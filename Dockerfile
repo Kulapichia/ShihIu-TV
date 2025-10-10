@@ -64,8 +64,8 @@ RUN echo "=== Running TypeScript Type Check ===" && \
     echo "=== TypeScript Check Completed Successfully ==="
 
 # 4. 执行构建命令，启用Next.js调试输出
-RUN echo "=== Starting Next.js Build with Debug Output ===" && \
-    pnpm run build:debug && \
+RUN echo "=== Starting Next.js Build ===" && \
+    pnpm run build && \
     echo "=== Checking build output ===" && \
     ls -la .next/ && \
     ls -la .next/static/ || echo "No static directory found" && \
