@@ -7,7 +7,7 @@
 
 ---
 
-# ShihIüTV Enhanced Edition
+# 🎬 ShihIüTV Enhanced
 
 <div align="center">
   <img src="public/logo.png" alt="ShihIüTV Logo" width="120">
