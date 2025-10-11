@@ -7,13 +7,13 @@
 
 ---
 
-# LunaTV Enhanced Edition
+# ShihIüTV Enhanced Edition
 
 <div align="center">
-  <img src="public/logo.png" alt="LunaTV Logo" width="120">
+  <img src="public/logo.png" alt="ShihIüTV Logo" width="120">
 </div>
 
-> 🎬 **LunaTV Enhanced Edition** 是基于 MoonTV 深度二次开发的全功能影视聚合播放平台。在原版基础上新增了 **YouTube 集成**、**网盘搜索**、**AI 推荐**、**短剧功能**、**IPTV 直播**、**Bangumi 动漫**、**播放统计**、**弹幕系统**等 50+ 重大功能增强，打造极致的在线观影体验。
+> 🎬 **ShihIüTV Enhanced Edition** 是基于 MoonTV 深度二次开发的全功能影视聚合播放平台。在原版基础上新增了 **YouTube 集成**、**网盘搜索**、**AI 推荐**、**短剧功能**、**IPTV 直播**、**Bangumi 动漫**、**播放统计**、**弹幕系统**等 50+ 重大功能增强，打造极致的在线观影体验。
 
 <div align="center">
 
@@ -95,7 +95,7 @@
 - **注意**：部署后项目为**空壳项目**，**无内置播放源和直播源**，需要自行收集配置
 - **演示站**：
   - Zeabur 部署：[https://smonetv.zeabur.app](https://smonetv.zeabur.app)
-  - Vercel 部署：[https://lunatv.smone.us](https://lunatv.smone.us)
+  - Vercel 部署：[https://ShihIüTV.smone.us](https://ShihIüTV.smone.us)
   - 供短期体验，数据库定时清理
 
 ### 🚫 传播限制
@@ -226,7 +226,7 @@
 
 ### ⚡ 一键部署到 Zeabur（最简单）
 
-点击下方按钮即可一键部署，自动配置 LunaTV + Kvrocks 数据库：
+点击下方按钮即可一键部署，自动配置 ShihIüTV + Kvrocks 数据库：
 
 [![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/templates/2425O0/deploy)
 
@@ -236,7 +236,7 @@
 - ✅ 持久化存储，数据永不丢失
 - ✅ 免费额度足够个人使用
 
-**⚠️ 重要提示**：部署完成后，需要在 Zeabur 中为 LunaTV 服务设置访问域名（Domain）才能在浏览器中访问。详见下方 [设置访问域名](#5-设置访问域名必须) 步骤。
+**⚠️ 重要提示**：部署完成后，需要在 Zeabur 中为 ShihIüTV 服务设置访问域名（Domain）才能在浏览器中访问。详见下方 [设置访问域名](#5-设置访问域名必须) 步骤。
 
 点击按钮后填写环境变量即可完成部署！详细说明见下方 [Zeabur 部署指南](#️-zeabur-部署推荐)。
 
@@ -253,7 +253,7 @@ Kvrocks 是基于 RocksDB 的持久化 Redis 协议兼容存储，推荐用于�
 ```yml
 services:
   moontv-core:
-    image: ghcr.io/szemeng76/lunatv:latest
+    image: ghcr.io/szemeng76/ShihIüTV:latest
     container_name: moontv-core
     restart: on-failure
     ports:
@@ -265,7 +265,7 @@ services:
       - KVROCKS_URL=redis://moontv-kvrocks:6666
       # 可选：站点配置
       - SITE_BASE=https://your-domain.com
-      - NEXT_PUBLIC_SITE_NAME=LunaTV Enhanced
+      - NEXT_PUBLIC_SITE_NAME=ShihIüTV Enhanced
     networks:
       - moontv-network
     depends_on:
@@ -295,7 +295,7 @@ Redis 默认配置可能导致数据丢失，需要开启持久化。
 ```yml
 services:
   moontv-core:
-    image: ghcr.io/szemeng76/lunatv:latest
+    image: ghcr.io/szemeng76/ShihIüTV:latest
     container_name: moontv-core
     restart: on-failure
     ports:
@@ -336,7 +336,7 @@ networks:
 ```yml
 services:
   moontv-core:
-    image: ghcr.io/szemeng76/lunatv:latest
+    image: ghcr.io/szemeng76/ShihIüTV:latest
     container_name: moontv-core
     restart: on-failure
     ports:
@@ -369,14 +369,14 @@ Zeabur 是一站式云端部署平台，使用预构建的 Docker 镜像可以�
 
    > 💡 **重要提示**：持久化卷路径必须设置为 `/var/lib/kvrocks/db`（KVRocks 数据目录），这样配置文件保留在容器内，数据库文件持久化，重启后数据不会丢失！
 
-2. **添加 LunaTV 服务**
+2. **添加 ShihIüTV 服务**
    - 点击 "Add Service" > "Docker Images"
-   - 输入镜像名称：`ghcr.io/szemeng76/lunatv:latest`
+   - 输入镜像名称：`ghcr.io/szemeng76/ShihIüTV:latest`
    - 配置端口：`3000` (HTTP)
 
 3. **配置环境变量**
 
-   在 LunaTV 服务的环境变量中添加：
+   在 ShihIüTV 服务的环境变量中添加：
 
    ```env
    # 必填：管理员账号
@@ -389,8 +389,8 @@ Zeabur 是一站式云端部署平台，使用预构建的 Docker 镜像可以�
 
    # 可选：站点配置
    SITE_BASE=https://your-domain.zeabur.app
-   NEXT_PUBLIC_SITE_NAME=LunaTV Enhanced
-   ANNOUNCEMENT=欢迎使用 LunaTV Enhanced Edition
+   NEXT_PUBLIC_SITE_NAME=ShihIüTV Enhanced
+   ANNOUNCEMENT=欢迎使用 ShihIüTV Enhanced Edition
 
    # 可选：豆瓣代理配置（推荐）
    NEXT_PUBLIC_DOUBAN_PROXY_TYPE=cmliussss-cdn-tencent
@@ -408,12 +408,12 @@ Zeabur 是一站式云端部署平台，使用预构建的 Docker 镜像可以�
 
 #### 5. 设置访问域名（必须）
 
-   - 在 LunaTV 服务页面，点击 "Networking" 或 "网络" 标签
+   - 在 ShihIüTV 服务页面，点击 "Networking" 或 "网络" 标签
    - 点击 "Generate Domain" 生成 Zeabur 提供的免费域名（如 `xxx.zeabur.app`）
    - 或者绑定自定义域名：
      * 点击 "Add Domain" 添加你的域名
      * 按照提示配置 DNS CNAME 记录指向 Zeabur 提供的目标地址
-   - 设置完域名后即可通过域名访问 LunaTV
+   - 设置完域名后即可通过域名访问 ShihIüTV
 
 6. **绑定自定义域名（可选）**
    - 在服务设置中点击 "Domains"
@@ -427,7 +427,7 @@ Zeabur 是一站式云端部署平台，使用预构建的 Docker 镜像可以�
 **更新步骤：**
 
 1. **进入服务页面**
-   - 点击需要更新的服务（LunaTV 或 KVRocks）
+   - 点击需要更新的服务（ShihIüTV 或 KVRocks）
 
 2. **重启服务**
    - 点击右上角的 **"Restart"** 按钮
@@ -497,8 +497,8 @@ Zeabur 是一站式云端部署平台，使用预构建的 Docker 镜像可以�
 
    # 可选：站点配置
    SITE_BASE=https://your-domain.vercel.app
-   NEXT_PUBLIC_SITE_NAME=LunaTV Enhanced
-   ANNOUNCEMENT=欢迎使用 LunaTV Enhanced Edition
+   NEXT_PUBLIC_SITE_NAME=ShihIüTV Enhanced
+   ANNOUNCEMENT=欢迎使用 ShihIüTV Enhanced Edition
 
    # 可选：豆瓣代理配置（推荐）
    NEXT_PUBLIC_DOUBAN_PROXY_TYPE=cmliussss-cdn-tencent
@@ -917,16 +917,16 @@ services:
 - ❌ 您不得将本项目用于商业目的
 - ⚠️ 若您修改、转换或以本项目为基础进行创作，您必须以相同的许可协议分发您的作品
 
-© 2025 LunaTV Enhanced Edition & Contributors
+© 2025 ShihIüTV Enhanced Edition & Contributors
 
-基于 [MoonTV](https://github.com/MoonTechLab/LunaTV) 进行二次开发。
+基于 [MoonTV](https://github.com/MoonTechLab/ShihIüTV) 进行二次开发。
 
 ---
 
 ## 🙏 致谢
 
 ### 原始项目
-- [MoonTV](https://github.com/MoonTechLab/LunaTV) — 项目原始版本
+- [MoonTV](https://github.com/MoonTechLab/ShihIüTV) — 项目原始版本
 - [Selene](https://github.com/MoonTechLab/Selene) — 官方移动端 APP
 - [LibreTV](https://github.com/LibreSpark/LibreTV) — 灵感来源
 
@@ -953,7 +953,7 @@ services:
 
 ## 📊 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=SzeMeng76/LunaTV&type=Date)](https://www.star-history.com/#SzeMeng76/LunaTV&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=SzeMeng76/ShihIüTV&type=Date)](https://www.star-history.com/#SzeMeng76/ShihIüTV&Date)
 
 ---
 
@@ -961,6 +961,6 @@ services:
 
 **如果这个项目对你有帮助，请给个 ⭐ Star 支持一下！**
 
-Made with ❤️ by LunaTV Enhanced Edition Team
+Made with ❤️ by ShihIüTV Enhanced Edition Team
 
 </div>
