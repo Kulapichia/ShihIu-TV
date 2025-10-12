@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    // 基础配置 (来自两者共有)
+    // 基础配置
     "target": "es5",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
