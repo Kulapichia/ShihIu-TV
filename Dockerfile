@@ -1,4 +1,5 @@
 # ---- 第 1 阶段：安装依赖 ----
+# 使用 slim 镜像以获得更好的原生模块兼容性
 FROM node:20-slim AS deps
 
 # 启用 corepack 并激活 pnpm（Node20 默认提供 corepack）
@@ -9,18 +10,25 @@ WORKDIR /app
 # 仅复制依赖清单，提高构建缓存利用率
 COPY package.json pnpm-lock.yaml ./
 
+# 先清理pnpm缓存，并且不安装可选依赖，减小依赖体积
 # 安装所有依赖（含 devDependencies，后续会裁剪）
-RUN pnpm install --frozen-lockfile
+RUN pnpm store prune && pnpm install --frozen-lockfile --no-optional
 
 # ---- 第 2 阶段：构建项目 (增加详细日志) ----
 FROM node:20-slim AS builder
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
-# 复制依赖
-COPY --from=deps /app/node_modules ./node_modules
-# 复制全部源代码
+# 复制package files和源代码
+COPY package.json pnpm-lock.yaml ./
 COPY . .
+
+# 复制预先安装好的依赖
+COPY --from=deps /app/node_modules ./node_modules
+
+# 验证依赖完整性，防止缓存不一致问题
+# 尝试使用离线模式快速验证，如果失败则重新安装，确保依赖绝对正确
+RUN pnpm install --frozen-lockfile --offline || pnpm install --frozen-lockfile
 
 # 删除敏感文件和目录，保留构建所需的配置文件
 RUN rm -rf .git .github docs *.md .gitignore .env.example && \
@@ -113,7 +121,10 @@ USER nextjs
 
 EXPOSE 3000
 
+# 为容器编排系统提供健康检查端点
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["/tmp/health-check.sh"]
+    
 # 使用自定义启动脚本，先预加载配置再启动服务器
 CMD ["node", "start.js"]
+
