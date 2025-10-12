@@ -164,6 +164,19 @@ function updateVersionTs(version) {
   }
 }
 
+function updatePackageJson(version) {
+  const packageJsonPath = path.join(process.cwd(), 'package.json');
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    packageJson.version = version;
+    fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2), 'utf8');
+    console.log(`✅ Updated package.json: ${version}`);
+  } catch (error) {
+    console.error(`❌ Failed to update package.json:`, error.message);
+    process.exit(1);
+  }
+}
+
 function main() {
   try {
     const changelogPath = path.join(process.cwd(), 'CHANGELOG');
@@ -199,12 +212,13 @@ function main() {
     const isGitHubActions = process.env.GITHUB_ACTIONS === 'true';
 
     if (isGitHubActions) {
-      // 在 GitHub Actions 中，更新版本文件
+      // Update version files in GitHub Actions environment
       console.log('正在更新版本文件...');
       updateVersionFile(latestVersion);
       updateVersionTs(latestVersion);
+      updatePackageJson(latestVersion);
     } else {
-      // 在本地运行时，只提示但不更新版本文件
+      // Skip version file updates in local environment
       console.log('🔧 本地运行模式：跳过版本文件更新');
       console.log('💡 版本文件更新将在 git tag 触发的 release 工作流中完成');
     }
