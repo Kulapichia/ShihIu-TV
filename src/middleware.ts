@@ -7,7 +7,7 @@ import { getAuthInfoFromCookie } from '@/lib/auth';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 跳过不需要认证的路径
+  // 跳过不需要认证的路径，这是所有公开路径的唯一权威来源
   if (shouldSkipAuth(pathname)) {
     return NextResponse.next();
   }
@@ -118,6 +118,7 @@ function handleAuthFailure(
 // 判断是否需要跳过认证的路径
 function shouldSkipAuth(pathname: string): boolean {
   const skipPaths = [
+    // 基础静态资源和Next.js内部路径
     '/_next',
     '/favicon.ico',
     '/robots.txt',
@@ -125,6 +126,27 @@ function shouldSkipAuth(pathname: string): boolean {
     '/icons/',
     '/logo.png',
     '/screenshot.png',
+
+    // 认证相关页面
+    '/login',
+    '/register',
+    '/warning',
+
+    // 认证相关API
+    '/api/login',
+    '/api/register',
+    '/api/logout',
+    '/api/server-config',
+    '/api/oauth/authorize',
+    '/api/oauth/callback',
+    '/api/oauth/exchange-token',
+
+    // --- 公开API路径 ---
+    '/api/tvbox',
+    '/api/live/merged',
+    '/api/parse',
+    '/api/bing-wallpaper',
+    '/api/proxy/spider.jar',
   ];
 
   return skipPaths.some((path) => pathname.startsWith(path));
@@ -132,7 +154,5 @@ function shouldSkipAuth(pathname: string): boolean {
 
 // 配置middleware匹配规则
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|login|register|warning|api/login|api/register|api/logout|api/cron|api/server-config|api/tvbox|api/live/merged|api/parse|api/bing-wallpaper|api/proxy/spider.jar).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/cron).*)'],
 };
