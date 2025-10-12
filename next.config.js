@@ -8,10 +8,14 @@ const nextConfig = {
   },
 
   reactStrictMode: false,
-  swcMinify: false,
+  swcMinify: true,
+  compress: true,
+  poweredByHeader: false,
+  generateEtags: false,
 
   experimental: {
     instrumentationHook: process.env.NODE_ENV === 'production',
+    serverMinification: true,
   },
 
   // Uncoment to add domain whitelist
@@ -29,7 +33,7 @@ const nextConfig = {
     ],
   },
 
-  webpack(config) {
+  webpack(config, { dev }) {
     // Grab the existing rule that handles SVG imports
     const fileLoaderRule = config.module.rules.find((rule) =>
       rule.test?.test?.('.svg')
@@ -65,15 +69,38 @@ const nextConfig = {
       crypto: false,
     };
 
+    // 生产环境代码保护
+    if (!dev) {
+      config.optimization.minimizer.forEach((plugin) => {
+        if (plugin.constructor.name === 'TerserPlugin') {
+          plugin.options.terserOptions = {
+            ...plugin.options.terserOptions,
+            compress: {
+              drop_console: true,
+              drop_debugger: true,
+            },
+            format: {
+              comments: false,
+            },
+          };
+        }
+      });
+    }
+
     return config;
   },
 };
 
-const withPWA = require('next-pwa')({
+const withPWA = require('@ducanh2912/next-pwa').default({
   dest: 'public',
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
+  reloadOnOnline: true,
+  swcMinify: true,
   disable: process.env.NODE_ENV === 'development',
-  register: true,
-  skipWaiting: true,
+  workboxOptions: {
+    disableDevLogs: true,
+  },
 });
 
 module.exports = withPWA(nextConfig);
