@@ -8,13 +8,19 @@ const nextConfig = {
   },
 
   reactStrictMode: false,
+  // 使用 SWC 进行代码压缩，性能优于 Terser
   swcMinify: true,
+  // 显式启用 Gzip 压缩
   compress: true,
+  // 禁用 x-powered-by 头，提升安全性
   poweredByHeader: false,
+  // 禁用 ETag 生成，适用于 CDN 或反向代理环境
   generateEtags: false,
 
   experimental: {
+    // instrumentationHook 配置
     instrumentationHook: process.env.NODE_ENV === 'production',
+    // 启用服务端代码压缩，优化 serverless function 性能
     serverMinification: true,
   },
 
@@ -59,7 +65,7 @@ const nextConfig = {
       }
     );
 
-    // Modify the file loader rule to ignore *.svg, since we have it handled now.
+    // Modify the file loader rule to ignore *.svg, since we have it handled now. 
     fileLoaderRule.exclude = /\.svg$/i;
 
     config.resolve.fallback = {
@@ -91,16 +97,22 @@ const nextConfig = {
   },
 };
 
+// 使用更现代的 PWA 库 @ducanh2912/next-pwa
 const withPWA = require('@ducanh2912/next-pwa').default({
   dest: 'public',
+  disable: process.env.NODE_ENV === 'development',
+  // 显式声明
+  register: true,
+  skipWaiting: true,
+  // PWA 增强功能
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
   swcMinify: true,
-  disable: process.env.NODE_ENV === 'development',
   workboxOptions: {
     disableDevLogs: true,
   },
 });
 
 module.exports = withPWA(nextConfig);
+
