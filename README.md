@@ -253,7 +253,7 @@ Kvrocks 是基于 RocksDB 的持久化 Redis 协议兼容存储，推荐用于�
 ```yml
 services:
   moontv-core:
-    image: ghcr.io/szemeng76/ShihIüTV:latest
+    image: ghcr.io/Kulapichia/ShihIüTV:latest
     container_name: moontv-core
     restart: on-failure
     ports:
@@ -295,7 +295,7 @@ Redis 默认配置可能导致数据丢失，需要开启持久化。
 ```yml
 services:
   moontv-core:
-    image: ghcr.io/szemeng76/ShihIüTV:latest
+    image: ghcr.io/Kulapichia/ShihIüTV:latest
     container_name: moontv-core
     restart: on-failure
     ports:
@@ -336,7 +336,7 @@ networks:
 ```yml
 services:
   moontv-core:
-    image: ghcr.io/szemeng76/ShihIüTV:latest
+    image: ghcr.io/Kulapichia/ShihIüTV:latest
     container_name: moontv-core
     restart: on-failure
     ports:
@@ -371,7 +371,7 @@ Zeabur 是一站式云端部署平台，使用预构建的 Docker 镜像可以�
 
 2. **添加 ShihIüTV 服务**
    - 点击 "Add Service" > "Docker Images"
-   - 输入镜像名称：`ghcr.io/szemeng76/ShihIüTV:latest`
+   - 输入镜像名称：`ghcr.io/Kulapichia/ShihIüTV:latest`
    - 配置端口：`3000` (HTTP)
 
 3. **配置环境变量**
@@ -953,7 +953,7 @@ services:
 
 ## 📊 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=SzeMeng76/ShihIüTV&type=Date)](https://www.star-history.com/#SzeMeng76/ShihIüTV&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Kulapichia/ShihIüTV&type=Date)](https://www.star-history.com/#Kulapichia/ShihIüTV&Date)
 
 ---
 
