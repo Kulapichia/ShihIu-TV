@@ -315,7 +315,50 @@ export class DbManager {
       await this.storage.clearExpiredCache(prefix);
     }
   }
+  
+  // ---------- 注册相关方法 ----------
+  async createPendingUser(username: string, password: string): Promise<void> {
+    if (typeof (this.storage as any).createPendingUser === 'function') {
+      await (this.storage as any).createPendingUser(username, password);
+    } else {
+      throw new Error('存储类型不支持注册功能');
+    }
+  }
 
+  async getPendingUsers(): Promise<PendingUser[]> {
+    if (typeof (this.storage as any).getPendingUsers === 'function') {
+      return (this.storage as any).getPendingUsers();
+    }
+    return [];
+  }
+
+  async approvePendingUser(username: string): Promise<void> {
+    if (typeof (this.storage as any).approvePendingUser === 'function') {
+      await (this.storage as any).approvePendingUser(username);
+    } else {
+      throw new Error('存储类型不支持注册功能');
+    }
+  }
+
+  async rejectPendingUser(username: string): Promise<void> {
+    if (typeof (this.storage as any).rejectPendingUser === 'function') {
+      await (this.storage as any).rejectPendingUser(username);
+    } else {
+      throw new Error('存储类型不支持注册功能');
+    }
+  }
+
+  async getRegistrationStats(): Promise<RegistrationStats> {
+    if (typeof (this.storage as any).getRegistrationStats === 'function') {
+      return (this.storage as any).getRegistrationStats();
+    }
+    return {
+      totalUsers: 0,
+      pendingUsers: 0,
+      todayRegistrations: 0,
+    };
+  }
+  
   // ---------- 播放统计相关 ----------
   async getPlayStats(): Promise<PlayStatsResult> {
     if (typeof (this.storage as any).getPlayStats === 'function') {
