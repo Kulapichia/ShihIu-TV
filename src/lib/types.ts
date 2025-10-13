@@ -170,6 +170,7 @@ export interface SearchResult {
   desc?: string;
   type_name?: string;
   douban_id?: number;
+  isYellow?: boolean;
   remarks?: string; // 备注信息（如"已完结"、"更新至20集"等）
 }
 
