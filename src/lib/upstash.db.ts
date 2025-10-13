@@ -2,7 +2,8 @@
 
 import { Redis } from '@upstash/redis';
 
-import { AdminConfig } from './admin.types';
+// [新增] 引入注册审批流程所需类型
+import { AdminConfig, PendingUser, RegistrationStats } from './admin.types';
 import {
   ContentStat,
   EpisodeSkipConfig,
@@ -80,7 +81,16 @@ export class UpstashRedisStorage implements IStorage {
     const val = await withRetry(() =>
       this.client.get(this.prKey(userName, key))
     );
-    return val ? (val as PlayRecord) : null;
+    if (!val) return null;
+    // [优化] 增加健壮性，兼容对象和JSON字符串
+    try {
+      return (
+        typeof val === 'string' ? JSON.parse(val) : val
+      ) as PlayRecord;
+    } catch (e) {
+      console.error(`[DB] 解析播放记录失败 for key ${key}:`, e);
+      return null;
+    }
   }
 
   async setPlayRecord(
@@ -95,18 +105,31 @@ export class UpstashRedisStorage implements IStorage {
     userName: string
   ): Promise<Record<string, PlayRecord>> {
     const pattern = `u:${userName}:pr:*`;
-    const keys: string[] = await withRetry(() => this.client.keys(pattern));
-    if (keys.length === 0) return {};
-
     const result: Record<string, PlayRecord> = {};
-    for (const fullKey of keys) {
-      const value = await withRetry(() => this.client.get(fullKey));
-      if (value) {
-        // 截取 source+id 部分
-        const keyPart = ensureString(fullKey.replace(`u:${userName}:pr:`, ''));
-        result[keyPart] = value as PlayRecord;
+    let cursor: string = '0'; // Upstash-redis v2.x.x scan 返回的 cursor 是 string
+
+    // [优化] 使用 SCAN 替代 KEYS 避免阻塞
+    do {
+      const [nextCursor, keys] = await withRetry(() => this.client.scan(cursor, { match: pattern, count: 100 }));
+      cursor = nextCursor;
+      
+      if (keys.length > 0) {
+        const values = await withRetry(() => this.client.mget(...keys));
+        values.forEach((value, index) => {
+          if (value) {
+            try {
+              // 截取 source+id 部分
+              const fullKey = keys[index];
+              const keyPart = ensureString(fullKey.replace(`u:${userName}:pr:`, ''));
+              result[keyPart] = (typeof value === 'string' ? JSON.parse(value) : value) as PlayRecord;
+            } catch (e) {
+              console.error(`[DB] 解析播放记录失败 for key ${keys[index]}:`, e);
+            }
+          }
+        });
       }
-    }
+    } while (cursor !== '0');
+
     return result;
   }
 
@@ -123,7 +146,14 @@ export class UpstashRedisStorage implements IStorage {
     const val = await withRetry(() =>
       this.client.get(this.favKey(userName, key))
     );
-    return val ? (val as Favorite) : null;
+    if (!val) return null;
+    // [优化] 增加健壮性，兼容对象和JSON字符串
+    try {
+      return (typeof val === 'string' ? JSON.parse(val) : val) as Favorite;
+    } catch(e) {
+      console.error(`[DB] 解析收藏失败 for key ${key}:`, e);
+      return null;
+    }
   }
 
   async setFavorite(
@@ -138,17 +168,30 @@ export class UpstashRedisStorage implements IStorage {
 
   async getAllFavorites(userName: string): Promise<Record<string, Favorite>> {
     const pattern = `u:${userName}:fav:*`;
-    const keys: string[] = await withRetry(() => this.client.keys(pattern));
-    if (keys.length === 0) return {};
-
     const result: Record<string, Favorite> = {};
-    for (const fullKey of keys) {
-      const value = await withRetry(() => this.client.get(fullKey));
-      if (value) {
-        const keyPart = ensureString(fullKey.replace(`u:${userName}:fav:`, ''));
-        result[keyPart] = value as Favorite;
+    let cursor: string = '0';
+
+    // [优化] 使用 SCAN 替代 KEYS 避免阻塞
+    do {
+      const [nextCursor, keys] = await withRetry(() => this.client.scan(cursor, { match: pattern, count: 100 }));
+      cursor = nextCursor;
+
+      if (keys.length > 0) {
+        const values = await withRetry(() => this.client.mget(...keys));
+        values.forEach((value, index) => {
+          if (value) {
+            try {
+              const fullKey = keys[index];
+              const keyPart = ensureString(fullKey.replace(`u:${userName}:fav:`, ''));
+              result[keyPart] = (typeof value === 'string' ? JSON.parse(value) : value) as Favorite;
+            } catch (e) {
+              console.error(`[DB] 解析收藏失败 for key ${keys[index]}:`, e);
+            }
+          }
+        });
       }
-    }
+    } while (cursor !== '0');
+
     return result;
   }
 
@@ -194,37 +237,33 @@ export class UpstashRedisStorage implements IStorage {
 
   // 删除用户及其所有数据
   async deleteUser(userName: string): Promise<void> {
-    // 删除用户密码
-    await withRetry(() => this.client.del(this.userPwdKey(userName)));
+    const keysToDelete: string[] = [];
 
-    // 删除搜索历史
-    await withRetry(() => this.client.del(this.shKey(userName)));
+    // 收集用户自身相关的key
+    keysToDelete.push(this.userPwdKey(userName));
+    keysToDelete.push(this.shKey(userName));
+    // [新增] 收集用户登录统计key
+    keysToDelete.push(`user_login_stats:${userName}`);
 
-    // 删除播放记录
-    const playRecordPattern = `u:${userName}:pr:*`;
-    const playRecordKeys = await withRetry(() =>
-      this.client.keys(playRecordPattern)
-    );
-    if (playRecordKeys.length > 0) {
-      await withRetry(() => this.client.del(...playRecordKeys));
+    // [优化] 使用 SCAN 收集用户所有数据
+    const patterns = [
+      `u:${userName}:pr:*`,
+      `u:${userName}:fav:*`,
+      `u:${userName}:skip:*`,
+      `u:${userName}:episodeskip:*`
+    ];
+    for (const pattern of patterns) {
+      let cursor: string = '0';
+      do {
+        const [nextCursor, keys] = await withRetry(() => this.client.scan(cursor, { match: pattern, count: 250 }));
+        cursor = nextCursor;
+        keysToDelete.push(...keys);
+      } while (cursor !== '0');
     }
 
-    // 删除收藏夹
-    const favoritePattern = `u:${userName}:fav:*`;
-    const favoriteKeys = await withRetry(() =>
-      this.client.keys(favoritePattern)
-    );
-    if (favoriteKeys.length > 0) {
-      await withRetry(() => this.client.del(...favoriteKeys));
-    }
-
-    // 删除跳过片头片尾配置
-    const skipConfigPattern = `u:${userName}:skip:*`;
-    const skipConfigKeys = await withRetry(() =>
-      this.client.keys(skipConfigPattern)
-    );
-    if (skipConfigKeys.length > 0) {
-      await withRetry(() => this.client.del(...skipConfigKeys));
+    // 批量删除
+    if (keysToDelete.length > 0) {
+      await withRetry(() => this.client.del(...keysToDelete));
     }
   }
 
@@ -262,13 +301,22 @@ export class UpstashRedisStorage implements IStorage {
 
   // ---------- 获取全部用户 ----------
   async getAllUsers(): Promise<string[]> {
-    const keys = await withRetry(() => this.client.keys('u:*:pwd'));
-    return keys
-      .map((k) => {
+    const users: string[] = [];
+    let cursor: string = '0';
+    
+    // [优化] 使用 SCAN 替代 KEYS
+    do {
+      const [nextCursor, keys] = await withRetry(() => this.client.scan(cursor, { match: 'u:*:pwd', count: 100 }));
+      cursor = nextCursor;
+      keys.forEach((k) => {
         const match = k.match(/^u:(.+?):pwd$/);
-        return match ? ensureString(match[1]) : undefined;
-      })
-      .filter((u): u is string => typeof u === 'string');
+        if (match) {
+          users.push(ensureString(match[1]));
+        }
+      });
+    } while (cursor !== '0');
+
+    return users;
   }
 
   // ---------- 管理员配置 ----------
@@ -347,28 +395,30 @@ export class UpstashRedisStorage implements IStorage {
     userName: string
   ): Promise<{ [key: string]: EpisodeSkipConfig }> {
     const pattern = `u:${userName}:skip:*`;
-    const keys = await withRetry(() => this.client.keys(pattern));
-
-    if (keys.length === 0) {
-      return {};
-    }
-
     const configs: { [key: string]: EpisodeSkipConfig } = {};
+    let cursor: string = '0';
+    
+    // [优化] 使用 SCAN 替代 KEYS
+    do {
+      const [nextCursor, keys] = await withRetry(() => this.client.scan(cursor, { match: pattern, count: 100 }));
+      cursor = nextCursor;
 
-    // 批量获取所有配置
-    const values = await withRetry(() => this.client.mget(keys));
-
-    keys.forEach((key, index) => {
-      const value = values[index];
-      if (value) {
-        // 从key中提取source+id
-        const match = key.match(/^u:.+?:skip:(.+)$/);
-        if (match) {
-          const sourceAndId = match[1];
-          configs[sourceAndId] = value as EpisodeSkipConfig;
-        }
+      if (keys.length > 0) {
+        // 批量获取所有配置
+        const values = await withRetry(() => this.client.mget(...keys));
+        keys.forEach((key, index) => {
+          const value = values[index];
+          if (value) {
+            // 从key中提取source+id
+            const match = key.match(/^u:.+?:skip:(.+)$/);
+            if (match) {
+              const sourceAndId = match[1];
+              configs[sourceAndId] = value as EpisodeSkipConfig;
+            }
+          }
+        });
       }
-    });
+    } while (cursor !== '0');
 
     return configs;
   }
@@ -414,45 +464,47 @@ export class UpstashRedisStorage implements IStorage {
     userName: string
   ): Promise<{ [key: string]: EpisodeSkipConfig }> {
     const pattern = `u:${userName}:episodeskip:*`;
-    const keys = await withRetry(() => this.client.keys(pattern));
-
-    if (keys.length === 0) {
-      return {};
-    }
-
     const configs: { [key: string]: EpisodeSkipConfig } = {};
+    let cursor: string = '0';
 
-    // 批量获取所有配置
-    const values = await withRetry(() => this.client.mget(keys));
+    // [优化] 使用 SCAN 替代 KEYS
+    do {
+      const [nextCursor, keys] = await withRetry(() => this.client.scan(cursor, { match: pattern, count: 100 }));
+      cursor = nextCursor;
 
-    keys.forEach((key, index) => {
-      const value = values[index];
-      if (value) {
-        // 从key中提取source+id
-        const match = key.match(/^u:.+?:episodeskip:(.+)$/);
-        if (match) {
-          const sourceAndId = match[1];
-          configs[sourceAndId] = value as EpisodeSkipConfig;
-        }
+      if (keys.length > 0) {
+        // 批量获取所有配置
+        const values = await withRetry(() => this.client.mget(...keys));
+        keys.forEach((key, index) => {
+          const value = values[index];
+          if (value) {
+            // 从key中提取source+id
+            const match = key.match(/^u:.+?:episodeskip:(.+)$/);
+            if (match) {
+              const sourceAndId = match[1];
+              configs[sourceAndId] = value as EpisodeSkipConfig;
+            }
+          }
+        });
       }
-    });
-
+    } while (cursor !== '0');
+    
     return configs;
   }
 
   // 清空所有数据
   async clearAllData(): Promise<void> {
     try {
-      // 获取所有用户
-      const allUsers = await this.getAllUsers();
-
-      // 删除所有用户及其数据
-      for (const username of allUsers) {
-        await this.deleteUser(username);
-      }
-
-      // 删除管理员配置
-      await withRetry(() => this.client.del(this.adminConfigKey()));
+      // [优化] 使用 SCAN 清理所有数据
+      let cursor: string = '0';
+      do {
+        // 每次扫描500个key
+        const [nextCursor, keys] = await withRetry(() => this.client.scan(cursor, { count: 500 }));
+        cursor = nextCursor;
+        if (keys.length > 0) {
+          await withRetry(() => this.client.del(...keys));
+        }
+      } while (cursor !== '0');
 
       console.log('所有数据已清空');
     } catch (error) {
@@ -508,15 +560,87 @@ export class UpstashRedisStorage implements IStorage {
     // Upstash的TTL机制会自动清理过期数据，这里主要用于手动清理
     // 可以根据需要实现特定前缀的缓存清理
     const pattern = prefix ? `cache:${prefix}*` : 'cache:*';
-    const keys = await withRetry(() => this.client.keys(pattern));
-
-    if (keys.length > 0) {
-      await withRetry(() => this.client.del(...keys));
-      console.log(`Cleared ${keys.length} cache entries with pattern: ${pattern}`);
-    }
+    
+    // [优化] 使用 SCAN 替代 KEYS
+    let cursor: string = '0';
+    do {
+        const [nextCursor, keys] = await withRetry(() => this.client.scan(cursor, { match: pattern, count: 250 }));
+        cursor = nextCursor;
+        if (keys.length > 0) {
+            await withRetry(() => this.client.del(...keys));
+            console.log(`Cleared ${keys.length} cache entries with pattern: ${pattern}`);
+        }
+    } while (cursor !== '0');
   }
 
+  // ---------- [新增] 注册相关方法 ----------
+  private pendingUserKey(username: string) {
+    return `pending:user:${username}`;
+  }
+  
+  async createPendingUser(username: string, password: string): Promise<void> {
+    const pendingUser: PendingUser = {
+      username,
+      password,
+      registeredAt: Date.now(),
+    };
+    await withRetry(() => this.client.set(this.pendingUserKey(username), JSON.stringify(pendingUser)));
+  }
+
+  async getPendingUsers(): Promise<PendingUser[]> {
+    const users: PendingUser[] = [];
+    let cursor: string = '0';
+    
+    do {
+      const [nextCursor, keys] = await withRetry(() => this.client.scan(cursor, { match: 'pending:user:*', count: 100 }));
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        const values = await withRetry(() => this.client.mget(...keys));
+        values.forEach(v => {
+          if (v) {
+            try {
+              users.push(JSON.parse(v as string));
+            } catch(e) {
+              console.error('解析待审核用户数据失败:', v);
+            }
+          }
+        });
+      }
+    } while (cursor !== '0');
+    
+    return users;
+  }
+
+  async approvePendingUser(username: string): Promise<void> {
+    const key = this.pendingUserKey(username);
+    const pendingData = await withRetry(() => this.client.get(key));
+    if (!pendingData) {
+      throw new Error('待审核用户不存在或数据已损坏');
+    }
+    
+    const user = JSON.parse(pendingData as string) as PendingUser;
+    await this.registerUser(user.username, user.password);
+    await withRetry(() => this.client.del(key));
+  }
+
+  async rejectPendingUser(username: string): Promise<void> {
+    await withRetry(() => this.client.del(this.pendingUserKey(username)));
+  }
+
+  async getRegistrationStats(): Promise<RegistrationStats> {
+    const totalUsers = (await this.getAllUsers()).length;
+    const pendingUsers = (await this.getPendingUsers()).length;
+    const adminConfig = await this.getAdminConfig();
+    const maxUsers = adminConfig?.SiteConfig?.MaxUsers;
+    // todayRegistrations 依赖于更复杂的日志或统计，此处简化
+    return { totalUsers, maxUsers, pendingUsers, todayRegistrations: 0 };
+  }
+  
   // ---------- 播放统计相关 ----------
+  isStatsSupported(): boolean {
+    return true;
+  }
+  
   async getPlayStats(): Promise<PlayStatsResult> {
     try {
       // 尝试从缓存获取
@@ -527,19 +651,7 @@ export class UpstashRedisStorage implements IStorage {
 
       // 重新计算统计数据
       const allUsers = await this.getAllUsers();
-      const userStats: Array<{
-        username: string;
-        totalWatchTime: number;
-        totalPlays: number;
-        lastPlayTime: number;
-        recentRecords: PlayRecord[];
-        avgWatchTime: number;
-        mostWatchedSource: string;
-        registrationDays: number;
-        lastLoginTime: number;
-        loginCount: number;
-        createdAt: number;
-      }> = [];
+      const userStats: any[] = [];
       let totalWatchTime = 0;
       let totalPlays = 0;
       const sourceCount: Record<string, number> = {};
@@ -577,19 +689,7 @@ export class UpstashRedisStorage implements IStorage {
         // 推断最后登录时间（基于最后播放时间）
         const lastLoginTime = userStat.lastPlayTime || userCreatedAt;
 
-        const enhancedUserStat = {
-          username: userStat.username,
-          totalWatchTime: userStat.totalWatchTime,
-          totalPlays: userStat.totalPlays,
-          lastPlayTime: userStat.lastPlayTime,
-          recentRecords: userStat.recentRecords,
-          avgWatchTime: userStat.avgWatchTime,
-          mostWatchedSource: userStat.mostWatchedSource,
-          registrationDays,
-          lastLoginTime,
-          loginCount: userStat.loginCount || 0, // 添加登入次数字段
-          createdAt: userCreatedAt,
-        };
+        const enhancedUserStat = { ...userStat, registrationDays, lastLoginTime, createdAt: userCreatedAt };
 
         userStats.push(enhancedUserStat);
         totalWatchTime += userStat.totalWatchTime;
@@ -628,11 +728,7 @@ export class UpstashRedisStorage implements IStorage {
         const date = new Date(now - i * 24 * 60 * 60 * 1000);
         const dateKey = date.toISOString().split('T')[0];
         const data = dailyData[dateKey] || { watchTime: 0, plays: 0 };
-        dailyStats.push({
-          date: dateKey,
-          watchTime: data.watchTime,
-          plays: data.plays,
-        });
+        dailyStats.push({ date: dateKey, watchTime: data.watchTime, plays: data.plays });
       }
 
       // 计算注册趋势
@@ -640,10 +736,7 @@ export class UpstashRedisStorage implements IStorage {
       for (let i = 6; i >= 0; i--) {
         const date = new Date(now - i * 24 * 60 * 60 * 1000);
         const dateKey = date.toISOString().split('T')[0];
-        registrationStats.push({
-          date: dateKey,
-          newUsers: registrationData[dateKey] || 0,
-        });
+        registrationStats.push({ date: dateKey, newUsers: registrationData[dateKey] || 0 });
       }
 
       // 计算活跃用户统计
@@ -665,13 +758,7 @@ export class UpstashRedisStorage implements IStorage {
         userStats,
         topSources,
         dailyStats,
-        // 新增：用户注册统计
-        registrationStats: {
-          todayNewUsers,
-          totalRegisteredUsers: allUsers.length,
-          registrationTrend: registrationStats,
-        },
-        // 新增：用户活跃度统计
+        registrationStats: { todayNewUsers, totalRegisteredUsers: allUsers.length, registrationTrend: registrationStats },
         activeUsers,
       };
 
@@ -681,26 +768,10 @@ export class UpstashRedisStorage implements IStorage {
     } catch (error) {
       console.error('获取播放统计失败:', error);
       return {
-        totalUsers: 0,
-        totalWatchTime: 0,
-        totalPlays: 0,
-        avgWatchTimePerUser: 0,
-        avgPlaysPerUser: 0,
-        userStats: [],
-        topSources: [],
-        dailyStats: [],
-        // 新增：用户注册统计
-        registrationStats: {
-          todayNewUsers: 0,
-          totalRegisteredUsers: 0,
-          registrationTrend: [],
-        },
-        // 新增：用户活跃度统计
-        activeUsers: {
-          daily: 0,
-          weekly: 0,
-          monthly: 0,
-        },
+        totalUsers: 0, totalWatchTime: 0, totalPlays: 0, avgWatchTimePerUser: 0, avgPlaysPerUser: 0,
+        userStats: [], topSources: [], dailyStats: [],
+        registrationStats: { todayNewUsers: 0, totalRegisteredUsers: 0, registrationTrend: [] },
+        activeUsers: { daily: 0, weekly: 0, monthly: 0 },
       };
     }
   }
@@ -711,175 +782,65 @@ export class UpstashRedisStorage implements IStorage {
       const records = await this.getAllPlayRecords(userName);
       const playRecords = Object.values(records);
 
-      if (playRecords.length === 0) {
-        // 即使没有播放记录，也要获取登入统计
-        let loginStats = {
-          loginCount: 0,
-          firstLoginTime: 0,
-          lastLoginTime: 0,
-          lastLoginDate: 0
-        };
-
-        try {
-          const loginStatsKey = `user_login_stats:${userName}`;
-          const storedLoginStats = await this.client.get<{
-            loginCount?: number;
-            firstLoginTime?: number;
-            lastLoginTime?: number;
-            lastLoginDate?: number;
-          }>(loginStatsKey);
-          console.log(`[Upstash-NoRecords] 用户 ${userName} 登入统计查询:`, {
-            key: loginStatsKey,
-            rawValue: storedLoginStats,
-            hasValue: !!storedLoginStats
-          });
-
-          if (storedLoginStats) {
-            // Upstash Redis返回的是对象，不需要JSON.parse
-            loginStats = {
-              loginCount: storedLoginStats.loginCount || 0,
-              firstLoginTime: storedLoginStats.firstLoginTime || 0,
-              lastLoginTime: storedLoginStats.lastLoginTime || 0,
-              lastLoginDate: storedLoginStats.lastLoginDate || storedLoginStats.lastLoginTime || 0
-            };
-            console.log(`[Upstash-NoRecords] 解析后的登入统计:`, loginStats);
-          } else {
-            console.log(`[Upstash-NoRecords] 用户 ${userName} 没有登入统计数据`);
-          }
-        } catch (error) {
-          console.error(`获取用户 ${userName} 登入统计失败:`, error);
-        }
-
-        return {
-          username: userName,
-          totalWatchTime: 0,
-          totalPlays: 0,
-          lastPlayTime: 0,
-          recentRecords: [],
-          avgWatchTime: 0,
-          mostWatchedSource: '',
-          // 新增字段
-          totalMovies: 0,
-          firstWatchDate: Date.now(),
-          lastUpdateTime: Date.now(),
-          // 登入统计字段
-          loginCount: loginStats.loginCount,
-          firstLoginTime: loginStats.firstLoginTime,
-          lastLoginTime: loginStats.lastLoginTime,
-          lastLoginDate: loginStats.lastLoginDate
-        };
-      }
-
-      // 计算统计
-      let totalWatchTime = 0;
-      let lastPlayTime = 0;
-      const sourceCount: Record<string, number> = {};
-
-      playRecords.forEach((record) => {
-        totalWatchTime += record.play_time || 0;
-        if (record.save_time > lastPlayTime) {
-          lastPlayTime = record.save_time;
-        }
-        const sourceName = record.source_name || '未知来源';
-        sourceCount[sourceName] = (sourceCount[sourceName] || 0) + 1;
-      });
-
-      // 计算观看影片总数（去重）
-      const totalMovies = new Set(playRecords.map(r => `${r.title}_${r.source_name}_${r.year}`)).size;
-
-      // 计算首次观看时间
-      const firstWatchDate = Math.min(...playRecords.map(r => r.save_time || Date.now()));
-
-      // 获取最近播放记录
-      const recentRecords = playRecords
-        .sort((a, b) => (b.save_time || 0) - (a.save_time || 0))
-        .slice(0, 10);
-
-      // 找出最常观看的来源
-      let mostWatchedSource = '';
-      let maxCount = 0;
-      for (const [source, count] of Object.entries(sourceCount)) {
-        if (count > maxCount) {
-          maxCount = count;
-          mostWatchedSource = source;
-        }
-      }
-
-      // 获取登入统计数据
-      let loginStats = {
-        loginCount: 0,
-        firstLoginTime: 0,
-        lastLoginTime: 0,
-        lastLoginDate: 0
-      };
-
+      // 优先获取登入统计数据
+      let loginStats = { loginCount: 0, firstLoginTime: 0, lastLoginTime: 0, lastLoginDate: 0 };
       try {
         const loginStatsKey = `user_login_stats:${userName}`;
-        const storedLoginStats = await this.client.get<{
-          loginCount?: number;
-          firstLoginTime?: number;
-          lastLoginTime?: number;
-          lastLoginDate?: number;
-        }>(loginStatsKey);
-        console.log(`[Upstash] 用户 ${userName} 登入统计查询:`, {
-          key: loginStatsKey,
-          rawValue: storedLoginStats,
-          hasValue: !!storedLoginStats
-        });
-
+        const storedLoginStats = await this.client.get<any>(loginStatsKey);
         if (storedLoginStats) {
-          // Upstash Redis返回的是对象，不需要JSON.parse
           loginStats = {
             loginCount: storedLoginStats.loginCount || 0,
             firstLoginTime: storedLoginStats.firstLoginTime || 0,
             lastLoginTime: storedLoginStats.lastLoginTime || 0,
             lastLoginDate: storedLoginStats.lastLoginDate || storedLoginStats.lastLoginTime || 0
           };
-          console.log(`[Upstash] 解析后的登入统计:`, loginStats);
-        } else {
-          console.log(`[Upstash] 用户 ${userName} 没有登入统计数据`);
         }
       } catch (error) {
         console.error(`获取用户 ${userName} 登入统计失败:`, error);
       }
+      
+      if (playRecords.length === 0) {
+        return {
+          username: userName, totalWatchTime: 0, totalPlays: 0, lastPlayTime: 0, recentRecords: [],
+          avgWatchTime: 0, mostWatchedSource: '', totalMovies: 0, firstWatchDate: 0,
+          lastUpdateTime: Date.now(), ...loginStats
+        };
+      }
 
+      // 计算播放统计
+      let totalWatchTime = 0;
+      let lastPlayTime = 0;
+      const sourceCount: Record<string, number> = {};
+      playRecords.forEach((record) => {
+        totalWatchTime += record.play_time || 0;
+        if (record.save_time > lastPlayTime) lastPlayTime = record.save_time;
+        const sourceName = record.source_name || '未知来源';
+        sourceCount[sourceName] = (sourceCount[sourceName] || 0) + 1;
+      });
+
+      const totalMovies = new Set(playRecords.map(r => `${r.title}_${r.source_name}_${r.year}`)).size;
+      const firstWatchDate = Math.min(...playRecords.map(r => r.save_time || Date.now()));
+      const recentRecords = playRecords.sort((a, b) => (b.save_time || 0) - (a.save_time || 0)).slice(0, 10);
+      let mostWatchedSource = '';
+      let maxCount = 0;
+      Object.entries(sourceCount).forEach(([source, count]) => {
+        if (count > maxCount) {
+          maxCount = count;
+          mostWatchedSource = source;
+        }
+      });
+      
       return {
-        username: userName,
-        totalWatchTime,
-        totalPlays: playRecords.length,
-        lastPlayTime,
-        recentRecords,
+        username: userName, totalWatchTime, totalPlays: playRecords.length, lastPlayTime, recentRecords,
         avgWatchTime: playRecords.length > 0 ? totalWatchTime / playRecords.length : 0,
-        mostWatchedSource,
-        // 新增字段
-        totalMovies,
-        firstWatchDate,
-        lastUpdateTime: Date.now(),
-        // 登入统计字段
-        loginCount: loginStats.loginCount,
-        firstLoginTime: loginStats.firstLoginTime,
-        lastLoginTime: loginStats.lastLoginTime,
-        lastLoginDate: loginStats.lastLoginDate
+        mostWatchedSource, totalMovies, firstWatchDate, lastUpdateTime: Date.now(), ...loginStats
       };
     } catch (error) {
       console.error(`获取用户 ${userName} 统计失败:`, error);
       return {
-        username: userName,
-        totalWatchTime: 0,
-        totalPlays: 0,
-        lastPlayTime: 0,
-        recentRecords: [],
-        avgWatchTime: 0,
-        mostWatchedSource: '',
-        // 新增字段
-        totalMovies: 0,
-        firstWatchDate: Date.now(),
-        lastUpdateTime: Date.now(),
-        // 登入统计字段（错误时使用默认值）
-        loginCount: 0,
-        firstLoginTime: 0,
-        lastLoginTime: 0,
-        lastLoginDate: 0
+        username: userName, totalWatchTime: 0, totalPlays: 0, lastPlayTime: 0, recentRecords: [],
+        avgWatchTime: 0, mostWatchedSource: '', totalMovies: 0, firstWatchDate: 0,
+        lastUpdateTime: Date.now(), loginCount: 0, firstLoginTime: 0, lastLoginTime: 0, lastLoginDate: 0,
       };
     }
   }
@@ -888,39 +849,20 @@ export class UpstashRedisStorage implements IStorage {
     try {
       // 获取所有用户的播放记录
       const allUsers = await this.getAllUsers();
-      const contentStats: Record<string, {
-        source: string;
-        id: string;
-        title: string;
-        source_name: string;
-        cover: string;
-        year: string;
-        playCount: number;
-        totalWatchTime: number;
-        uniqueUsers: Set<string>;
-        lastPlayed: number;
-      }> = {};
+      const contentStats: Record<string, any> = {};
 
       for (const username of allUsers) {
         const records = await this.getAllPlayRecords(username);
         Object.entries(records).forEach(([key, record]) => {
           if (!contentStats[key]) {
-            // 从key中解析source和id
             const [source, id] = key.split('+', 2);
             contentStats[key] = {
-              source: source || '',
-              id: id || '',
-              title: record.title || '未知标题',
-              source_name: record.source_name || '未知来源',
-              cover: record.cover || '',
-              year: record.year || '',
-              playCount: 0,
-              totalWatchTime: 0,
-              uniqueUsers: new Set(),
-              lastPlayed: 0,
+              source: source || '', id: id || '', title: record.title || '未知标题',
+              source_name: record.source_name || '未知来源', cover: record.cover || '',
+              year: record.year || '', playCount: 0, totalWatchTime: 0,
+              uniqueUsers: new Set(), lastPlayed: 0,
             };
           }
-
           const stat = contentStats[key];
           stat.playCount += 1;
           stat.totalWatchTime += record.play_time || 0;
@@ -934,16 +876,8 @@ export class UpstashRedisStorage implements IStorage {
       // 转换 Set 为数量并排序
       const result = Object.values(contentStats)
         .map((stat) => ({
-          source: stat.source,
-          id: stat.id,
-          title: stat.title,
-          source_name: stat.source_name,
-          cover: stat.cover,
-          year: stat.year,
-          playCount: stat.playCount,
-          totalWatchTime: stat.totalWatchTime,
+          ...stat,
           averageWatchTime: stat.playCount > 0 ? stat.totalWatchTime / stat.playCount : 0,
-          lastPlayed: stat.lastPlayed,
           uniqueUsers: stat.uniqueUsers.size,
         }))
         .sort((a, b) => b.playCount - a.playCount)
@@ -980,17 +914,9 @@ export class UpstashRedisStorage implements IStorage {
       const loginStatsKey = `user_login_stats:${userName}`;
 
       // 获取当前登入统计数据
-      const currentStats = await this.client.get<{
-        loginCount?: number;
-        firstLoginTime?: number | null;
-        lastLoginTime?: number | null;
-        lastLoginDate?: number | null;
-      }>(loginStatsKey);
+      const currentStats = await this.client.get<any>(loginStatsKey);
       const loginStats = currentStats || {
-        loginCount: 0,
-        firstLoginTime: null,
-        lastLoginTime: null,
-        lastLoginDate: null
+        loginCount: 0, firstLoginTime: null, lastLoginTime: null, lastLoginDate: null
       };
 
       // 更新统计数据
