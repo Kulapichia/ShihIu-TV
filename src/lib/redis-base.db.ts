@@ -189,7 +189,10 @@ export abstract class BaseRedisStorage implements IStorage {
     userName: string
   ): Promise<Record<string, PlayRecord>> {
     const pattern = `u:${userName}:pr:*`;
-    const keys: string[] = await this.withRetry(() => this.client.keys(pattern));
+    const keys: string[] = [];
+    for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      keys.push(key);
+    }
     if (keys.length === 0) return {};
     const values = await this.withRetry(() => this.client.mGet(keys));
     const result: Record<string, PlayRecord> = {};
@@ -233,7 +236,9 @@ export abstract class BaseRedisStorage implements IStorage {
 
   async getAllFavorites(userName: string): Promise<Record<string, Favorite>> {
     const pattern = `u:${userName}:fav:*`;
-    const keys: string[] = await this.withRetry(() => this.client.keys(pattern));
+    for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      keys.push(key);
+    }
     if (keys.length === 0) return {};
     const values = await this.withRetry(() => this.client.mGet(keys));
     const result: Record<string, Favorite> = {};
@@ -290,19 +295,27 @@ export abstract class BaseRedisStorage implements IStorage {
 
   // 删除用户及其所有数据
   async deleteUser(userName: string): Promise<void> {
+    const keysToDelete: string[] = [];
     // 删除用户密码
-    await this.withRetry(() => this.client.del(this.userPwdKey(userName)));
-
+    keysToDelete.push(this.userPwdKey(userName));
     // 删除搜索历史
-    await this.withRetry(() => this.client.del(this.shKey(userName)));
-
+    keysToDelete.push(this.shKey(userName));
+    
     // 删除播放记录
-    const playRecordPattern = `u:${userName}:pr:*`;
-    const playRecordKeys = await this.withRetry(() =>
-      this.client.keys(playRecordPattern)
-    );
-    if (playRecordKeys.length > 0) {
-      await this.withRetry(() => this.client.del(playRecordKeys));
+    for await (const key of this.client.scanIterator({ MATCH: `u:${userName}:pr:*`, COUNT: 100 })) {
+      keysToDelete.push(key);
+    }
+    // 删除收藏夹
+    for await (const key of this.client.scanIterator({ MATCH: `u:${userName}:fav:*`, COUNT: 100 })) {
+      keysToDelete.push(key);
+    }
+    // 删除跳过片头片尾配置
+    for await (const key of this.client.scanIterator({ MATCH: `u:${userName}:skip:*`, COUNT: 100 })) {
+      keysToDelete.push(key);
+    }
+    
+    if (keysToDelete.length > 0) {
+      await this.withRetry(() => this.client.del(keysToDelete));
     }
 
     // 删除收藏夹
@@ -358,9 +371,14 @@ export abstract class BaseRedisStorage implements IStorage {
 
   // ---------- 获取全部用户 ----------
   async getAllUsers(): Promise<string[]> {
-    const keys = await this.withRetry(() => this.client.keys('u:*:pwd'));
-    return keys
-      .map((k) => {
+    const users: string[] = [];
+    for await (const key of this.client.scanIterator({ MATCH: 'u:*:pwd', COUNT: 100 })) {
+      const match = key.match(/^u:(.+?):pwd$/);
+      if (match) {
+        users.push(ensureString(match[1]));
+      }
+    }
+    return users;
         const match = k.match(/^u:(.+?):pwd$/);
         return match ? ensureString(match[1]) : undefined;
       })
@@ -427,7 +445,10 @@ export abstract class BaseRedisStorage implements IStorage {
     userName: string
   ): Promise<{ [key: string]: EpisodeSkipConfig }> {
     const pattern = `u:${userName}:skip:*`;
-    const keys = await this.withRetry(() => this.client.keys(pattern));
+    const keys: string[] = [];
+    for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      keys.push(key);
+    }
 
     if (keys.length === 0) {
       return {};
@@ -602,12 +623,177 @@ export abstract class BaseRedisStorage implements IStorage {
     // Redis的TTL机制会自动清理过期数据，这里主要用于手动清理
     // 可以根据需要实现特定前缀的缓存清理
     const pattern = prefix ? `cache:${prefix}*` : 'cache:*';
-    const keys = await this.withRetry(() => this.client.keys(pattern));
+    const keys: string[] = [];
+    for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      keys.push(key);
+    }
 
     if (keys.length > 0) {
       await this.withRetry(() => this.client.del(keys));
       console.log(`Cleared ${keys.length} cache entries with pattern: ${pattern}`);
     }
+  }
+
+  // ---------- 注册相关方法 ----------
+  private pendingUserKey(username: string) {
+    return `pending:user:${username}`;
+  }
+
+  private registrationStatsKey() {
+    return 'registration:stats';
+  }
+
+  async createPendingUser(username: string, password: string): Promise<void> {
+    const pendingUser: PendingUser = {
+      username,
+      registeredAt: Date.now(),
+      password: password, // 存储明文密码，与主系统保持一致
+    };
+
+    await this.withRetry(() =>
+      this.client.set(
+        this.pendingUserKey(username),
+        JSON.stringify(pendingUser)
+      )
+    );
+
+    // 更新今日注册统计
+    const today = new Date().toISOString().split('T')[0];
+    const todayKey = `registration:today:${today}`;
+    await this.withRetry(() => this.client.incr(todayKey));
+    await this.withRetry(() => this.client.expire(todayKey, 24 * 60 * 60)); // 24小时过期
+  }
+
+  async getPendingUsers(): Promise<PendingUser[]> {
+    const pattern = 'pending:user:*';
+    const keys: string[] = [];
+    for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      keys.push(key);
+    }
+    
+    if (keys.length === 0) return [];
+
+    const values = await this.withRetry(() => this.client.mGet(keys));
+    const pendingUsers: PendingUser[] = [];
+
+    values.forEach((raw, index) => {
+      if (raw) {
+        try {
+          // 检查 raw 是否为有效的 JSON 字符串
+          if (typeof raw === 'string' && raw !== '[object Object]') {
+            const parsed = JSON.parse(raw) as PendingUser;
+            // 验证解析后的数据结构是否完整
+            if (
+              parsed &&
+              parsed.username &&
+              typeof parsed.registeredAt === 'number'
+            ) {
+              pendingUsers.push(parsed);
+            } else {
+              console.warn('待审核用户数据结构不完整:', parsed);
+              // 可选：清理损坏的数据
+              const keyToClean = keys[index];
+              if (keyToClean) {
+                this.withRetry(() => this.client.del(keyToClean)).catch((err) =>
+                  console.error('清理损坏数据失败:', err)
+                );
+              }
+            }
+          } else {
+            console.warn('待审核用户数据格式无效:', raw);
+            // 清理无效数据
+            const keyToClean = keys[index];
+            if (keyToClean) {
+              this.withRetry(() => this.client.del(keyToClean)).catch((err) =>
+                console.error('清理无效数据失败:', err)
+              );
+            }
+          }
+        } catch (error) {
+          console.error('解析待审核用户数据失败:', error, 'raw data:', raw);
+          // 清理解析失败的损坏数据
+          const keyToClean = keys[index];
+          if (keyToClean) {
+            this.withRetry(() => this.client.del(keyToClean)).catch((err) =>
+              console.error('清理解析失败的数据失败:', err)
+            );
+          }
+        }
+      }
+    });
+
+    return pendingUsers.sort((a, b) => a.registeredAt - b.registeredAt);
+  }
+
+  async approvePendingUser(username: string): Promise<void> {
+    // 获取待审核用户信息
+    const pendingData = await this.withRetry(() =>
+      this.client.get(this.pendingUserKey(username))
+    );
+
+    if (!pendingData) {
+      throw new Error('待审核用户不存在');
+    }
+
+    let pendingUser: PendingUser;
+    try {
+      pendingUser = JSON.parse(pendingData);
+    } catch (e) {
+      console.error(`[DB] Failed to parse PendingUser for ${username}:`, e);
+      // 如果解析失败，直接拒绝并删除该损坏的待审核记录
+      await this.rejectPendingUser(username);
+      throw new Error(`待审核用户 ${username} 的数据已损坏`);
+    }
+
+    // 创建正式用户账号（使用明文密码）
+    await this.withRetry(() =>
+      this.client.set(this.userPwdKey(username), pendingUser.password)
+    );
+
+    // 删除待审核记录
+    await this.withRetry(() => this.client.del(this.pendingUserKey(username)));
+
+    console.log(`用户 ${username} 注册审核通过`);
+  }
+
+  async rejectPendingUser(username: string): Promise<void> {
+    const exists = await this.withRetry(() =>
+      this.client.exists(this.pendingUserKey(username))
+    );
+
+    if (exists === 0) {
+      throw new Error('待审核用户不存在');
+    }
+
+    await this.withRetry(() => this.client.del(this.pendingUserKey(username)));
+    console.log(`用户 ${username} 注册申请已拒绝`);
+  }
+
+  async getRegistrationStats(): Promise<RegistrationStats> {
+    // 获取总用户数
+    const allUsers = await this.getAllUsers();
+    const totalUsers = allUsers.length;
+
+    // 获取待审核用户数
+    const pendingUsers = await this.getPendingUsers();
+    const pendingCount = pendingUsers.length;
+
+    // 获取今日注册数
+    const today = new Date().toISOString().split('T')[0];
+    const todayKey = `registration:today:${today}`;
+    const todayCount = await this.withRetry(() => this.client.get(todayKey));
+    const todayRegistrations = todayCount ? parseInt(todayCount) : 0;
+
+    // 从配置中获取最大用户数限制
+    const adminConfig = await this.getAdminConfig();
+    const maxUsers = adminConfig?.SiteConfig?.MaxUsers;
+
+    return {
+      totalUsers,
+      maxUsers,
+      pendingUsers: pendingCount,
+      todayRegistrations,
+    };
   }
 
   // ---------- 播放统计相关 ----------
