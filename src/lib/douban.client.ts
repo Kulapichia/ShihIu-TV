@@ -448,10 +448,26 @@ export async function getDoubanList(
       break;
     case 'direct':
     default:
-      const response = await fetch(
-        `/api/douban?tag=${tag}&type=${type}&pageSize=${pageLimit}&pageStart=${pageStart}`
-      );
-      result = await response.json();
+      try {
+        const response = await fetch(
+          `/api/douban/list?type=${type}&tag=${tag}&limit=${pageLimit}&start=${pageStart}`
+        );
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        result = await response.json();
+      } catch (error) {
+        console.error(`获取豆瓣列表数据失败 (direct):`, error);
+        // 触发全局错误提示
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('globalError', {
+              detail: { message: `获取豆瓣列表 '${tag}' 失败` },
+            })
+          );
+        }
+        result = { code: 500, message: '获取失败', list: [] };
+      }
       break;
   }
   
@@ -594,10 +610,26 @@ export async function getDoubanRecommends(
       break;
     case 'direct':
     default:
-      const response = await fetch(
-        `/api/douban/recommends?kind=${kind}&limit=${pageLimit}&start=${pageStart}&category=${category}&format=${format}&region=${region}&year=${year}&platform=${platform}&sort=${sort}&label=${label}`
-      );
-      result = await response.json();
+      try {
+        const response = await fetch(
+          `/api/douban/recommends?kind=${kind}&limit=${pageLimit}&start=${pageStart}&category=${category}&format=${format}&region=${region}&year=${year}&platform=${platform}&sort=${sort}&label=${label}`
+        );
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        result = await response.json();
+      } catch (error) {
+        console.error(`获取豆瓣推荐数据失败 (direct):`, error);
+        // 触发全局错误提示
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('globalError', {
+              detail: { message: `获取豆瓣推荐 '${kind}' 失败` },
+            })
+          );
+        }
+        result = { code: 500, message: '获取失败', list: [] };
+      }
       break;
   }
   
