@@ -2,13 +2,15 @@
 
 import { db } from '@/lib/db';
 
-import { AdminConfig } from './admin.types';
+import { AdminConfig, OAuthConfig, SourceLastCheck } from './admin.types';
 
 export interface ApiSite {
   key: string;
   api: string;
   name: string;
   detail?: string;
+  disabled?: boolean;
+  lastCheck?: SourceLastCheck;
 }
 
 export interface LiveCfg {
@@ -209,10 +211,11 @@ async function getInitConfig(configFile: string, subConfig: {
         Number(process.env.NEXT_PUBLIC_SEARCH_MAX_PAGE) || 5,
       SiteInterfaceCacheTime: cfgFile.cache_time || 7200,
       DoubanProxyType:
-        process.env.NEXT_PUBLIC_DOUBAN_PROXY_TYPE || 'direct',
+        process.env.NEXT_PUBLIC_DOUBAN_PROXY_TYPE || 'cmliussss-cdn-tencent',
       DoubanProxy: process.env.NEXT_PUBLIC_DOUBAN_PROXY || '',
       DoubanImageProxyType:
-        process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE || 'direct',
+        process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE ||
+        'cmliussss-cdn-tencent',
       DoubanImageProxy: process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY || '',
       DisableYellowFilter:
         process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true',
@@ -222,6 +225,63 @@ async function getInitConfig(configFile: string, subConfig: {
       TMDBApiKey: process.env.TMDB_API_KEY || '',
       TMDBLanguage: 'zh-CN',
       EnableTMDBActorSearch: false, // 默认关闭，需要配置API Key后手动开启
+      ShowContentFilter:
+        process.env.NEXT_PUBLIC_SHOW_CONTENT_FILTER !== 'false',
+      EnableVirtualScroll: process.env.ENABLE_VIRTUAL_SCROLL !== 'false',
+      // 智能内容审核配置
+      IntelligentFilter: {
+        enabled: false,
+        provider: 'sightengine',
+        confidence: 0.85,
+        options: {
+          sightengine: {
+            apiUrl: 'https://api.sightengine.com/1.0/check.json',
+            apiUser: '',
+            apiSecret: '',
+            timeoutMs: 12000,
+          },
+          custom: {
+            apiUrl: '',
+            apiKeyHeader: 'X-Api-Key',
+            apiKeyValue: '',
+            jsonBodyTemplate: '{"image": "{{URL}}"}',
+            responseScorePath: 'nudity.raw',
+          },
+          baidu: {
+            apiKey: '',
+            secretKey: '',
+            tokenUrl: 'https://aip.baidubce.com/oauth/2.0/token',
+            timeoutMs: 12000, // 新增：默认审核超时12秒
+            tokenTimeoutMs: 10000, // 新增：默认Token超时10秒
+          },
+          aliyun: {
+            accessKeyId: '',
+            accessKeySecret: '',
+            regionId: 'cn-shanghai',
+          },
+          tencent: {
+            secretId: '',
+            secretKey: '',
+            region: 'ap-shanghai',
+          },
+        },
+      },
+      EnableRegistration: process.env.ENABLE_REGISTRATION === 'true',
+      RegistrationApproval: process.env.REGISTRATION_APPROVAL !== 'false',
+      MaxUsers: process.env.MAX_USERS
+        ? Number(process.env.MAX_USERS)
+        : undefined,
+      LinuxDoOAuth: {
+        enabled: false,
+        autoRegister: false,
+        minTrustLevel: 3,
+        defaultRole: 'user',
+        clientId: '',
+        clientSecret: '',
+        authorizeUrl: 'https://connect.linux.do/oauth2/authorize',
+        tokenUrl: 'https://connect.linux.do/oauth2/token',
+        userInfoUrl: 'https://connect.linux.do/api/user',
+      },
     },
     UserConfig: {
       AllowRegister: true, // 默认允许注册
@@ -344,6 +404,23 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   if (!adminConfig.LiveConfig || !Array.isArray(adminConfig.LiveConfig)) {
     adminConfig.LiveConfig = [];
   }
+  if (adminConfig.SiteConfig.EnableVirtualScroll === undefined) {
+    adminConfig.SiteConfig.EnableVirtualScroll = true;
+  }
+  // 确保 OAuth 配置存在
+  if (!adminConfig.SiteConfig.LinuxDoOAuth) {
+    adminConfig.SiteConfig.LinuxDoOAuth = {
+      enabled: false,
+      autoRegister: false,
+      minTrustLevel: 3,
+      defaultRole: 'user',
+      clientId: '',
+      clientSecret: '',
+      authorizeUrl: 'https://connect.linux.do/oauth2/authorize',
+      tokenUrl: 'https://connect.linux.do/oauth2/token',
+      userInfoUrl: 'https://connect.linux.do/api/user',
+    };
+  }
   
   // 确保网盘搜索配置有默认值
   if (!adminConfig.NetDiskConfig) {
@@ -439,6 +516,50 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
     return true;
   });
 
+  // 新增：智能审核配置从旧格式到新格式的数据迁移逻辑
+  // @ts-ignore - 临时允许访问可能不存在的旧属性
+  if (adminConfig.SiteConfig.IntelligentFilterEnabled !== undefined) {
+    console.log('[Config] Migrating legacy IntelligentFilter settings to new structure...');
+    
+    // @ts-ignore
+    const legacyEnabled = adminConfig.SiteConfig.IntelligentFilterEnabled;
+    // @ts-ignore
+    const legacyConfidence = adminConfig.SiteConfig.IntelligentFilterConfidence;
+    // @ts-ignore
+    const legacyApiUrl = adminConfig.SiteConfig.IntelligentFilterApiUrl;
+    // @ts-ignore
+    const legacyApiKey = adminConfig.SiteConfig.IntelligentFilterApiKey;
+    adminConfig.SiteConfig.IntelligentFilter = {
+      enabled: legacyEnabled,
+      provider: 'sightengine', // 旧配置无法判断提供商，默认迁移到 sightengine
+      confidence: legacyConfidence || 0.85,
+      options: {
+        sightengine: {
+          apiUrl: legacyApiUrl || 'https://api.sightengine.com/1.0/check.json',
+          // 旧的 ApiKey 同时赋值给 User 和 Secret，需要用户迁移后手动检查修正
+          apiUser: legacyApiKey || '',
+          apiSecret: legacyApiKey || '',
+        },
+        custom: {
+          apiUrl: '',
+          apiKeyHeader: 'X-Api-Key',
+          apiKeyValue: '',
+          jsonBodyTemplate: '{"image": "{{URL}}"}',
+          responseScorePath: 'nudity.raw', // 初始化新字段
+        },
+      },
+    };
+  
+    // 删除旧的、已迁移的属性
+    // @ts-ignore
+    delete adminConfig.SiteConfig.IntelligentFilterEnabled;
+    // @ts-ignore
+    delete adminConfig.SiteConfig.IntelligentFilterApiUrl;
+    // @ts-ignore
+    delete adminConfig.SiteConfig.IntelligentFilterApiKey;
+    // @ts-ignore
+    delete adminConfig.SiteConfig.IntelligentFilterConfidence;
+  }
   return adminConfig;
 }
 
@@ -480,12 +601,7 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
   // 优先根据用户自己的 enabledApis 配置查找
   if (userConfig.enabledApis && userConfig.enabledApis.length > 0) {
     const userApiSitesSet = new Set(userConfig.enabledApis);
-    return allApiSites.filter((s) => userApiSitesSet.has(s.key)).map((s) => ({
-      key: s.key,
-      name: s.name,
-      api: s.api,
-      detail: s.detail,
-    }));
+    return allApiSites.filter((s) => userApiSitesSet.has(s.key));
   }
 
   // 如果没有 enabledApis 配置，则根据 tags 查找
@@ -501,12 +617,7 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
     });
 
     if (enabledApisFromTags.size > 0) {
-      return allApiSites.filter((s) => enabledApisFromTags.has(s.key)).map((s) => ({
-        key: s.key,
-        name: s.name,
-        api: s.api,
-        detail: s.detail,
-      }));
+      return allApiSites.filter((s) => enabledApisFromTags.has(s.key));
     }
   }
 
@@ -515,6 +626,11 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
 }
 
 export async function setCachedConfig(config: AdminConfig) {
+  cachedConfig = config;
+}
+
+export async function saveAndCacheConfig(config: AdminConfig) {
+  await db.saveAdminConfig(config);
   cachedConfig = config;
 }
 
