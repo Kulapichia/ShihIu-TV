@@ -404,3 +404,232 @@ export function isSeriesCompleted(remarks?: string): boolean {
   // - 单独的"完"（但不包括"完整"）
   return /完结|已完结|全\d+集|完(?!整)/.test(remarks);
 }
+
+// ========================================================================
+// 导入/导出功能所需的函数
+// ========================================================================
+
+type Source = AdminConfig['SourceConfig'][0];
+
+/**
+ * 导出数据为文件
+ * @param data - 要导出的视频源数组
+ * @param format - 格式 'json', 'csv', 'text'
+ * @param cacheTime - 仅在导出json时需要，用于构建config.json结构
+ */
+export function exportData(
+  data: Source[],
+  format: 'json' | 'csv' | 'text',
+  cacheTime?: number
+) {
+  let content: string;
+  let mimeType: string;
+  let fileExtension: string;
+  let fileName: string; //用于自定义文件名
+
+  switch (format) {
+    case 'csv': {
+      const header = 'name,key,api,detail,disabled\n';
+      const rows = data
+        .map(
+          (s) =>
+            `"${s.name}","${s.key}","${s.api}","${s.detail || ''}","${
+              s.disabled
+            }"`
+        )
+        .join('\n');
+      content = header + rows;
+      mimeType = 'text/csv;charset=utf-8;';
+      fileExtension = 'csv';
+      break;
+    }
+
+    case 'text':
+      content = data.map((s) => s.api).join('\n');
+      mimeType = 'text/plain;charset=utf-8;';
+      fileExtension = 'txt';
+      break;
+
+    case 'json':
+    default: {
+      // 将数组转换为 "api_site" 对象结构
+      const api_site = data.reduce(
+        (acc, source) => {
+          // 只导出需要的字段
+          acc[source.key] = {
+            name: source.name,
+            api: source.api,
+            detail: source.detail || '',
+          };
+          return acc;
+        },
+        {} as Record<string, { name: string; api: string; detail: string }>
+      );
+
+      const exportObject = {
+        cache_time: cacheTime || 7200, // 使用传入的cacheTime或默认值
+        api_site,
+      };
+
+      // 使用4个空格缩进以匹配格式
+      content = JSON.stringify(exportObject, null, 4);
+      mimeType = 'application/json;charset=utf-8;';
+      fileExtension = 'json';
+      break;
+    }
+  }
+
+  // 根据格式决定文件名
+  if (format === 'json') {
+    fileName = 'config.json';
+  } else {
+    fileName = `video_sources_${new Date()
+      .toISOString()
+      .slice(0, 10)}.${fileExtension}`;
+  }
+
+  const blob = new Blob([content], { type: mimeType });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = fileName; //使用新的文件名变量
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/**
+ * 解析导入的文本数据并进行校验
+ * @param rawText - 原始文本
+ * @param existingKeys - 已存在的 key 集合，用于查重
+ * @returns 解析结果，包括数据、格式和错误信息
+ */
+export function parseImportData(rawText: string, existingKeys: Set<string>) {
+  const lines = rawText.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) return { data: [], format: 'unknown', errors: ['输入内容为空'] };
+
+  const errors: string[] = [];
+  const parsedData: Omit<Source, 'from'>[] = [];
+  const importKeys = new Set<string>();
+  let format = 'unknown';
+
+  // 1. Try parsing as JSON
+  try {
+    const jsonData = JSON.parse(rawText);
+    
+    // 检查是否为 config.json 格式 (包含 api_site 对象)
+    if (jsonData && typeof jsonData.api_site === 'object' && !Array.isArray(jsonData.api_site)) {
+      format = 'json';
+      Object.entries(jsonData.api_site).forEach(([key, site]: [string, any], index) => {
+        if (!site.name || !site.api) {
+          errors.push(`第 ${index + 1} 条 (JSON config): 源 "${key}" 缺少 name 或 api 字段。`);
+          return;
+        }
+        if (existingKeys.has(key)) {
+          errors.push(`第 ${index + 1} 条 (JSON config): Key "${key}" 已存在，将跳过。`);
+          return;
+        }
+        if (importKeys.has(key)) {
+          errors.push(`第 ${index + 1} 条 (JSON config): Key "${key}" 在导入数据中重复，将跳过。`);
+          return;
+        }
+        parsedData.push({
+          name: String(site.name),
+          key: key,
+          api: String(site.api),
+          detail: String(site.detail || ''),
+          disabled: false, // 默认不禁用
+        });
+        importKeys.add(key);
+      });
+      return { data: parsedData, format, errors };
+    }
+    
+    // 检查是否为简单的对象数组格式
+    if (Array.isArray(jsonData)) {
+      format = 'json';
+      jsonData.forEach((item, index) => {
+        if (!item.key || !item.name || !item.api) {
+          errors.push(`第 ${index + 1} 行 (JSON): 缺少 name, key, 或 api 字段。`);
+          return;
+        }
+        if (existingKeys.has(item.key)) {
+          errors.push(`第 ${index + 1} 行 (JSON): Key "${item.key}" 已存在，将跳过。`);
+          return;
+        }
+        if (importKeys.has(item.key)) {
+          errors.push(`第 ${index + 1} 行 (JSON): Key "${item.key}" 在导入数据中重复，将跳过。`);
+          return;
+        }
+        parsedData.push({
+          name: String(item.name),
+          key: String(item.key),
+          api: String(item.api),
+          detail: String(item.detail || ''),
+          disabled: Boolean(item.disabled),
+        });
+        importKeys.add(item.key);
+      });
+      return { data: parsedData, format, errors };
+    }
+  } catch (e) { /* 不是 JSON, 继续尝试下一种格式 */ }
+  
+  // 2. Try parsing as CSV
+  if (lines[0].includes(',')) {
+    format = 'csv';
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''));
+    const nameIndex = header.indexOf('name');
+    const keyIndex = header.indexOf('key');
+    const apiIndex = header.indexOf('api');
+    
+    if (nameIndex > -1 && keyIndex > -1 && apiIndex > -1) {
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+        const key = values[keyIndex];
+        const name = values[nameIndex];
+        const api = values[apiIndex];
+
+        if (!key || !name || !api) {
+          errors.push(`第 ${i + 1} 行 (CSV): 缺少 name, key, 或 api 值。`);
+          continue;
+        }
+        if (existingKeys.has(key)) {
+          errors.push(`第 ${i + 1} 行 (CSV): Key "${key}" 已存在，将跳过。`);
+          continue;
+        }
+        if (importKeys.has(key)) {
+          errors.push(`第 ${i + 1} 行 (CSV): Key "${key}" 在导入数据中重复，将跳过。`);
+          continue;
+        }
+        parsedData.push({
+          key, name, api,
+          detail: values[header.indexOf('detail')] || '',
+          disabled: values[header.indexOf('disabled')] === 'true',
+        });
+        importKeys.add(key);
+      }
+      return { data: parsedData, format, errors };
+    }
+  }
+
+  // 3. Assume Plain Text (one API per line)
+  format = 'text';
+  lines.forEach((line, index) => {
+    try {
+      const url = new URL(line);
+      const name = url.hostname;
+      const key = `imported_${Date.now()}_${index}`; // 生成唯一 key
+      
+      parsedData.push({
+        name: `导入 - ${name}`,
+        key,
+        api: line,
+        detail: '',
+        disabled: false,
+      });
+    } catch (e) {
+      errors.push(`第 ${index + 1} 行 (TEXT): "${line.slice(0, 30)}..." 不是一个有效的 URL。`);
+    }
+  });
+
+  return { data: parsedData, format, errors };
+}
