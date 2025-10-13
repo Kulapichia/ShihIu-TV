@@ -80,9 +80,7 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
   // 获取远程变更日志
   const fetchRemoteChangelog = async () => {
     try {
-      const response = await fetch(
-        'https://raw.githubusercontent.com/SzeMeng76/LunaTV/refs/heads/main/CHANGELOG'
-      );
+      const response = await fetch('/api/changelog');
       if (response.ok) {
         const content = await response.text();
         const parsed = parseChangelog(content);
@@ -362,15 +360,14 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
                       </p>
                     </div>
                   </div>
-                  <a
-                    href='https://github.com/SzeMeng76/LunaTV'
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    className='inline-flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-xs sm:text-sm rounded-lg transition-colors shadow-sm w-full'
+                  
+                  <button
+                    disabled
+                    className='inline-flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600 text-white text-xs sm:text-sm rounded-lg transition-colors shadow-sm w-full opacity-50 cursor-not-allowed'
                   >
                     <Download className='w-3 h-3 sm:w-4 sm:h-4' />
                     前往仓库
-                  </a>
+                  </button>
                 </div>
               </div>
             )}
@@ -392,15 +389,13 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
                       </p>
                     </div>
                   </div>
-                  <a
-                    href='https://github.com/SzeMeng76/LunaTV'
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    className='inline-flex items-center justify-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm rounded-lg transition-colors shadow-sm w-full'
+                  <button
+                    disabled
+                    className='inline-flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white text-xs sm:text-sm rounded-lg transition-colors shadow-sm w-full opacity-50 cursor-not-allowed'
                   >
                     <CheckCircle className='w-3 h-3 sm:w-4 sm:h-4' />
                     前往仓库
-                  </a>
+                  </button>
                 </div>
               </div>
             )}
