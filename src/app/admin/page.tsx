@@ -31,10 +31,15 @@ import {
   ChevronUp,
   Database,
   ExternalLink,
+  FileJson,
   FileText,
   FolderOpen,
+  KeyRound,
   Settings,
+  Sheet,
   Tv,
+  Upload,
+  UserCheck,
   Users,
   Video,
 } from 'lucide-react';
@@ -42,8 +47,15 @@ import { GripVertical } from 'lucide-react';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { AdminConfig, AdminConfigResult } from '@/lib/admin.types';
+import {
+  AdminConfig,
+  AdminConfigResult,
+  PendingUser,
+  RegistrationStats,
+  SiteConfig,
+} from '@/lib/admin.types';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
+import { exportData, parseImportData } from '@/lib/utils';
 
 import AIRecommendConfig from '@/components/AIRecommendConfig';
 import CacheManager from '@/components/CacheManager';
@@ -99,7 +111,7 @@ const buttonStyles = {
 interface AlertModalProps {
   isOpen: boolean;
   onClose: () => void;
-  type: 'success' | 'error' | 'warning';
+  type: 'success' | 'error' | 'warning' | 'info';
   title: string;
   message?: string;
   timer?: number;
@@ -140,6 +152,8 @@ const AlertModal = ({
         return <AlertCircle className="w-8 h-8 text-red-500" />;
       case 'warning':
         return <AlertTriangle className="w-8 h-8 text-yellow-500" />;
+      case 'info':
+        return <AlertCircle className="w-8 h-8 text-blue-500" />;
       default:
         return null;
     }
@@ -153,6 +167,8 @@ const AlertModal = ({
         return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
       case 'warning':
         return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800';
+      case 'info':
+        return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800';
       default:
         return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800';
     }
@@ -195,7 +211,7 @@ const AlertModal = ({
 const useAlertModal = () => {
   const [alertModal, setAlertModal] = useState<{
     isOpen: boolean;
-    type: 'success' | 'error' | 'warning';
+    type: 'success' | 'error' | 'warning' | 'info';
     title: string;
     message?: string;
     timer?: number;
@@ -3609,15 +3625,16 @@ const ConfigFileComponent = ({ config, refreshConfig }: { config: AdminConfig | 
           body: JSON.stringify({ url: subscriptionUrl }),
         });
 
+        const data = await resp.json().catch(() => ({})); // 保证data总是一个对象
+
         if (!resp.ok) {
-          const data = await resp.json().catch(() => ({}));
-          throw new Error(data.error || `拉取失败: ${resp.status}`);
+          // 优先使用后端返回的错误信息
+          const errorMessage = data.error || `拉取失败: HTTP ${resp.status}`;
+          throw new Error(errorMessage);
         }
 
-        const data = await resp.json();
         if (data.configContent) {
           setConfigContent(data.configContent);
-          // 更新本地配置的最后检查时间
           const currentTime = new Date().toISOString();
           setLastCheckTime(currentTime);
           showSuccess('配置拉取成功', showAlert);
@@ -3625,11 +3642,13 @@ const ConfigFileComponent = ({ config, refreshConfig }: { config: AdminConfig | 
           showError('拉取失败：未获取到配置内容', showAlert);
         }
       } catch (err) {
-        showError(err instanceof Error ? err.message : '拉取失败', showAlert);
-        throw err;
+        // 将具体的错误信息展示给用户
+        showError(err instanceof Error ? err.message : '发生未知错误', showAlert);
+        // 此处不需要再向上抛出错误，因为 withLoading 已经处理了
       }
     });
   };
+
 
   // 保存配置文件
   const handleSave = async () => {
@@ -3806,7 +3825,13 @@ const ConfigFileComponent = ({ config, refreshConfig }: { config: AdminConfig | 
 };
 
 // 新增站点配置组件
-const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | null; refreshConfig: () => Promise<void> }) => {
+const SiteConfigComponent = ({
+  config,
+  refreshConfig,
+}: {
+  config: AdminConfig | null;
+  refreshConfig: () => Promise<void>;
+}) => {
   const { alertModal, showAlert, hideAlert } = useAlertModal();
   const { isLoading, withLoading } = useLoadingState();
   const [siteSettings, setSiteSettings] = useState<SiteConfig>({
@@ -3814,9 +3839,9 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
     Announcement: '',
     SearchDownstreamMaxPage: 1,
     SiteInterfaceCacheTime: 7200,
-    DoubanProxyType: 'direct',
+    DoubanProxyType: 'cmliussss-cdn-tencent',
     DoubanProxy: '',
-    DoubanImageProxyType: 'direct',
+    DoubanImageProxyType: 'cmliussss-cdn-tencent',
     DoubanImageProxy: '',
     DisableYellowFilter: false,
     FluidSearch: true,
@@ -3824,7 +3849,72 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
     TMDBApiKey: '',
     TMDBLanguage: 'zh-CN',
     EnableTMDBActorSearch: false,
+    // 初始化新增字段
+    IntelligentFilter: {
+      enabled: false,
+      provider: 'sightengine',
+      confidence: 0.85,
+      options: {
+        sightengine: { apiUrl: '', apiUser: '', apiSecret: '' },
+        custom: { apiUrl: '', apiKeyHeader: '', apiKeyValue: '', jsonBodyTemplate: '', responseScorePath: '' },
+        baidu: { apiKey: '', secretKey: '' },
+        aliyun: { accessKeyId: '', accessKeySecret: '', regionId: 'cn-shanghai' },
+        tencent: { secretId: '', secretKey: '', region: 'ap-shanghai' },
+      },
+    },
+    EnableRegistration: false,
+    RegistrationApproval: true,
+    LinuxDoOAuth: {
+      enabled: false,
+      autoRegister: false,
+      minTrustLevel: 3,
+      defaultRole: 'user',
+      clientId: '',
+      clientSecret: '',
+      authorizeUrl: 'https://connect.linux.do/oauth2/authorize',
+      tokenUrl: 'https://connect.linux.do/oauth2/token',
+      userInfoUrl: 'https://connect.linux.do/api/user',
+    },
   });
+  // 新增：API测试相关状态
+  const [isApiTesting, setIsApiTesting] = useState(false);
+  const [apiTestResult, setApiTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [isApiVerified, setIsApiVerified] = useState(false);
+  // 新增：创建更健壮、可复用的状态更新函数
+  const handleIntelligentFilterChange = (
+    key: keyof SiteConfig['IntelligentFilter'],
+    value: any
+  ) => {
+    setSiteSettings((prev) => ({
+      ...prev,
+      IntelligentFilter: {
+        ...prev.IntelligentFilter!,
+        [key]: value,
+      },
+    }));
+  };
+  const handleFilterOptionChange = (
+    provider: 'sightengine' | 'custom' | 'baidu' | 'aliyun' | 'tencent',
+    key: string,
+    value: string
+  ) => {
+    setSiteSettings((prev) => ({
+      ...prev,
+      IntelligentFilter: {
+        ...prev.IntelligentFilter!,
+        options: {
+          ...prev.IntelligentFilter!.options,
+          [provider]: {
+            ...prev.IntelligentFilter!.options[provider]!,
+            [key]: value,
+          },
+        },
+      },
+    }));
+  };
 
   // 豆瓣数据源相关状态
   const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
@@ -3877,19 +3967,69 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
 
   useEffect(() => {
     if (config?.SiteConfig) {
-      setSiteSettings({
-        ...config.SiteConfig,
-        DoubanProxyType: config.SiteConfig.DoubanProxyType || 'direct',
-        DoubanProxy: config.SiteConfig.DoubanProxy || '',
-        DoubanImageProxyType:
-          config.SiteConfig.DoubanImageProxyType || 'direct',
-        DoubanImageProxy: config.SiteConfig.DoubanImageProxy || '',
-        DisableYellowFilter: config.SiteConfig.DisableYellowFilter || false,
-        FluidSearch: config.SiteConfig.FluidSearch || true,
-        // TMDB配置
-        TMDBApiKey: config.SiteConfig.TMDBApiKey || '',
-        TMDBLanguage: config.SiteConfig.TMDBLanguage || 'zh-CN',
-        EnableTMDBActorSearch: config.SiteConfig.EnableTMDBActorSearch || false,
+      // 深度合并配置，确保所有层级的默认值都存在
+      const deepMerge = (defaults: any, newConfig: any): any => {
+        const merged = { ...defaults };
+        for (const key in newConfig) {
+          if (newConfig[key] !== undefined && newConfig[key] !== null) {
+            if (
+              typeof newConfig[key] === 'object' &&
+              !Array.isArray(newConfig[key]) &&
+              defaults[key] &&
+              typeof defaults[key] === 'object'
+            ) {
+              merged[key] = deepMerge(defaults[key], newConfig[key]);
+            } else {
+              merged[key] = newConfig[key];
+            }
+          }
+        }
+        return merged;
+      };
+
+      setSiteSettings((prevSettings) => {
+        // 步骤 1: 深度合并，处理所有 ?? 逻辑
+        const newConfig = deepMerge(prevSettings, config.SiteConfig);
+        
+        // 步骤 2: 处理密钥占位符
+        const newOptions = newConfig.IntelligentFilter.options;
+        const prevOptions = prevSettings.IntelligentFilter.options;
+        
+        if (newOptions.sightengine?.apiSecret === '********' && prevOptions.sightengine?.apiSecret) {
+          newOptions.sightengine.apiSecret = prevOptions.sightengine.apiSecret;
+        }
+        if (newOptions.custom?.apiKeyValue === '********' && prevOptions.custom?.apiKeyValue) {
+          newOptions.custom.apiKeyValue = prevOptions.custom.apiKeyValue;
+        }
+        if (newOptions.baidu?.secretKey === '********' && prevOptions.baidu?.secretKey) {
+          newOptions.baidu.secretKey = prevOptions.baidu.secretKey;
+        }
+        if (newOptions.aliyun?.accessKeySecret === '********' && prevOptions.aliyun?.accessKeySecret) {
+          newOptions.aliyun.accessKeySecret = prevOptions.aliyun.accessKeySecret;
+        }
+        if (newOptions.tencent?.secretKey === '********' && prevOptions.tencent?.secretKey) {
+          newOptions.tencent.secretKey = prevOptions.tencent.secretKey;
+        }
+
+        // 步骤 3: 处理需要 || 逻辑的字段
+        const fieldsWithFalsyDefaults = {
+          DoubanProxyType: 'cmliussss-cdn-tencent',
+          DoubanImageProxyType: 'cmliussss-cdn-tencent',
+          DoubanProxy: '',
+          DoubanImageProxy: '',
+          DisableYellowFilter: false,
+        };
+        
+        for (const [field, defaultValue] of Object.entries(fieldsWithFalsyDefaults)) {
+          // 使用这个判断条件来正确模拟 || 的行为
+          if (!newConfig[field]) {
+            // 特殊处理布尔值 false，因为 !false 是 true
+            if (newConfig[field] === false) continue;
+            newConfig[field] = defaultValue;
+          }
+        }
+        
+        return newConfig;
       });
     }
   }, [config]);
@@ -3928,6 +4068,26 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
         document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [isDoubanImageProxyDropdownOpen]);
+  
+  // [新增useEffect]
+  // 新增：当审核配置变化时，重置验证状态
+  useEffect(() => {
+    setIsApiVerified(false);
+    setApiTestResult(null);
+  }, [
+    siteSettings.IntelligentFilter?.provider,
+    siteSettings.IntelligentFilter?.options.custom?.apiUrl,
+    siteSettings.IntelligentFilter?.options.custom?.apiKeyHeader,
+    siteSettings.IntelligentFilter?.options.custom?.apiKeyValue,
+    siteSettings.IntelligentFilter?.options.custom?.jsonBodyTemplate,
+    siteSettings.IntelligentFilter?.options.custom?.responseScorePath,
+    siteSettings.IntelligentFilter?.options.sightengine?.apiUrl,
+    siteSettings.IntelligentFilter?.options.sightengine?.apiUser,
+    siteSettings.IntelligentFilter?.options.sightengine?.apiSecret,
+    siteSettings.IntelligentFilter?.options.baidu?.apiKey,
+    siteSettings.IntelligentFilter?.options.baidu?.secretKey,
+    siteSettings.IntelligentFilter?.options.baidu?.tokenUrl,
+  ]);
 
   // 处理豆瓣数据源变化
   const handleDoubanDataSourceChange = (value: string) => {
@@ -3945,16 +4105,58 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
     }));
   };
 
+  // 测试API连接的函数（已修改为通用）
+  const handleTestApiConnection = async () => {
+    const provider = siteSettings.IntelligentFilter?.provider;
+    if (!provider) return;
+
+    // 根据当前选择的 provider 动态获取对应的配置
+    const config = siteSettings.IntelligentFilter.options[provider];
+
+    if (!config) {
+      showAlert({ type: 'error', title: '错误', message: '找不到API配置' });
+      return;
+    }
+
+    setIsApiTesting(true);
+    setApiTestResult(null);
+    try {
+      // 向同一个后端接口发送请求，但增加了 provider 字段以作区分
+      const response = await fetch('/api/admin/moderate/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider, // <--- 关键改动：告知后端当前测试的是哪个提供商
+          config: config,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || '测试请求失败');
+      }
+      setApiTestResult({ success: true, message: result.message });
+      setIsApiVerified(true); // 测试通过
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '未知错误';
+      setApiTestResult({ success: false, message });
+      setIsApiVerified(false); // 测试失败
+    } finally {
+      setIsApiTesting(false);
+    }
+  };
+
+
   // 保存站点配置
   const handleSave = async () => {
+    // 在保存前，先对数据进行处理
+    const settingsToSave = JSON.parse(JSON.stringify(siteSettings));
     await withLoading('saveSiteConfig', async () => {
       try {
         const resp = await fetch('/api/admin/site', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...siteSettings }),
+          body: JSON.stringify(settingsToSave),
         });
-
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
           throw new Error(data.error || `保存失败: ${resp.status}`);
@@ -3968,6 +4170,8 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
       }
     });
   };
+  
+
 
   if (!config) {
     return (
@@ -4344,7 +4548,404 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
           启用后搜索结果将实时流式返回，提升用户体验。
         </p>
       </div>
+      
+      {/* 显示内容安全筛选器 */}
+      <div>
+        <div className='flex items-center justify-between'>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            显示内容安全筛选器
+          </label>
+          <button
+            type='button'
+            onClick={() =>
+              setSiteSettings((prev) => ({
+                ...prev,
+                ShowContentFilter: !(prev.ShowContentFilter ?? true),
+              }))
+            }
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+              siteSettings.ShowContentFilter !== false
+                ? buttonStyles.toggleOn
+                : buttonStyles.toggleOff
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full ${buttonStyles.toggleThumb} transition-transform ${
+                siteSettings.ShowContentFilter !== false
+                  ? buttonStyles.toggleThumbOn
+                  : buttonStyles.toggleThumbOff
+              }`}
+            />
+          </button>
+        </div>
+        <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+          在搜索结果页面显示“全部/常规/探索内容”的筛选切换按钮。
+        </p>
+      </div>
 
+      {/* 新增：智能内容审核配置 */}
+      <div className='border-t border-gray-200 dark:border-gray-700 pt-6 mt-6'>
+        <h3 className='text-md font-semibold text-gray-800 dark:text-gray-200 mb-4'>
+          智能内容审核
+        </h3>
+        <div className='space-y-6'>
+          {/* 启用开关 */}
+          <div>
+            <div className='flex items-center justify-between'>
+              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300'>
+                启用智能审核
+              </label>
+              <button
+                type='button'
+                onClick={() => handleIntelligentFilterChange('enabled', !siteSettings.IntelligentFilter?.enabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+                  siteSettings.IntelligentFilter?.enabled
+                    ? buttonStyles.toggleOn
+                    : buttonStyles.toggleOff
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full ${
+                    buttonStyles.toggleThumb
+                  } transition-transform ${
+                    siteSettings.IntelligentFilter?.enabled
+                      ? buttonStyles.toggleThumbOn
+                      : buttonStyles.toggleThumbOff
+                  }`}
+                />
+              </button>
+            </div>
+            <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+              启用后，将使用第三方AI服务对视频封面图进行审核。
+            </p>
+          </div>
+          {/* 提供商选择 */}
+          <div>
+            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+              审核服务提供商
+            </label>
+            <select
+              value={siteSettings.IntelligentFilter?.provider || 'sightengine'}
+              onChange={(e) => handleIntelligentFilterChange('provider', e.target.value)}
+              className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+            >
+              <option value='sightengine'>Sightengine (内置支持)</option>
+              <option value='baidu'>百度智能云 (内置支持)</option>
+              <option value='aliyun'>阿里云 (即将支持)</option>
+              <option value='tencent'>腾讯云 (即将支持)</option>
+              <option value='custom'>自定义 API</option>
+            </select>
+          </div>
+          {/* Sightengine 配置项 */}
+          {siteSettings.IntelligentFilter?.provider === 'sightengine' && (
+            <div className='space-y-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900/50'>
+              <p className='text-sm text-gray-600 dark:text-gray-400'>
+                为 Sightengine 配置 API 凭证。
+              </p>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                  API URL
+                </label>
+                <input
+                  type='text'
+                  value={siteSettings.IntelligentFilter.options.sightengine?.apiUrl || ''}
+                  onChange={(e) => handleFilterOptionChange('sightengine', 'apiUrl', e.target.value)}
+                  placeholder='留空将使用默认地址: https://api.sightengine.com/'
+                  className='w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                  API User
+                </label>
+                <input
+                  type='text'
+                  placeholder='请输入 Sightengine API User'
+                  value={siteSettings.IntelligentFilter.options.sightengine?.apiUser || ''}
+                  onChange={(e) => handleFilterOptionChange('sightengine', 'apiUser', e.target.value)}
+                  className='w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                  API Secret
+                </label>
+                <input
+                  type='password'
+                  placeholder='请输入 Sightengine API Secret'
+                  value={siteSettings.IntelligentFilter.options.sightengine?.apiSecret || ''}
+                  onChange={(e) => handleFilterOptionChange('sightengine', 'apiSecret', e.target.value)}
+                  className='w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                />
+              </div>
+              {/* 超时时间设置 */}
+              <div>
+                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                  超时时间 (毫秒)
+                </label>
+                <input
+                  type='number'
+                  placeholder='默认 15000'
+                  value={siteSettings.IntelligentFilter.options.sightengine?.timeoutMs || ''}
+                  onChange={(e) => handleFilterOptionChange('sightengine', 'timeoutMs', e.target.value)}
+                  className='w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                />
+                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                  设置请求 Sightengine API 的超时时间，单位为毫秒。
+                </p>
+              </div>              
+              {/* 为 Sightengine 添加测试连接按钮和结果显示 */}
+              <div className='pt-2'>
+                <button
+                  type='button'
+                  onClick={handleTestApiConnection}
+                  disabled={isApiTesting}
+                  className={`w-full px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    isApiTesting
+                      ? buttonStyles.disabled
+                      : buttonStyles.primary
+                  }`}
+                >
+                  {isApiTesting ? '测试中...' : '测试连接'}
+                </button>
+                {apiTestResult && (
+                  <div
+                    className={`mt-3 p-2 text-xs rounded-md ${
+                      apiTestResult.success
+                        ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                        : 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                    }`}
+                  >
+                    {apiTestResult.message}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* 百度智能云 配置项 */}
+          {siteSettings.IntelligentFilter?.provider === 'baidu' && (
+            <div className='space-y-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900/50'>
+              <p className='text-sm text-gray-600 dark:text-gray-400'>
+                为百度智能云内容审核配置凭证。
+              </p>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                  API Key (Client ID)
+                </label>
+                <input
+                  type='text'
+                  placeholder='请输入百度云 API Key'
+                  value={siteSettings.IntelligentFilter.options.baidu?.apiKey || ''}
+                  onChange={(e) => handleFilterOptionChange('baidu', 'apiKey', e.target.value)}
+                  className='w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                  Secret Key (Client Secret)
+                </label>
+                <input
+                  type='password'
+                  placeholder='请输入百度云 Secret Key'
+                  value={siteSettings.IntelligentFilter.options.baidu?.secretKey || ''}
+                  onChange={(e) => handleFilterOptionChange('baidu', 'secretKey', e.target.value)}
+                  className='w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                  Token URL (可选)
+                </label>
+                <input
+                  type='text'
+                  placeholder='留空则使用默认地址'
+                  value={siteSettings.IntelligentFilter.options.baidu?.tokenUrl || ''}
+                  onChange={(e) => handleFilterOptionChange('baidu', 'tokenUrl', e.target.value)}
+                  className='w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                />
+              </div>
+              {/* 新增：超时时间设置 */}
+              <div>
+                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                  审核请求超时 (毫秒)
+                </label>
+                <input
+                  type='number'
+                  placeholder='默认 15000'
+                  value={siteSettings.IntelligentFilter.options.baidu?.timeoutMs || ''}
+                  onChange={(e) => handleFilterOptionChange('baidu', 'timeoutMs', e.target.value)}
+                  className='w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                  Token 请求超时 (毫秒)
+                </label>
+                <input
+                  type='number'
+                  placeholder='默认 15000'
+                  value={siteSettings.IntelligentFilter.options.baidu?.tokenTimeoutMs || ''}
+                  onChange={(e) => handleFilterOptionChange('baidu', 'tokenTimeoutMs', e.target.value)}
+                  className='w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                />
+              </div>              
+              {/* 为百度云添加测试连接按钮 */}
+              <div className='pt-2'>
+                <button
+                  type='button'
+                  onClick={handleTestApiConnection}
+                  disabled={isApiTesting}
+                  className={`w-full px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    isApiTesting
+                      ? buttonStyles.disabled
+                      : buttonStyles.primary
+                  }`}
+                >
+                  {isApiTesting ? '测试中...' : '测试连接'}
+                </button>
+                {apiTestResult && (
+                  <div
+                    className={`mt-3 p-2 text-xs rounded-md ${
+                      apiTestResult.success
+                        ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                        : 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                    }`}
+                  >
+                    {apiTestResult.message}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* 阿里云 & 腾讯云 (占位) */}
+          {(siteSettings.IntelligentFilter?.provider === 'aliyun' || siteSettings.IntelligentFilter?.provider === 'tencent') && (
+            <div className='p-4 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900/50 text-center'>
+              <p className='text-sm text-gray-500 dark:text-gray-400'>
+                {siteSettings.IntelligentFilter.provider === 'aliyun' ? '阿里云' : '腾讯云'} 
+                内容安全服务即将支持，敬请期待！
+              </p>
+            </div>
+          )}
+          {/* 自定义 API 配置项 */}
+          {siteSettings.IntelligentFilter?.provider === 'custom' && (
+            <div className='space-y-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900/50'>
+              <p className='text-sm text-gray-600 dark:text-gray-400'>
+                配置一个通用的 JSON API 进行审核。
+              </p>
+              <div>
+                <label className='block text-sm font-medium'>API URL</label>
+                <input type='text' value={siteSettings.IntelligentFilter.options.custom?.apiUrl || ''} onChange={(e) => handleFilterOptionChange('custom', 'apiUrl', e.target.value)} className='w-full px-3 py-2 border rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800' />
+              </div>
+              <div>
+                <label className='block text-sm font-medium'>API Key Header</label>
+                <input type='text' placeholder='例如: Authorization' value={siteSettings.IntelligentFilter.options.custom?.apiKeyHeader || ''} onChange={(e) => handleFilterOptionChange('custom', 'apiKeyHeader', e.target.value)} className='w-full px-3 py-2 border rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800' />
+              </div>
+              <div>
+                <label className='block text-sm font-medium'>API Key Value</label>
+                <input type='password' placeholder='例如: Bearer sk-xxxx' value={siteSettings.IntelligentFilter.options.custom?.apiKeyValue || ''} onChange={(e) => handleFilterOptionChange('custom', 'apiKeyValue', e.target.value)} className='w-full px-3 py-2 border rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800' />
+              </div>
+              <div>
+                <label className='block text-sm font-medium'>JSON Body Template</label>
+                <textarea value={siteSettings.IntelligentFilter.options.custom?.jsonBodyTemplate || ''} onChange={(e) => handleFilterOptionChange('custom', 'jsonBodyTemplate', e.target.value)} className='w-full px-3 py-2 border rounded-lg font-mono text-xs text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800' rows={3}></textarea>
+                <p className='text-xs text-gray-500 mt-1'>使用 `{'{{URL}}'}` 作为图片地址的占位符。</p>
+              </div>
+              {/* 新增: 响应分数路径 */}
+              <div>
+                <label className='block text-sm font-medium'>Response Score Path</label>
+                <input
+                  type='text'
+                  placeholder='例如: nudity.raw 或 data.score'
+                  value={siteSettings.IntelligentFilter.options.custom?.responseScorePath || ''}
+                  onChange={(e) => handleFilterOptionChange('custom', 'responseScorePath', e.target.value)}
+                  className='w-full px-3 py-2 border rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800'
+                />
+                <p className='text-xs text-gray-500 mt-1'>
+                  指定 API 响应中数字分数的路径。如果分数大于等于置信度阈值，则屏蔽。
+                </p>
+              </div>
+              {/* 新增：测试连接按钮和结果显示 */}
+              <div className='pt-2'>
+                <button
+                  type='button'
+                  onClick={handleTestApiConnection}
+                  disabled={isApiTesting}
+                  className={`w-full px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    isApiTesting
+                      ? buttonStyles.disabled
+                      : buttonStyles.primary
+                  }`}
+                >
+                  {isApiTesting ? '测试中...' : '测试连接'}
+                </button>
+                {apiTestResult && (
+                  <div
+                    className={`mt-3 p-2 text-xs rounded-md ${
+                      apiTestResult.success
+                        ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                        : 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                    }`}
+                  >
+                    {apiTestResult.message}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 通用配置：置信度 */}
+          <div>
+            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+              置信度阈值 (0.0 - 1.0)
+            </label>
+            <input
+              type='number'
+              min="0" max="1" step="0.05"
+              placeholder='例如: 0.85'
+              value={siteSettings.IntelligentFilter?.confidence || 0.85}
+              onChange={(e) => handleIntelligentFilterChange('confidence', parseFloat(e.target.value) || 0.85)}
+              className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+            />
+            <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+              当AI模型识别出违规内容的可能性高于此值时，将自动屏蔽。
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 新增：虚拟滑动开关 */}
+      <div>
+        <div className='flex items-center justify-between'>
+          <label
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            启用虚拟滑动
+          </label>
+          <button
+            type='button'
+            onClick={() =>
+              setSiteSettings((prev) => ({
+                ...prev,
+                EnableVirtualScroll: !(prev.EnableVirtualScroll ?? true),
+              }))
+            }
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${siteSettings.EnableVirtualScroll !== false
+                ? buttonStyles.toggleOn
+                : buttonStyles.toggleOff
+              }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full ${buttonStyles.toggleThumb} transition-transform ${siteSettings.EnableVirtualScroll !== false
+                  ? buttonStyles.toggleThumbOn
+                  : buttonStyles.toggleThumbOff
+                }`}
+            />
+          </button>
+        </div>
+        <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+          在搜索和豆瓣页面启用虚拟列表，可大幅提升大量数据加载时的性能。
+        </p>
+      </div>
+      
       {/* TMDB配置 */}
       <div className='border-t border-gray-200 dark:border-gray-700 pt-6'>
         <h3 className='text-lg font-medium text-gray-900 dark:text-gray-100 mb-4'>
@@ -5263,6 +5864,8 @@ function AdminPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<'owner' | 'admin' | null>(null);
   const [showResetConfigModal, setShowResetConfigModal] = useState(false);
+  // 注册管理相关状态
+  const [storageType, setStorageType] = useState<string>('localstorage');
   const [expandedTabs, setExpandedTabs] = useState<{ [key: string]: boolean }>({
     userConfig: false,
     videoSource: false,
@@ -5276,6 +5879,8 @@ function AdminPageClient() {
     configFile: false,
     cacheManager: false,
     dataMigration: false,
+    registrationConfig: false,
+    oauthConfig: false,
   });
 
   // 获取管理员配置
@@ -5310,6 +5915,15 @@ function AdminPageClient() {
   useEffect(() => {
     // 首次加载时显示骨架
     fetchConfig(true);
+    // 获取存储类型
+    fetch('/api/server-config')
+      .then((res) => res.json())
+      .then((data) => {
+        setStorageType(data.StorageType || 'localstorage');
+      })
+      .catch(() => {
+        setStorageType('localstorage');
+      }); 
   }, [fetchConfig]);
 
   // 切换标签展开状态
@@ -5421,6 +6035,26 @@ function AdminPageClient() {
           >
             <SiteConfigComponent config={config} refreshConfig={fetchConfig} />
           </CollapsibleTab>
+          
+          {/* OAuth 配置标签 - 仅非 localStorage 模式下显示 */}
+          {storageType !== 'localstorage' && (
+            <CollapsibleTab
+              title='LinuxDo OAuth 配置'
+              icon={
+                <KeyRound
+                  size={20}
+                  className='text-gray-600 dark:text-gray-400'
+                />
+              }
+              isExpanded={expandedTabs.oauthConfig}
+              onToggle={() => toggleTab('oauthConfig')}
+            >
+              <OAuthConfigComponent
+                config={config}
+                refreshConfig={fetchConfig}
+              />
+            </CollapsibleTab>
+          )}
 
           <div className='space-y-4'>
             {/* 用户配置标签 */}
@@ -5439,6 +6073,27 @@ function AdminPageClient() {
               />
             </CollapsibleTab>
 
+            {/* 注册管理标签 - 仅在非 localStorage 模式下显示 */}
+            {storageType !== 'localstorage' && (
+              <CollapsibleTab
+                title='注册管理'
+                icon={
+                  <UserCheck
+                    size={20}
+                    className='text-gray-600 dark:text-gray-400'
+                  />
+                }
+                isExpanded={expandedTabs.registrationConfig}
+                onToggle={() => toggleTab('registrationConfig')}
+              >
+                <RegistrationConfig
+                  config={config}
+                  role={role}
+                  refreshConfig={fetchConfig}
+                />
+              </CollapsibleTab>
+            )}
+            
             {/* 视频源配置标签 */}
             <CollapsibleTab
               title='视频源配置'
