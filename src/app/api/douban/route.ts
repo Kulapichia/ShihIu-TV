@@ -63,14 +63,27 @@ export async function GET(request: Request) {
     // 调用豆瓣 API
     const doubanData = await fetchDoubanData<DoubanApiResponse>(target);
 
-    // 转换数据格式
-    const list: DoubanItem[] = doubanData.subjects.map((item) => ({
-      id: item.id,
-      title: item.title,
-      poster: item.cover,
-      rate: item.rate,
-      year: '',
-    }));
+    // 使用 flatMap 进行安全转换和过滤
+    const list: DoubanItem[] = (doubanData.subjects || []).flatMap((item: any) => {
+        try {
+            // 1. 使用 Zod 验证原始数据
+            const parsedItem = RawDoubanSubjectSchema.parse(item);
+
+            // 2. 如果验证通过，安全地进行转换
+            return [{
+                id: parsedItem.id,
+                title: parsedItem.title,
+                poster: parsedItem.cover || '',
+                rate: parsedItem.rate || '',
+                year: '',
+            }];
+        } catch (error) {
+            // 3. 如果验证失败，打印错误并跳过此项
+            console.error('Skipping invalid Douban subject item:', item, error);
+            return []; // flatMap 会将空数组自动移除
+        }
+    });
+
 
     const response: DoubanResult = {
       code: 200,
