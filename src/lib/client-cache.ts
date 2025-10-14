@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, no-console */
+'use client';
+
 export class ClientCache {
   static async get(key: string): Promise<any | null> {
     try {
