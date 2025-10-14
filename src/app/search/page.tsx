@@ -19,6 +19,7 @@ import SearchResultFilter, { SearchFilterCategory } from '@/components/SearchRes
 import SearchSuggestions from '@/components/SearchSuggestions';
 import VideoCard, { VideoCardHandle } from '@/components/VideoCard';
 import VirtualSearchGrid from '@/components/VirtualSearchGrid';
+import CapsuleSwitch from '@/components/CapsuleSwitch';
 import NetDiskSearchResults from '@/components/NetDiskSearchResults';
 import YouTubeVideoCard from '@/components/YouTubeVideoCard';
 import DirectYouTubePlayer from '@/components/DirectYouTubePlayer';
@@ -52,6 +53,10 @@ function SearchPageClient() {
     }
     return true;
   });
+
+  const [showContentFilterUI, setShowContentFilterUI] = useState(false);
+  const [contentFilter, setContentFilter] = useState<'all' | 'normal' | 'yellow'>('all');
+  const [isDeepSearching, setIsDeepSearching] = useState(false);
 
   // 网盘搜索相关状态
   const [searchType, setSearchType] = useState<'video' | 'netdisk' | 'youtube' | 'tmdb-actor'>('video');
@@ -179,23 +184,34 @@ function SearchPageClient() {
     }
   };
 
-  // 在“无排序”场景用于每个源批次的预排序：完全匹配标题优先，其次年份倒序，未知年份最后
+  // Frontend sorting that fully trusts the backend's relevance score.
   const sortBatchForNoOrder = (items: SearchResult[]) => {
-    const q = currentQueryRef.current.trim();
+    // This function now primarily relies on the backend's relevance score.
+    // Frontend sorting is only for batches and as a fallback.
     return items.slice().sort((a, b) => {
-      const aExact = (a.title || '').trim() === q;
-      const bExact = (b.title || '').trim() === q;
-      if (aExact && !bExact) return -1;
-      if (!aExact && bExact) return 1;
-
-      const aNum = Number.parseInt(a.year as any, 10);
-      const bNum = Number.parseInt(b.year as any, 10);
+      // Primary sorting criterion: relevance score from backend (descending).
+      // The `relevanceScore` is dynamically added by the backend APIs.
+      const aRelevance = (a as any).relevanceScore ?? 0;
+      const bRelevance = (b as any).relevanceScore ?? 0;
+      
+      if (bRelevance !== aRelevance) {
+        return bRelevance - aRelevance;
+      }
+      
+      // Secondary sorting criterion: year (descending, more recent first).
+      // This serves as a secondary sort key, consistent with the backend logic.
+      const aNum = Number.parseInt(a.year, 10);
+      const bNum = Number.parseInt(b.year, 10);
       const aValid = !Number.isNaN(aNum);
       const bValid = !Number.isNaN(bNum);
+      if (aValid && bValid && bNum !== aNum) {
+        return bNum - aNum;
+      }
       if (aValid && !bValid) return -1;
       if (!aValid && bValid) return 1;
-      if (aValid && bValid) return bNum - aNum; // 年份倒序
-      return 0;
+      
+      // Tertiary sorting criterion: alphabetical order by title.
+      return (a.title || '').localeCompare(b.title || '');
     });
   };
 
@@ -218,6 +234,107 @@ function SearchPageClient() {
 
     return order === 'asc' ? aNum - bNum : bNum - aNum;
   };
+  
+  // 将后端的强大评分算法引入前端
+  const calculateRelevanceScore = (item: any, searchQuery: string): number => {
+      if (!item || !searchQuery) {
+        return 0;
+      }
+      const query = searchQuery.toLowerCase().trim();
+      const title = (item.title || '').toLowerCase();
+      const typeName = (item.type_name || '').toLowerCase();
+      const director = (item.director || '').toLowerCase();
+      const actor = (item.actor || '').toLowerCase();
+      
+      let score = 0;
+      const queryLength = query.length;
+      const titleLength = title.length;
+      
+      // Advanced exact matching with weight adjustment
+      if (title === query) {
+        score += 1000; // Significantly higher for exact match
+      }
+      // Perfect prefix matching (high priority for user intent)
+      else if (title.startsWith(query)) {
+        score += 800 * (queryLength / titleLength); // Weight by query coverage
+      }
+      // Word boundary exact matches (important for multi-word queries)
+      else if (new RegExp(`\\b${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(title)) {
+        score += 600;
+      }
+      // Substring matching with position weighting
+      else if (title.includes(query)) {
+        const position = title.indexOf(query);
+        const positionWeight = 1 - (position / titleLength); // Earlier position gets higher score
+        score += 300 * positionWeight;
+      }
+      
+      // Advanced multi-word query processing
+      const queryWords = query.split(/\s+/).filter((word: string) => word.length > 0);
+      const titleWords = title.split(/[\s-._]+/).filter((word: string) => word.length > 0);
+      
+      if (queryWords.length > 1) {
+        let wordMatchScore = 0;
+        let exactWordMatches = 0;
+        let partialWordMatches = 0;
+        
+        queryWords.forEach(queryWord => {
+          let bestWordScore = 0;
+          titleWords.forEach((titleWord: string) => {
+            if (titleWord === queryWord) {
+              bestWordScore = Math.max(bestWordScore, 50);
+              exactWordMatches++;
+            } else if (titleWord.includes(queryWord) && queryWord.length >= 2) {
+              const coverage = queryWord.length / titleWord.length;
+              bestWordScore = Math.max(bestWordScore, 25 * coverage);
+              partialWordMatches++;
+            } else if (queryWord.includes(titleWord) && titleWord.length >= 2) {
+              const coverage = titleWord.length / queryWord.length;
+              bestWordScore = Math.max(bestWordScore, 20 * coverage);
+            }
+          });
+          wordMatchScore += bestWordScore;
+        });
+        
+        // Bonus for matching all query words
+        if (exactWordMatches === queryWords.length) {
+          wordMatchScore *= 2;
+        }
+        
+        // Bonus for high match ratio
+        const matchRatio = (exactWordMatches + partialWordMatches * 0.5) / queryWords.length;
+        wordMatchScore *= (0.5 + matchRatio);
+        
+        score += wordMatchScore;
+      }
+      
+      // Enhanced metadata matching
+      let metadataScore = 0;
+      if (typeName.includes(query)) {
+        metadataScore += 40;
+      }
+      if (director.includes(query)) {
+        metadataScore += 60; // Director matches are quite relevant
+      }
+      if (actor.includes(query)) {
+        metadataScore += 50; // Actor matches are also relevant
+      }
+      score += metadataScore;
+      
+      // Content quality and recency weighting
+      const currentYear = new Date().getFullYear();
+      const itemYear = parseInt(item.year) || 0;
+      
+      if (itemYear >= currentYear - 1) {
+        score += 30; // Very recent content
+      } else if (itemYear >= currentYear - 3) {
+        score += 20; // Recent content
+      } else if (itemYear >= currentYear - 10) {
+        score += 10; // Moderately recent
+      }
+      
+      return Math.max(0, Math.round(score));
+    };
 
   // 聚合后的结果（按标题和年份分组）
   const aggregatedResults = useMemo(() => {
@@ -328,41 +445,48 @@ function SearchPageClient() {
   // 非聚合：应用筛选与排序
   const filteredAllResults = useMemo(() => {
     const { source, title, year, yearOrder } = filterAll;
-    const filtered = searchResults.filter((item) => {
+    let filtered = searchResults.filter((item) => {
       if (source !== 'all' && item.source !== source) return false;
       if (title !== 'all' && item.title !== title) return false;
       if (year !== 'all' && item.year !== year) return false;
       return true;
     });
 
-    // 如果是无排序状态，直接返回过滤后的原始顺序
-    if (yearOrder === 'none') {
-      return filtered;
+    // 内容类型筛选
+    if (showContentFilterUI) {
+      switch (contentFilter) {
+        case 'normal':
+          filtered = filtered.filter((item) => item.isYellow !== true);
+          break;
+        case 'yellow':
+          filtered = filtered.filter((item) => item.isYellow === true);
+          break;
+        default:
+          break;
+      }
     }
 
-    // 简化排序：1. 年份排序，2. 年份相同时精确匹配在前，3. 标题排序
+    // 统一排序逻辑：先按年份（如果指定），再按相关性评分
     return filtered.sort((a, b) => {
-      // 首先按年份排序
-      const yearComp = compareYear(a.year, b.year, yearOrder);
-      if (yearComp !== 0) return yearComp;
-
-      // 年份相同时，精确匹配在前
-      const aExactMatch = a.title === searchQuery.trim();
-      const bExactMatch = b.title === searchQuery.trim();
-      if (aExactMatch && !bExactMatch) return -1;
-      if (!aExactMatch && bExactMatch) return 1;
-
-      // 最后按标题排序，正序时字母序，倒序时反字母序
-      return yearOrder === 'asc' ?
-        a.title.localeCompare(b.title) :
-        b.title.localeCompare(a.title);
+      // 1. 年份排序优先
+      if (yearOrder !== 'none') {
+        const yearComp = compareYear(a.year, b.year, yearOrder);
+        if (yearComp !== 0) return yearComp;
+      }
+      
+      // 2. 按相关性评分排序（始终包含前端计算作为备用方案）
+      const scoreA =
+        (a as any).relevanceScore || calculateRelevanceScore(a, searchQuery);
+      const scoreB =
+        (b as any).relevanceScore || calculateRelevanceScore(b, searchQuery);
+      return scoreB - scoreA;
     });
-  }, [searchResults, filterAll, searchQuery]);
+  }, [searchResults, filterAll, searchQuery, contentFilter, showContentFilterUI]);
 
   // 聚合：应用筛选与排序
   const filteredAggResults = useMemo(() => {
     const { source, title, year, yearOrder } = filterAgg as any;
-    const filtered = aggregatedResults.filter(([_, group]) => {
+    let filtered = aggregatedResults.filter(([_, group]) => {
       const gTitle = group[0]?.title ?? '';
       const gYear = group[0]?.year ?? 'unknown';
       const hasSource = source === 'all' ? true : group.some((item) => item.source === source);
@@ -371,34 +495,51 @@ function SearchPageClient() {
       if (year !== 'all' && gYear !== year) return false;
       return true;
     });
-
-    // 如果是无排序状态，保持按关键字+年份+类型出现的原始顺序
-    if (yearOrder === 'none') {
-      return filtered;
+    
+    // 内容类型筛选
+    if (showContentFilterUI) {
+      switch (contentFilter) {
+        case 'normal':
+          filtered = filtered.filter(
+            ([, group]) => !group.some((item) => item.isYellow === true)
+          );
+          break;
+        case 'yellow':
+          filtered = filtered.filter(([, group]) =>
+            group.some((item) => item.isYellow === true)
+          );
+          break;
+        default:
+          break;
+      }
     }
 
-    // 简化排序：1. 年份排序，2. 年份相同时精确匹配在前，3. 标题排序
+    // 统一排序逻辑：先按年份（如果指定），再按组内最高相关性评分
     return filtered.sort((a, b) => {
-      // 首先按年份排序
-      const aYear = a[1][0].year;
-      const bYear = b[1][0].year;
-      const yearComp = compareYear(aYear, bYear, yearOrder);
-      if (yearComp !== 0) return yearComp;
-
-      // 年份相同时，精确匹配在前
-      const aExactMatch = a[1][0].title === searchQuery.trim();
-      const bExactMatch = b[1][0].title === searchQuery.trim();
-      if (aExactMatch && !bExactMatch) return -1;
-      if (!aExactMatch && bExactMatch) return 1;
-
-      // 最后按标题排序，正序时字母序，倒序时反字母序
-      const aTitle = a[1][0].title;
-      const bTitle = b[1][0].title;
-      return yearOrder === 'asc' ?
-        aTitle.localeCompare(bTitle) :
-        bTitle.localeCompare(aTitle);
+      // 1. 年份排序优先
+      if (yearOrder !== 'none') {
+        const aYear = a[1][0].year;
+        const bYear = b[1][0].year;
+        const yearComp = compareYear(aYear, bYear, yearOrder);
+        if (yearComp !== 0) return yearComp;
+      }
+      
+      // 2. 按组内最高相关性评分排序（始终包含前端计算作为备用方案）
+      const scoreA = Math.max(
+        ...a[1].map(
+          (item) =>
+            (item as any).relevanceScore || calculateRelevanceScore(item, searchQuery)
+        )
+      );
+      const scoreB = Math.max(
+        ...b[1].map(
+          (item) =>
+            (item as any).relevanceScore || calculateRelevanceScore(item, searchQuery)
+        )
+      );
+      return scoreB - scoreA;
     });
-  }, [aggregatedResults, filterAgg, searchQuery]);
+  }, [aggregatedResults, filterAgg, searchQuery, contentFilter, showContentFilterUI]);
 
   useEffect(() => {
     // 无搜索参数时聚焦搜索框
@@ -420,6 +561,8 @@ function SearchPageClient() {
 
     // 读取流式搜索设置
     if (typeof window !== 'undefined') {
+      const shouldShow = (window as any).RUNTIME_CONFIG?.SHOW_CONTENT_FILTER;
+      setShowContentFilterUI(shouldShow);
       const savedFluidSearch = localStorage.getItem('fluidSearch');
       const defaultFluidSearch =
         (window as any).RUNTIME_CONFIG?.FLUID_SEARCH !== false;
@@ -620,26 +763,35 @@ function SearchPageClient() {
           }
         };
       } else {
-        // 传统搜索：使用普通接口
-        fetch(`/api/search?q=${encodeURIComponent(trimmed)}`)
-          .then(response => response.json())
-          .then(data => {
+        // 传统搜索：并发请求所有分页
+        const MAX_PAGES = (window as any).RUNTIME_CONFIG?.SEARCH_MAX_PAGE || 1;
+        const pagePromises = Array.from({ length: MAX_PAGES }, (_, i) => i + 1).map(page =>
+          fetch(`/api/search?q=${encodeURIComponent(trimmed)}&page=${page}`).then(res => res.json())
+        );
+        
+        Promise.all(pagePromises)
+          .then(pagesData => {
             if (currentQueryRef.current !== trimmed) return;
 
-            if (data.results && Array.isArray(data.results)) {
-              const activeYearOrder = (viewMode === 'agg' ? (filterAgg.yearOrder) : (filterAll.yearOrder));
+            const allResults = pagesData.flatMap(data => data.results || []);
+
+            if (allResults.length > 0) {
+              const activeYearOrder =
+                viewMode === 'agg' ? filterAgg.yearOrder : filterAll.yearOrder;
               const results: SearchResult[] =
                 activeYearOrder === 'none'
-                  ? sortBatchForNoOrder(data.results as SearchResult[])
-                  : (data.results as SearchResult[]);
-
+                  ? sortBatchForNoOrder(allResults as SearchResult[])
+                  : (allResults as SearchResult[]);
+              
               setSearchResults(results);
               setTotalSources(1);
               setCompletedSources(1);
             }
-            setIsLoading(false);
           })
-          .catch(() => {
+          .catch((err) => {
+            console.error("Failed to fetch search results:", err);
+          })
+          .finally(() => {
             setIsLoading(false);
           });
       }
@@ -812,6 +964,59 @@ function SearchPageClient() {
       setTmdbActorError('搜索演员失败，请稍后重试');
     } finally {
       setTmdbActorLoading(false);
+    }
+  };
+
+  const handleDeepSearch = async () => {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery || isDeepSearching) return;
+
+    setIsDeepSearching(true);
+
+    try {
+      // 调用改造后的API，并带上 deep=true 参数
+      const response = await fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}&deep=true`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || '深度搜索请求失败');
+      }
+
+      const data = await response.json();
+      const newResults = data.results || [];
+
+      if (newResults.length > 0) {
+        // 使用 Map 进行高效去重合并，保留旧结果，追加新结果
+        const combinedResultsMap = new Map(
+          searchResults.map(r => [`${r.source}-${r.id}`, r])
+        );
+
+        let addedCount = 0;
+        newResults.forEach((result: SearchResult) => {
+          const key = `${result.source}-${result.id}`;
+          if (!combinedResultsMap.has(key)) {
+            combinedResultsMap.set(key, result);
+            addedCount++;
+          }
+        });
+
+        // 只有当有新结果时才更新状态
+        if (addedCount > 0) {
+          startTransition(() => {
+            setSearchResults(Array.from(combinedResultsMap.values()));
+          });
+        }
+
+        alert(`深度搜索完成！新增了 ${addedCount} 条结果。`);
+      } else {
+        alert('深度搜索完成，没有发现更多新结果。');
+      }
+
+    } catch (error) {
+      console.error("深度搜索失败:", error);
+      alert(error instanceof Error ? error.message : '深度搜索发生未知错误');
+    } finally {
+      setIsDeepSearching(false);
     }
   };
 
@@ -1391,7 +1596,23 @@ function SearchPageClient() {
                 </div>
                 
                 {/* 开关控件行 */}
-                <div className='flex items-center justify-end gap-6'>
+                <div className='flex items-center justify-end flex-wrap gap-4 sm:gap-6'>
+                  {/* 内容分类筛选器 */}
+                  {showContentFilterUI && (
+                    <CapsuleSwitch
+                      options={[
+                        { label: '全部', value: 'all' },
+                        { label: '常规', value: 'normal' },
+                        { label: '探索', value: 'yellow' },
+                      ]}
+                      active={contentFilter}
+                      onChange={(value) =>
+                        setContentFilter(
+                          value as 'all' | 'normal' | 'yellow'
+                        )
+                      }
+                    />
+                  )}
                   {/* 虚拟化开关 */}
                   <label className='flex items-center gap-3 cursor-pointer select-none shrink-0 group'>
                     <span className='text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors'>
@@ -1532,6 +1753,28 @@ function SearchPageClient() {
                       ))}
                   </div>
                 )
+              )}
+              {/* 在结果列表下方添加深度搜索按钮 */}
+              {!isLoading && showResults && searchResults.length > 0 && searchType === 'video' && (
+                <div className="mt-12 text-center">
+                  <button
+                    onClick={handleDeepSearch}
+                    disabled={isDeepSearching}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isDeepSearching ? (
+                      <span className="flex items-center">
+                        <span className="inline-block h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                        正在搜索所有页面...
+                      </span>
+                    ) : (
+                      '深度搜索 (可能较慢)'
+                    )}
+                  </button>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    此操作将搜索所有数据源的全部可用分页，以查找更多结果。
+                  </p>
+                </div>
               )}
                 </>
               )}
