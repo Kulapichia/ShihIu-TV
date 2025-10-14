@@ -9,7 +9,18 @@ import { db } from '@/lib/db';
 export const runtime = 'nodejs';
 
 // 支持的操作类型
-type Action = 'add' | 'disable' | 'enable' | 'delete' | 'sort' | 'batch_disable' | 'batch_enable' | 'batch_delete';
+type Action =
+  | 'add'
+  | 'disable'
+  | 'enable'
+  | 'delete'
+  | 'sort'
+  | 'batch_disable'
+  | 'batch_enable'
+  | 'batch_delete'
+  | 'update_check_results'
+  | 'batch_delete_invalid'
+  | 'batch_import';
 
 interface BaseBody {
   action?: Action;
@@ -37,7 +48,19 @@ export async function POST(request: NextRequest) {
     const username = authInfo.username;
 
     // 基础校验
-    const ACTIONS: Action[] = ['add', 'disable', 'enable', 'delete', 'sort', 'batch_disable', 'batch_enable', 'batch_delete'];
+    const ACTIONS: Action[] = [
+      'add',
+      'disable',
+      'enable',
+      'delete',
+      'sort',
+      'batch_disable',
+      'batch_enable',
+      'batch_delete',
+      'update_check_results',
+      'batch_delete_invalid',
+      'batch_import',
+    ];
     if (!username || !action || !ACTIONS.includes(action)) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
@@ -115,17 +138,17 @@ export async function POST(request: NextRequest) {
         // 检查并清理用户组和用户的权限数组
         // 清理用户组权限
         if (adminConfig.UserConfig.Tags) {
-          adminConfig.UserConfig.Tags.forEach(tag => {
+          adminConfig.UserConfig.Tags.forEach((tag) => {
             if (tag.enabledApis) {
-              tag.enabledApis = tag.enabledApis.filter(api => api !== key);
+              tag.enabledApis = tag.enabledApis.filter((api) => api !== key);
             }
           });
         }
 
         // 清理用户权限
-        adminConfig.UserConfig.Users.forEach(user => {
+        adminConfig.UserConfig.Users.forEach((user) => {
           if (user.enabledApis) {
-            user.enabledApis = user.enabledApis.filter(api => api !== key);
+            user.enabledApis = user.enabledApis.filter((api) => api !== key);
           }
         });
         break;
@@ -133,9 +156,12 @@ export async function POST(request: NextRequest) {
       case 'batch_disable': {
         const { keys } = body as { keys?: string[] };
         if (!Array.isArray(keys) || keys.length === 0) {
-          return NextResponse.json({ error: '缺少 keys 参数或为空' }, { status: 400 });
+          return NextResponse.json(
+            { error: '缺少 keys 参数或为空' },
+            { status: 400 }
+          );
         }
-        keys.forEach(key => {
+        keys.forEach((key) => {
           const entry = adminConfig.SourceConfig.find((s) => s.key === key);
           if (entry) {
             entry.disabled = true;
@@ -146,9 +172,12 @@ export async function POST(request: NextRequest) {
       case 'batch_enable': {
         const { keys } = body as { keys?: string[] };
         if (!Array.isArray(keys) || keys.length === 0) {
-          return NextResponse.json({ error: '缺少 keys 参数或为空' }, { status: 400 });
+          return NextResponse.json(
+            { error: '缺少 keys 参数或为空' },
+            { status: 400 }
+          );
         }
-        keys.forEach(key => {
+        keys.forEach((key) => {
           const entry = adminConfig.SourceConfig.find((s) => s.key === key);
           if (entry) {
             entry.disabled = false;
@@ -159,16 +188,19 @@ export async function POST(request: NextRequest) {
       case 'batch_delete': {
         const { keys } = body as { keys?: string[] };
         if (!Array.isArray(keys) || keys.length === 0) {
-          return NextResponse.json({ error: '缺少 keys 参数或为空' }, { status: 400 });
+          return NextResponse.json(
+            { error: '缺少 keys 参数或为空' },
+            { status: 400 }
+          );
         }
         // 过滤掉 from=config 的源，但不报错
-        const keysToDelete = keys.filter(key => {
+        const keysToDelete = keys.filter((key) => {
           const entry = adminConfig.SourceConfig.find((s) => s.key === key);
           return entry && entry.from !== 'config';
         });
 
         // 批量删除
-        keysToDelete.forEach(key => {
+        keysToDelete.forEach((key) => {
           const idx = adminConfig.SourceConfig.findIndex((s) => s.key === key);
           if (idx !== -1) {
             adminConfig.SourceConfig.splice(idx, 1);
@@ -181,7 +213,9 @@ export async function POST(request: NextRequest) {
           if (adminConfig.UserConfig.Tags) {
             adminConfig.UserConfig.Tags.forEach(tag => {
               if (tag.enabledApis) {
-                tag.enabledApis = tag.enabledApis.filter(api => !keysToDelete.includes(api));
+                tag.enabledApis = tag.enabledApis.filter(
+                  (api) => !keysToDelete.includes(api)
+                );
               }
             });
           }
@@ -189,7 +223,9 @@ export async function POST(request: NextRequest) {
           // 清理用户权限
           adminConfig.UserConfig.Users.forEach(user => {
             if (user.enabledApis) {
-              user.enabledApis = user.enabledApis.filter(api => !keysToDelete.includes(api));
+              user.enabledApis = user.enabledApis.filter(
+                (api) => !keysToDelete.includes(api)
+              );
             }
           });
         }
@@ -218,6 +254,95 @@ export async function POST(request: NextRequest) {
         });
         adminConfig.SourceConfig = newList;
         break;
+      }
+      case 'update_check_results': {
+        const { results } = body as {
+          results?: {
+            key: string;
+            status: any;
+            latency: number;
+          }[];
+        };
+        if (!Array.isArray(results)) {
+          return NextResponse.json(
+            { error: '缺少 results 参数' },
+            { status: 400 }
+          );
+        }
+        const timestamp = Date.now();
+        results.forEach((result) => {
+          const entry = adminConfig.SourceConfig.find(
+            (s) => s.key === result.key
+          );
+          if (entry) {
+            entry.lastCheck = {
+              status: result.status,
+              latency: result.latency,
+              timestamp,
+            };
+          }
+        });
+        break;
+      }
+      case 'batch_delete_invalid': {
+        adminConfig.SourceConfig = adminConfig.SourceConfig.filter((entry) => {
+          const isCustom = entry.from === 'custom';
+          const isInvalid =
+            entry.lastCheck &&
+            (entry.lastCheck.status === 'invalid' ||
+              entry.lastCheck.status === 'timeout' ||
+              entry.lastCheck.status === 'unreachable');
+          
+          // 仅当是自定义源且无效时才删除
+          return !(isCustom && isInvalid);
+        });
+        break;
+      }
+      case 'batch_import': {
+        const { sources: sourcesToImport } = body;
+        if (!Array.isArray(sourcesToImport) || sourcesToImport.length === 0) {
+          return NextResponse.json({ error: '导入的数据无效' }, { status: 400 });
+        }
+
+        const existingKeys = new Set(adminConfig.SourceConfig.map(s => s.key));
+        let addedCount = 0;
+        let skippedCount = 0;
+
+        for (const source of sourcesToImport) {
+          if (
+            !source.key ||
+            !source.name ||
+            !source.api ||
+            typeof source.key !== 'string' ||
+            typeof source.name !== 'string' ||
+            typeof source.api !== 'string'
+          ) {
+            skippedCount++;
+            continue; // 跳过格式不正确的数据
+          }
+
+          if (existingKeys.has(source.key)) {
+            skippedCount++;
+            continue; // 跳过重复的 Key
+          }
+
+          adminConfig.SourceConfig.push({
+            name: source.name,
+            key: source.key,
+            api: source.api,
+            detail: source.detail || '',
+            from: 'custom',
+            disabled: source.disabled || false,
+          });
+          existingKeys.add(source.key);
+          addedCount++;
+        }
+        
+        // 此处直接保存并返回，不走 switch 后的统一保存
+        await db.saveAdminConfig(adminConfig);
+        return NextResponse.json({ 
+          message: `导入完成！成功添加 ${addedCount} 个源，跳过 ${skippedCount} 个（重复或格式错误）。`
+        });
       }
       default:
         return NextResponse.json({ error: '未知操作' }, { status: 400 });
