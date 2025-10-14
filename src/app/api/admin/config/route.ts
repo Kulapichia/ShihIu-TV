@@ -28,9 +28,22 @@ export async function GET(request: NextRequest) {
 
   try {
     const config = await getConfig();
+    // 创建一个深拷贝用于前端展示，避免污染内存缓存
+    const configForFrontend = JSON.parse(JSON.stringify(config));
+
+    // 在返回给前端前，用占位符屏蔽敏感信息
+    if (configForFrontend.SiteConfig.IntelligentFilter?.options?.sightengine?.apiSecret) {
+      configForFrontend.SiteConfig.IntelligentFilter.options.sightengine.apiSecret = "********";
+    }
+    if (configForFrontend.SiteConfig.IntelligentFilter?.options?.custom?.apiKeyValue) {
+      configForFrontend.SiteConfig.IntelligentFilter.options.custom.apiKeyValue = "********";
+    }
+    if (configForFrontend.SiteConfig.IntelligentFilter?.options?.baidu?.secretKey) {
+      configForFrontend.SiteConfig.IntelligentFilter.options.baidu.secretKey = "********";
+    }
     const result: AdminConfigResult = {
       Role: 'owner',
-      Config: config,
+      Config: configForFrontend,
     };
     if (username === process.env.USERNAME) {
       result.Role = 'owner';
