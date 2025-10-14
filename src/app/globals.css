@@ -93,13 +93,15 @@ html:not(.dark) body {
   }
 }
 
-/* 隐藏所有滚动条（兼容 WebKit、Firefox、IE/Edge）- 排除ArtPlayer */
-*:not(.artplayer):not(.artplayer *) {
+/* 将隐藏滚动条的规则范围缩小到 html 和 body，避免影响内部可滚动元素 */
+html,
+body {
   -ms-overflow-style: none; /* IE & Edge */
   scrollbar-width: none; /* Firefox */
 }
 
-*:not(.artplayer):not(.artplayer *)::webkit-scrollbar {
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Opera */
 }
 
