@@ -2463,7 +2463,7 @@ const VideoSourceConfig = ({
 }) => {
   const { alertModal, showAlert, hideAlert } = useAlertModal();
   const { isLoading, withLoading } = useLoadingState();
-  const [sources, setSources] = useState<DataSource[]>([]);
+  const [sources, setSources] = useState<AdminConfig['SourceConfig']>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [orderChanged, setOrderChanged] = useState(false);
   const [newSource, setNewSource] = useState<DataSource>({
@@ -2500,15 +2500,11 @@ const VideoSourceConfig = ({
 
   // 有效性检测相关状态
   const [showValidationModal, setShowValidationModal] = useState(false);
-  const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchKeyword, setSearchKeyword] = useState('庆余年');
   const [isValidating, setIsValidating] = useState(false);
-  const [validationResults, setValidationResults] = useState<Array<{
-    key: string;
-    name: string;
-    status: 'valid' | 'no_results' | 'invalid' | 'validating';
-    message: string;
-    resultCount: number;
-  }>>([]);
+  const [validationResults, setValidationResults] = useState<any[]>([]);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // dnd-kit 传感器
   const sensors = useSensors(
@@ -2536,6 +2532,46 @@ const VideoSourceConfig = ({
     }
   }, [config]);
 
+  // 筛选状态
+  const [filterStatus, setFilterStatus] = useState<
+    'all' | 'enabled' | 'disabled'
+  >('all');
+  const [filterValidity, setFilterValidity] = useState<
+    'all' | 'valid' | 'invalid' | 'no_results' | 'untested'
+  >('all');
+
+  // 创建筛选后的视频源列表
+  const filteredSources = useMemo(() => {
+    return sources.filter((source) => {
+      // 状态筛选
+      if (filterStatus === 'enabled' && source.disabled) return false;
+      if (filterStatus === 'disabled' && !source.disabled) return false;
+
+      // 有效性筛选
+      const validity = source.lastCheck?.status || 'untested';
+      if (filterValidity !== 'all') {
+        if (filterValidity === 'invalid') {
+          if (!['invalid', 'timeout', 'unreachable'].includes(validity))
+            return false;
+        } else if (validity !== filterValidity) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [sources, filterStatus, filterValidity]);
+
+  // 使用 useMemo 计算全选状态，依赖筛选后的列表
+  const selectAll = useMemo(() => {
+    if (filteredSources.length === 0) return false;
+    return filteredSources.every((s) => selectedSources.has(s.key));
+  }, [selectedSources, filteredSources]);
+
+  // 筛选条件变化时，清空选择，避免操作不在视图内的项
+  useEffect(() => {
+    setSelectedSources(new Set());
+  }, [filterStatus, filterValidity]);
+  
   // 通用 API 请求
   const callSourceApi = async (body: Record<string, any>) => {
     try {
@@ -2620,7 +2656,11 @@ const VideoSourceConfig = ({
   // 有效性检测函数
   const handleValidateSources = async () => {
     if (!searchKeyword.trim()) {
-      showAlert({ type: 'warning', title: '请输入搜索关键词', message: '搜索关键词不能为空' });
+      showAlert({
+        type: 'warning',
+        title: '请输入搜索关键词',
+        message: '搜索关键词不能为空',
+      });
       return;
     }
 
@@ -2629,19 +2669,16 @@ const VideoSourceConfig = ({
       setValidationResults([]); // 清空之前的结果
       setShowValidationModal(false); // 立即关闭弹窗
 
-      // 初始化所有视频源为检测中状态
-      const initialResults = sources.map(source => ({
-        key: source.key,
-        name: source.name,
-        status: 'validating' as const,
-        message: '检测中...',
-        resultCount: 0
-      }));
-      setValidationResults(initialResults);
+      // 用于收集所有源的最终结果
+      const collectedResults: { key: string; status: any; latency: number }[] =
+        [];
 
       try {
-        // 使用EventSource接收流式数据
-        const eventSource = new EventSource(`/api/admin/source/validate?q=${encodeURIComponent(searchKeyword.trim())}`);
+        const eventSource = new EventSource(
+          `/api/admin/source/validate?q=${encodeURIComponent(
+            searchKeyword.trim()
+          )}`
+        );
 
         eventSource.onmessage = (event) => {
           try {
@@ -2654,35 +2691,39 @@ const VideoSourceConfig = ({
 
               case 'source_result':
               case 'source_error':
-                // 更新验证结果
-                setValidationResults(prev => {
-                  const existing = prev.find(r => r.key === data.source);
-                  if (existing) {
-                    return prev.map(r => r.key === data.source ? {
-                      key: data.source,
-                      name: sources.find(s => s.key === data.source)?.name || data.source,
-                      status: data.status,
-                      message: data.status === 'valid' ? '搜索正常' :
-                        data.status === 'no_results' ? '无法搜索到结果' : '连接失败',
-                      resultCount: data.status === 'valid' ? 1 : 0
-                    } : r);
-                  } else {
-                    return [...prev, {
-                      key: data.source,
-                      name: sources.find(s => s.key === data.source)?.name || data.source,
-                      status: data.status,
-                      message: data.status === 'valid' ? '搜索正常' :
-                        data.status === 'no_results' ? '无法搜索到结果' : '连接失败',
-                      resultCount: data.status === 'valid' ? 1 : 0
-                    }];
-                  }
+                // 收集结果用于最后提交
+                collectedResults.push({
+                  key: data.source,
+                  status: data.status,
+                  latency: data.latency,
                 });
                 break;
 
               case 'complete':
-                console.log(`检测完成，共检测 ${data.completedSources} 个视频源`);
+                console.log(
+                  `检测完成，共检测 ${data.completedSources} 个视频源`
+                );
                 eventSource.close();
                 setIsValidating(false);
+
+                // 检测完成，将所有结果一次性提交到后端保存
+                fetch('/api/admin/source', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'update_check_results',
+                    results: collectedResults,
+                  }),
+                })
+                  .then((res) => {
+                    if (!res.ok) throw new Error('保存检测结果失败');
+                    showSuccess('检测完成，结果已保存', showAlert);
+                    // 刷新配置以获取最新数据
+                    refreshConfig();
+                  })
+                  .catch((err) => {
+                    showError(err.message, showAlert);
+                  });
                 break;
             }
           } catch (error) {
@@ -2694,7 +2735,11 @@ const VideoSourceConfig = ({
           console.error('EventSource错误:', error);
           eventSource.close();
           setIsValidating(false);
-          showAlert({ type: 'error', title: '验证失败', message: '连接错误，请重试' });
+          showAlert({
+            type: 'error',
+            title: '验证失败',
+            message: '连接错误，请重试',
+          });
         };
 
         // 设置超时，防止长时间等待
@@ -2702,59 +2747,98 @@ const VideoSourceConfig = ({
           if (eventSource.readyState === EventSource.OPEN) {
             eventSource.close();
             setIsValidating(false);
-            showAlert({ type: 'warning', title: '验证超时', message: '检测超时，请重试' });
+            showAlert({
+              type: 'warning',
+              title: '验证超时',
+              message: '部分源检测超时，结果可能不完整',
+            });
+            // 即使超时，也尝试保存已收到的结果
+            if (collectedResults.length > 0) {
+              fetch('/api/admin/source', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'update_check_results',
+                  results: collectedResults,
+                }),
+              }).then(() => refreshConfig());
+            }
           }
         }, 60000); // 60秒超时
 
       } catch (error) {
         setIsValidating(false);
-        showAlert({ type: 'error', title: '验证失败', message: error instanceof Error ? error.message : '未知错误' });
+        showAlert({
+          type: 'error',
+          title: '验证失败',
+          message: error instanceof Error ? error.message : '未知错误',
+        });
         throw error;
       }
     });
   };
 
   // 获取有效性状态显示
-  const getValidationStatus = (sourceKey: string) => {
-    const result = validationResults.find(r => r.key === sourceKey);
-    if (!result) return null;
-
-    switch (result.status) {
-      case 'validating':
+  const getValidationStatus = (source: AdminConfig['SourceConfig'][0]) => {
+    // 优先显示实时检测状态
+    if (isValidating) {
+      const liveResult = validationResults.find((r) => r.key === source.key);
+      if (liveResult?.status === 'validating') {
         return {
           text: '检测中',
-          className: 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300',
+          className:
+            'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300',
           icon: '⟳',
-          message: result.message
         };
+      }
+    }
+
+    const check = source.lastCheck;
+    if (!check || check.status === 'untested') {
+      return {
+        text: '未检测',
+        className:
+          'bg-gray-100 dark:bg-gray-700/60 text-gray-600 dark:text-gray-400',
+        icon: '?',
+      };
+    }
+
+    switch (check.status) {
       case 'valid':
         return {
           text: '有效',
-          className: 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300',
+          className:
+            'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300',
           icon: '✓',
-          message: result.message
         };
       case 'no_results':
         return {
           text: '无法搜索',
-          className: 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300',
+          className:
+            'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300',
           icon: '⚠',
-          message: result.message
         };
       case 'invalid':
+      case 'timeout':
+      case 'unreachable':
         return {
           text: '无效',
-          className: 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300',
+          className:
+            'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300',
           icon: '✗',
-          message: result.message
         };
       default:
-        return null;
+        return {
+          text: '未知',
+          className:
+            'bg-gray-100 dark:bg-gray-700/60 text-gray-600 dark:text-gray-400',
+          icon: '?',
+        };
     }
   };
 
   // 可拖拽行封装 (dnd-kit)
-  const DraggableRow = ({ source }: { source: DataSource }) => {
+  const DraggableRow = ({ source }: { source: AdminConfig['SourceConfig'][0] }) => {
     const { attributes, listeners, setNodeRef, transform, transition } =
       useSortable({ id: source.key });
 
@@ -2815,19 +2899,31 @@ const VideoSourceConfig = ({
         </td>
         <td className='px-6 py-4 whitespace-nowrap max-w-[1rem]'>
           {(() => {
-            const status = getValidationStatus(source.key);
-            if (!status) {
-              return (
-                <span className='px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-900/20 text-gray-600 dark:text-gray-400'>
-                  未检测
-                </span>
-              );
-            }
+            const status = getValidationStatus(source);
             return (
-              <span className={`px-2 py-1 text-xs rounded-full ${status.className}`} title={status.message}>
+              <span
+                className={`px-2 py-1 text-xs rounded-full ${status.className}`}
+              >
                 {status.icon} {status.text}
               </span>
             );
+          })()}
+        </td>
+        <td className='px-6 py-4 whitespace-nowrap text-sm'>
+          {(() => {
+            const latency = source.lastCheck?.latency;
+            if (typeof latency !== 'number' || latency < 0) {
+              return (
+                <span className='text-gray-500 dark:text-gray-400'>-</span>
+              );
+            }
+            const colorClass =
+              latency < 200
+                ? 'text-green-600 dark:text-green-400'
+                : latency < 1000
+                  ? 'text-yellow-600 dark:text-yellow-400'
+                  : 'text-red-600 dark:text-red-400';
+            return <span className={colorClass}>{latency}ms</span>;
           })()}
         </td>
         <td className='px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2'>
@@ -2879,13 +2975,14 @@ const VideoSourceConfig = ({
   }, []);
 
   // 批量操作
-  const handleBatchOperation = async (action: 'batch_enable' | 'batch_disable' | 'batch_delete') => {
-    if (selectedSources.size === 0) {
-      showAlert({ type: 'warning', title: '请先选择要操作的视频源', message: '请选择至少一个视频源' });
+  const handleBatchOperation = async (action: 'batch_enable' | 'batch_disable' | 'batch_delete' | 'batch_delete_invalid') => {
+    const keys =
+      action === 'batch_delete_invalid' ? [] : Array.from(selectedSources);
+    if (action !== 'batch_delete_invalid' && keys.length === 0) {
+      showAlert({ type: 'warning', title: '请先选择要操作的视频源' });
+
       return;
     }
-
-    const keys = Array.from(selectedSources);
     let confirmMessage = '';
     let actionName = '';
 
@@ -2901,6 +2998,22 @@ const VideoSourceConfig = ({
       case 'batch_delete':
         confirmMessage = `确定要删除选中的 ${keys.length} 个视频源吗？此操作不可恢复！`;
         actionName = '批量删除';
+        break;
+      case 'batch_delete_invalid':
+        {
+          const invalidCount = sources.filter(
+            (s) =>
+              s.from === 'custom' &&
+              s.lastCheck &&
+              ['invalid', 'timeout', 'unreachable'].includes(s.lastCheck.status)
+          ).length;
+          if (invalidCount === 0) {
+            showAlert({ type: 'info', title: '没有可清理的无效源' });
+            return;
+          }
+          confirmMessage = `检测到 ${invalidCount} 个可清理的自定义无效源，确定要删除它们吗？`;
+          actionName = '一键清理无效源';
+        }
         break;
     }
 
@@ -2942,67 +3055,44 @@ const VideoSourceConfig = ({
       {/* 添加视频源表单 */}
       <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
         <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
-          视频源列表
+          视频源列表 ({sources.length})
         </h4>
-        <div className='flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-2'>
-          {/* 批量操作按钮 - 移动端显示在下一行，PC端显示在左侧 */}
-          {selectedSources.size > 0 && (
-            <>
-              <div className='flex flex-wrap items-center gap-3 order-2 sm:order-1'>
-                <span className='text-sm text-gray-600 dark:text-gray-400'>
-                  <span className='sm:hidden'>已选 {selectedSources.size}</span>
-                  <span className='hidden sm:inline'>已选择 {selectedSources.size} 个视频源</span>
-                </span>
-                <button
-                  onClick={() => handleBatchOperation('batch_enable')}
-                  disabled={isLoading('batchSource_batch_enable')}
-                  className={`px-3 py-1 text-sm ${isLoading('batchSource_batch_enable') ? buttonStyles.disabled : buttonStyles.success}`}
-                >
-                  {isLoading('batchSource_batch_enable') ? '启用中...' : '批量启用'}
-                </button>
-                <button
-                  onClick={() => handleBatchOperation('batch_disable')}
-                  disabled={isLoading('batchSource_batch_disable')}
-                  className={`px-3 py-1 text-sm ${isLoading('batchSource_batch_disable') ? buttonStyles.disabled : buttonStyles.warning}`}
-                >
-                  {isLoading('batchSource_batch_disable') ? '禁用中...' : '批量禁用'}
-                </button>
-                <button
-                  onClick={() => handleBatchOperation('batch_delete')}
-                  disabled={isLoading('batchSource_batch_delete')}
-                  className={`px-3 py-1 text-sm ${isLoading('batchSource_batch_delete') ? buttonStyles.disabled : buttonStyles.danger}`}
-                >
-                  {isLoading('batchSource_batch_delete') ? '删除中...' : '批量删除'}
-                </button>
-              </div>
-              <div className='hidden sm:block w-px h-6 bg-gray-300 dark:bg-gray-600 order-2'></div>
-            </>
-          )}
-          <div className='flex items-center gap-2 order-1 sm:order-2'>
-            <button
-              onClick={() => setShowValidationModal(true)}
-              disabled={isValidating}
-              className={`px-3 py-1 text-sm rounded-lg transition-colors flex items-center space-x-1 ${isValidating
-                ? buttonStyles.disabled
-                : buttonStyles.primary
-                }`}
-            >
-              {isValidating ? (
-                <>
-                  <div className='w-3 h-3 border border-white border-t-transparent rounded-full animate-spin'></div>
-                  <span>检测中...</span>
-                </>
-              ) : (
-                '有效性检测'
-              )}
-            </button>
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className={showAddForm ? buttonStyles.secondary : buttonStyles.success}
-            >
-              {showAddForm ? '取消' : '添加视频源'}
-            </button>
-          </div>
+        <div className='flex items-center flex-wrap gap-2'>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className={buttonStyles.primary}
+          >
+            导入
+          </button>
+          <button
+            onClick={() => setShowExportModal(true)}
+            className={buttonStyles.primary}
+          >
+            导出
+          </button>
+          <button
+            onClick={() => handleBatchOperation('batch_delete_invalid')}
+            className={buttonStyles.danger}
+          >
+            一键清理无效源
+          </button>
+          <button
+            onClick={() => setShowValidationModal(true)}
+            disabled={isValidating}
+            className={`flex items-center gap-1 ${isValidating ? buttonStyles.disabled : buttonStyles.primary
+              }`}
+          >
+            {isValidating && (
+              <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
+            )}
+            {isValidating ? '检测中...' : '有效性检测'}
+          </button>
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className={showAddForm ? buttonStyles.secondary : buttonStyles.success}
+          >
+            {showAddForm ? '取消' : '添加视频源'}
+          </button>
         </div>
       </div>
 
@@ -3092,6 +3182,9 @@ const VideoSourceConfig = ({
               <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
                 有效性
               </th>
+              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                延迟
+              </th>
               <th className='px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
                 操作
               </th>
@@ -3109,7 +3202,7 @@ const VideoSourceConfig = ({
               strategy={verticalListSortingStrategy}
             >
               <tbody className='divide-y divide-gray-200 dark:divide-gray-700'>
-                {sources.map((source) => (
+                {filteredSources.map((source) => (
                   <DraggableRow key={source.key} source={source} />
                 ))}
               </tbody>
@@ -5028,11 +5121,20 @@ const SiteConfigComponent = ({
       <div className='flex justify-end'>
         <button
           onClick={handleSave}
-          disabled={isLoading('saveSiteConfig')}
-          className={`px-4 py-2 ${isLoading('saveSiteConfig')
+          disabled={
+            isLoading('saveSiteConfig') ||
+            (siteSettings.IntelligentFilter?.enabled && !isApiVerified)
+          }
+          className={`px-4 py-2 ${isLoading('saveSiteConfig') ||
+            (siteSettings.IntelligentFilter?.enabled && !isApiVerified)
             ? buttonStyles.disabled
             : buttonStyles.success
             } rounded-lg transition-colors`}
+          title={
+            siteSettings.IntelligentFilter?.enabled && !isApiVerified
+              ? '请先测试并确保API连接通过'
+              : ''
+          }
         >
           {isLoading('saveSiteConfig') ? '保存中…' : '保存'}
         </button>
@@ -5842,6 +5944,846 @@ const NetDiskConfig = ({
         </button>
       </div>
 
+// 注册管理组件
+interface RegistrationConfigProps {
+  config: AdminConfig | null;
+  role: 'owner' | 'admin' | null;
+  refreshConfig: () => Promise<void>;
+}
+
+const RegistrationConfig = ({
+  config: _config,
+  role: _role,
+  refreshConfig,
+}: RegistrationConfigProps) => {
+  const { alertModal, showAlert, hideAlert } = useAlertModal();
+  const { isLoading, withLoading } = useLoadingState();
+  const [registrationData, setRegistrationData] = useState<{
+    settings: any;
+    pendingUsers: PendingUser[];
+    stats: RegistrationStats;
+  } | null>(null);
+  const [selectedPendingUsers, setSelectedPendingUsers] = useState<string[]>(
+    []
+  );
+
+  // 自动刷新相关状态
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [refreshInterval, setRefreshInterval] = useState(30000); // 30秒
+  const [lastDataHash, setLastDataHash] = useState<string>('');
+
+  // 获取注册数据
+  const fetchRegistrationData = async () => {
+    try {
+      const response = await fetch('/api/admin/registration');
+      if (!response.ok) {
+        throw new Error('Failed to fetch registration data');
+      }
+      const data = await response.json();
+
+      // 计算数据哈希用于检测变化
+      const dataHash = JSON.stringify({
+        pendingCount: data.pendingUsers.length,
+        pendingUsers: data.pendingUsers.map((u: any) => u.username).sort(),
+      });
+
+      // 如果数据有变化，显示通知
+      if (
+        lastDataHash &&
+        lastDataHash !== dataHash &&
+        data.pendingUsers.length > 0
+      ) {
+        const prevData = registrationData;
+        if (
+          prevData &&
+          data.pendingUsers.length > prevData.pendingUsers.length
+        ) {
+          const newUsersCount =
+            data.pendingUsers.length - prevData.pendingUsers.length;
+          showAlert({
+            type: 'success',
+            title: '新用户注册',
+            message: `有 ${newUsersCount} 个新用户等待审核`,
+            timer: 3000,
+          });
+        }
+      }
+
+      setLastDataHash(dataHash);
+      setRegistrationData(data);
+    } catch (error) {
+      console.error('获取注册数据失败:', error);
+      showAlert({ type: 'error', title: '错误', message: '获取注册数据失败' });
+    }
+  };
+
+  useEffect(() => {
+    fetchRegistrationData();
+  }, []);
+
+  // 自动刷新轮询
+  useEffect(() => {
+    if (!autoRefresh || refreshInterval <= 0) return;
+
+    const interval = setInterval(() => {
+      fetchRegistrationData();
+    }, refreshInterval);
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, refreshInterval, lastDataHash]);
+
+  // 更新注册设置
+  const handleUpdateSettings = async (newSettings: any) => {
+    await withLoading('updateRegistrationSettings', async () => {
+      try {
+        const response = await fetch('/api/admin/registration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'updateSettings',
+            settings: newSettings,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update settings');
+        }
+
+        showAlert({
+          type: 'success',
+          title: '成功',
+          message: '注册设置已更新',
+          timer: 2000,
+        });
+        await Promise.all([refreshConfig(), fetchRegistrationData()]);
+      } catch (error) {
+        console.error('更新注册设置失败:', error);
+        showAlert({
+          type: 'error',
+          title: '错误',
+          message: '更新注册设置失败',
+        });
+      }
+    });
+  };
+
+  // 批准用户
+  const handleApproveUser = async (username: string) => {
+    await withLoading(`approve_${username}`, async () => {
+      try {
+        const response = await fetch('/api/admin/registration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'approve',
+            username,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to approve user');
+        }
+
+        showAlert({
+          type: 'success',
+          title: '成功',
+          message: `用户 ${username} 审核通过`,
+          timer: 2000,
+        });
+        await Promise.all([refreshConfig(), fetchRegistrationData()]);
+      } catch (error) {
+        console.error('批准用户失败:', error);
+        showAlert({
+          type: 'error',
+          title: '错误',
+          message: `批准用户 ${username} 失败`,
+        });
+      }
+    });
+  };
+
+  // 拒绝用户
+  const handleRejectUser = async (username: string) => {
+    await withLoading(`reject_${username}`, async () => {
+      try {
+        const response = await fetch('/api/admin/registration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'reject',
+            username,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to reject user');
+        }
+
+        showAlert({
+          type: 'success',
+          title: '成功',
+          message: `用户 ${username} 申请已拒绝`,
+          timer: 2000,
+        });
+        await fetchRegistrationData();
+      } catch (error) {
+        console.error('拒绝用户失败:', error);
+        showAlert({
+          type: 'error',
+          title: '错误',
+          message: `拒绝用户 ${username} 失败`,
+        });
+      }
+    });
+  };
+
+  // 批量操作
+  const handleBatchOperation = async (action: 'approve' | 'reject') => {
+    if (selectedPendingUsers.length === 0) {
+      showAlert({
+        type: 'warning',
+        title: '提示',
+        message: '请选择要操作的用户',
+      });
+      return;
+    }
+
+    await withLoading(`batch_${action}`, async () => {
+      try {
+        const response = await fetch('/api/admin/registration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: `batch${action.charAt(0).toUpperCase() + action.slice(1)}`,
+            usernames: selectedPendingUsers,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to ${action} users`);
+        }
+
+        const result = await response.json();
+        showAlert({
+          type: 'success',
+          title: '成功',
+          message: result.message,
+          timer: 3000,
+        });
+        setSelectedPendingUsers([]);
+        await Promise.all([refreshConfig(), fetchRegistrationData()]);
+      } catch (error) {
+        console.error(
+          `批量${action === 'approve' ? '批准' : '拒绝'}用户失败:`,
+          error
+        );
+        showAlert({ type: 'error', title: '错误', message: '批量操作失败' });
+      }
+    });
+  };
+
+  if (!registrationData) {
+    return <div className='p-4 text-center text-gray-500'>加载中...</div>;
+  }
+
+  const { settings, pendingUsers, stats } = registrationData;
+
+  return (
+    <div className='space-y-6'>
+      {/* 注册统计 */}
+      <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+        <div className='bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg'>
+          <div className='text-2xl font-bold text-blue-600 dark:text-blue-400'>
+            {stats.totalUsers}
+          </div>
+          <div className='text-sm text-blue-600 dark:text-blue-400'>
+            总用户数
+            {stats.maxUsers && ` / ${stats.maxUsers}`}
+          </div>
+        </div>
+        <div className='bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg'>
+          <div className='text-2xl font-bold text-orange-600 dark:text-orange-400'>
+            {stats.pendingUsers}
+          </div>
+          <div className='text-sm text-orange-600 dark:text-orange-400'>
+            待审核用户
+          </div>
+        </div>
+        <div className='bg-green-50 dark:bg-green-900/20 p-4 rounded-lg'>
+          <div className='text-2xl font-bold text-green-600 dark:text-green-400'>
+            {stats.todayRegistrations}
+          </div>
+          <div className='text-sm text-green-600 dark:text-green-400'>
+            今日注册
+          </div>
+        </div>
+        <div
+          className={`p-4 rounded-lg ${
+            settings.enableRegistration
+              ? 'bg-green-50 dark:bg-green-900/20'
+              : 'bg-red-50 dark:bg-red-900/20'
+          }`}
+        >
+          <div
+            className={`text-2xl font-bold ${
+              settings.enableRegistration
+                ? 'text-green-600 dark:text-green-400'
+                : 'text-red-600 dark:text-red-400'
+            }`}
+          >
+            {settings.enableRegistration ? '开启' : '关闭'}
+          </div>
+          <div
+            className={`text-sm ${
+              settings.enableRegistration
+                ? 'text-green-600 dark:text-green-400'
+                : 'text-red-600 dark:text-red-400'
+            }`}
+          >
+            注册状态
+          </div>
+        </div>
+      </div>
+
+      {/* 注册设置 */}
+      <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm'>
+        <h3 className='text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100'>
+          注册设置
+        </h3>
+        <div className='space-y-4'>
+          <div className='flex items-center space-x-4'>
+            <label className='flex items-center'>
+              <input
+                type='checkbox'
+                checked={settings.enableRegistration}
+                onChange={(e) =>
+                  handleUpdateSettings({
+                    ...settings,
+                    enableRegistration: e.target.checked,
+                  })
+                }
+                className='mr-2'
+              />
+              启用新用户注册
+            </label>
+          </div>
+
+          {settings.enableRegistration && (
+            <>
+              <div className='flex items-center space-x-4'>
+                <label className='flex items-center'>
+                  <input
+                    type='checkbox'
+                    checked={settings.registrationApproval}
+                    onChange={(e) =>
+                      handleUpdateSettings({
+                        ...settings,
+                        registrationApproval: e.target.checked,
+                      })
+                    }
+                    className='mr-2'
+                  />
+                  需要管理员审核
+                </label>
+              </div>
+
+              <div className='flex items-center space-x-4'>
+                <label className='flex items-center space-x-2'>
+                  <span>最大用户数限制:</span>
+                  <input
+                    type='number'
+                    value={settings.maxUsers || ''}
+                    onChange={(e) =>
+                      handleUpdateSettings({
+                        ...settings,
+                        maxUsers: e.target.value
+                          ? parseInt(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder='无限制'
+                    className='px-3 py-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 w-24'
+                    min='1'
+                  />
+                </label>
+              </div>
+
+              {/* 自动刷新设置 */}
+              {settings.registrationApproval && (
+                <>
+                  <div className='border-t border-gray-200 dark:border-gray-700 pt-4 mt-4'>
+                    <h4 className='text-md font-medium text-gray-900 dark:text-gray-100 mb-3'>
+                      自动刷新设置
+                    </h4>
+                    <div className='space-y-3'>
+                      <div className='flex items-center space-x-4'>
+                        <label className='flex items-center'>
+                          <input
+                            type='checkbox'
+                            checked={autoRefresh}
+                            onChange={(e) => setAutoRefresh(e.target.checked)}
+                            className='mr-2'
+                          />
+                          启用自动刷新
+                        </label>
+                      </div>
+
+                      {autoRefresh && (
+                        <div className='flex items-center space-x-4'>
+                          <label className='flex items-center space-x-2'>
+                            <span>刷新间隔:</span>
+                            <select
+                              value={refreshInterval}
+                              onChange={(e) =>
+                                setRefreshInterval(Number(e.target.value))
+                              }
+                              className='px-3 py-1 border rounded-md dark:bg-gray-700 dark:border-gray-600'
+                            >
+                              <option value={10000}>10秒</option>
+                              <option value={30000}>30秒</option>
+                              <option value={60000}>1分钟</option>
+                              <option value={300000}>5分钟</option>
+                            </select>
+                          </label>
+                        </div>
+                      )}
+
+                      <div className='text-xs text-gray-500 dark:text-gray-400'>
+                        {autoRefresh
+                          ? `自动检测新的待审核用户，每${
+                              refreshInterval / 1000
+                            }秒刷新一次`
+                          : '已关闭自动刷新，需要手动刷新页面查看新用户'}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 待审核用户列表 */}
+      {settings.enableRegistration &&
+        settings.registrationApproval &&
+        pendingUsers.length > 0 && (
+          <div className='bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm'>
+            <div className='flex items-center justify-between mb-4'>
+              <div className='flex items-center space-x-3'>
+                <h3 className='text-lg font-semibold text-gray-900 dark:text-gray-100'>
+                  待审核用户 ({pendingUsers.length})
+                </h3>
+                {autoRefresh && (
+                  <div className='flex items-center space-x-2'>
+                    <div className='w-2 h-2 bg-green-500 rounded-full animate-pulse'></div>
+                    <span className='text-xs text-gray-500 dark:text-gray-400'>
+                      自动刷新中
+                    </span>
+                  </div>
+                )}
+              </div>
+              {selectedPendingUsers.length > 0 && (
+                <div className='space-x-2'>
+                  <button
+                    onClick={() => handleBatchOperation('approve')}
+                    disabled={isLoading('batch_approve')}
+                    className={buttonStyles.roundedSuccess}
+                  >
+                    批量批准 ({selectedPendingUsers.length})
+                  </button>
+                  <button
+                    onClick={() => handleBatchOperation('reject')}
+                    disabled={isLoading('batch_reject')}
+                    className={buttonStyles.roundedDanger}
+                  >
+                    批量拒绝 ({selectedPendingUsers.length})
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className='overflow-x-auto'>
+              <table className='min-w-full divide-y divide-gray-200 dark:divide-gray-700'>
+                <thead className='bg-gray-50 dark:bg-gray-700'>
+                  <tr>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider'>
+                      <input
+                        type='checkbox'
+                        checked={
+                          selectedPendingUsers.length === pendingUsers.length
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedPendingUsers(
+                              pendingUsers.map((u) => u.username)
+                            );
+                          } else {
+                            setSelectedPendingUsers([]);
+                          }
+                        }}
+                      />
+                    </th>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider'>
+                      用户名
+                    </th>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider'>
+                      注册时间
+                    </th>
+                    <th className='px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider'>
+                      操作
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className='bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700'>
+                  {pendingUsers.map((user) => (
+                    <tr key={user.username}>
+                      <td className='px-6 py-4 whitespace-nowrap'>
+                        <input
+                          type='checkbox'
+                          checked={selectedPendingUsers.includes(user.username)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedPendingUsers([
+                                ...selectedPendingUsers,
+                                user.username,
+                              ]);
+                            } else {
+                              setSelectedPendingUsers(
+                                selectedPendingUsers.filter(
+                                  (u) => u !== user.username
+                                )
+                              );
+                            }
+                          }}
+                        />
+                      </td>
+                      <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100'>
+                        {user.username}
+                      </td>
+                      <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400'>
+                        {new Date(user.registeredAt).toLocaleString()}
+                      </td>
+                      <td className='px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2'>
+                        <button
+                          onClick={() => handleApproveUser(user.username)}
+                          disabled={isLoading(`approve_${user.username}`)}
+                          className={buttonStyles.roundedSuccess}
+                        >
+                          批准
+                        </button>
+                        <button
+                          onClick={() => handleRejectUser(user.username)}
+                          disabled={isLoading(`reject_${user.username}`)}
+                          className={buttonStyles.roundedDanger}
+                        >
+                          拒绝
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+      {/* 提示信息 */}
+      {settings.enableRegistration &&
+        pendingUsers.length === 0 &&
+        settings.registrationApproval && (
+          <div className='bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-center text-blue-600 dark:text-blue-400'>
+            暂无待审核的用户注册申请
+          </div>
+        )}
+
+      {alertModal.isOpen && (
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={hideAlert}
+          type={alertModal.type}
+          title={alertModal.title}
+          message={alertModal.message}
+          timer={alertModal.timer}
+          showConfirm={alertModal.showConfirm}
+        />
+      )}
+    </div>
+  );
+};
+// OAuth 配置组件
+const OAuthConfigComponent = ({
+  config,
+  refreshConfig,
+}: {
+  config: AdminConfig | null;
+  refreshConfig: () => Promise<void>;
+}) => {
+  const { alertModal, showAlert, hideAlert } = useAlertModal();
+  const { isLoading, withLoading } = useLoadingState();
+  const [oauthSettings, setOauthSettings] = useState({
+    enabled: false,
+    autoRegister: false,
+    minTrustLevel: 3,
+    defaultRole: 'user' as 'user' | 'admin',
+    clientId: '',
+    clientSecret: '',
+    redirectUri: '',
+  });
+
+  // 加载 OAuth 配置
+  useEffect(() => {
+    if (config?.SiteConfig.LinuxDoOAuth) {
+      const oauth = config.SiteConfig.LinuxDoOAuth;
+      setOauthSettings({
+        enabled: oauth.enabled,
+        autoRegister: oauth.autoRegister,
+        minTrustLevel: oauth.minTrustLevel,
+        defaultRole: oauth.defaultRole,
+        clientId: oauth.clientId,
+        clientSecret: oauth.clientSecret || '',
+        redirectUri: oauth.redirectUri || '',
+      });
+    }
+  }, [config]);
+
+  // 保存 OAuth 配置
+  const handleSaveOAuth = async () => {
+    await withLoading('saveOAuth', async () => {
+      try {
+        const response = await fetch('/api/admin/oauth', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(oauthSettings),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || '保存失败');
+        }
+
+        showAlert({
+          type: 'success',
+          title: '成功',
+          message: 'OAuth 配置已保存',
+          timer: 2000,
+        });
+        await refreshConfig();
+      } catch (error) {
+        console.error('保存 OAuth 配置失败:', error);
+        showAlert({
+          type: 'error',
+          title: '错误',
+          message: '保存配置失败: ' + (error as Error).message,
+          showConfirm: true,
+        });
+        throw error;
+      }
+    });
+  };
+
+  if (!config) {
+    return (
+      <div className='text-center text-gray-500 dark:text-gray-400'>
+        加载中...
+      </div>
+    );
+  }
+
+  return (
+    <div className='space-y-6'>
+      <div className='flex items-center justify-between'>
+        <h3 className='text-lg font-semibold text-gray-900 dark:text-gray-100'>
+          LinuxDo OAuth 登录配置
+        </h3>
+        <button
+          onClick={handleSaveOAuth}
+          disabled={isLoading('saveOAuth')}
+          className={
+            isLoading('saveOAuth')
+              ? buttonStyles.disabled
+              : buttonStyles.success
+          }
+        >
+          {isLoading('saveOAuth') ? '保存中...' : '保存配置'}
+        </button>
+      </div>
+
+      {/* 基础开关 */}
+      <div className='space-y-4'>
+        <div className='flex items-center space-x-3'>
+          <input
+            type='checkbox'
+            id='oauth-enabled'
+            checked={oauthSettings.enabled}
+            onChange={(e) =>
+              setOauthSettings((prev) => ({
+                ...prev,
+                enabled: e.target.checked,
+              }))
+            }
+            className='h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded'
+          />
+          <label
+            htmlFor='oauth-enabled'
+            className='text-sm font-medium text-gray-700 dark:text-gray-300'
+          >
+            启用 LinuxDo OAuth 登录
+          </label>
+        </div>
+
+        <div className='flex items-center space-x-3'>
+          <input
+            type='checkbox'
+            id='oauth-auto-register'
+            checked={oauthSettings.autoRegister}
+            onChange={(e) =>
+              setOauthSettings((prev) => ({
+                ...prev,
+                autoRegister: e.target.checked,
+              }))
+            }
+            className='h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded'
+          />
+          <label
+            htmlFor='oauth-auto-register'
+            className='text-sm font-medium text-gray-700 dark:text-gray-300'
+          >
+            自动注册新用户
+          </label>
+        </div>
+      </div>
+
+      {/* OAuth 应用配置 */}
+      <div className='space-y-4'>
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            应用 ID (Client ID) *
+          </label>
+          <input
+            type='text'
+            value={oauthSettings.clientId}
+            onChange={(e) =>
+              setOauthSettings((prev) => ({
+                ...prev,
+                clientId: e.target.value,
+              }))
+            }
+            placeholder='LinuxDo OAuth 应用的 Client ID'
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          />
+        </div>
+
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            应用密钥 (Client Secret) *
+          </label>
+          <input
+            type='password'
+            value={oauthSettings.clientSecret}
+            onChange={(e) =>
+              setOauthSettings((prev) => ({
+                ...prev,
+                clientSecret: e.target.value,
+              }))
+            }
+            placeholder='LinuxDo OAuth 应用的 Client Secret'
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          />
+        </div>
+
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            回调地址 (可选)
+          </label>
+          <input
+            type='url'
+            value={oauthSettings.redirectUri}
+            onChange={(e) =>
+              setOauthSettings((prev) => ({
+                ...prev,
+                redirectUri: e.target.value,
+              }))
+            }
+            placeholder='留空使用自动生成的回调地址'
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          />
+          <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+            如需自定义回调地址，请确保配置正确
+          </p>
+        </div>
+      </div>
+
+      {/* 用户注册配置 */}
+      <div className='space-y-4'>
+        <h4 className='text-md font-medium text-gray-900 dark:text-gray-100'>
+          用户注册配置
+        </h4>
+
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            最低信任等级
+          </label>
+          <select
+            value={oauthSettings.minTrustLevel}
+            onChange={(e) =>
+              setOauthSettings((prev) => ({
+                ...prev,
+                minTrustLevel: parseInt(e.target.value),
+              }))
+            }
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          >
+            <option value={0}>0 级 - 新用户</option>
+            <option value={1}>1 级 - 基础用户</option>
+            <option value={2}>2 级 - 会员</option>
+            <option value={3}>3 级 - 常规用户</option>
+            <option value={4}>4 级 - 领导者</option>
+          </select>
+          <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+            只有达到此等级的 LinuxDo 用户才能登录
+          </p>
+        </div>
+
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            默认用户角色
+          </label>
+          <select
+            value={oauthSettings.defaultRole}
+            onChange={(e) =>
+              setOauthSettings((prev) => ({
+                ...prev,
+                defaultRole: e.target.value as 'user' | 'admin',
+              }))
+            }
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          >
+            <option value='user'>普通用户</option>
+            <option value='admin'>管理员</option>
+          </select>
+          <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+            自动注册的用户将获得此角色
+          </p>
+        </div>
+      </div>
+
+      {/* 配置说明 */}
+      <div className='bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg'>
+        <h5 className='text-sm font-medium text-blue-800 dark:text-blue-200 mb-2'>
+          配置说明
+        </h5>
+        <ul className='text-xs text-blue-700 dark:text-blue-300 space-y-1'>
+          <li>• 需要在 LinuxDo 管理后台创建 OAuth 应用获取凭证</li>
+          <li>• 启用自动注册后，符合信任等级的新用户将自动创建账号</li>
+          <li>• 禁用自动注册时，只有已存在的用户可以登录</li>
+          <li>• 回调地址格式: https://yourdomain.com/api/oauth/callback</li>
+        </ul>
+      </div>
+
+      
       {/* 通用弹窗组件 */}
       <AlertModal
         isOpen={alertModal.isOpen}
@@ -5923,7 +6865,7 @@ function AdminPageClient() {
       })
       .catch(() => {
         setStorageType('localstorage');
-      }); 
+      });
   }, [fetchConfig]);
 
   // 切换标签展开状态
