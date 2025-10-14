@@ -88,6 +88,19 @@ function validateImageResponse(contentType: string | null, contentLength: number
   return { isValid: true };
 }
 
+// 处理 OPTIONS 预检请求，增强 CORS 兼容性
+export async function OPTIONS(request: Request) {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, User-Agent, Referer, If-None-Match',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
+
 export async function GET(request: Request) {
   const startTime = Date.now();
   logoStats.requests++;
@@ -101,9 +114,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing image URL' }, { status: 400 });
   }
 
+  // 强制校验 source 参数
+  if (!source) {
+    logoStats.errors++;
+    return NextResponse.json(
+      { error: 'Missing source parameter' },
+      { status: 400 }
+    );
+  }
+
   const config = await getConfig();
   const liveSource = config.LiveConfig?.find((s: any) => s.key === source);
-  const ua = liveSource?.ua || 'AptvPlayer/1.4.10';
+  // 智能 User-Agent 模拟
+  const ua = liveSource?.ua || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
   const decodedUrl = decodeURIComponent(imageUrl);
   const cacheKey = `${source || 'default'}-${decodedUrl}`;
@@ -142,6 +165,7 @@ export async function GET(request: Request) {
       signal: controller.signal,
       headers: {
         'User-Agent': ua,
+        // 更标准的 Accept 请求头
         'Accept': 'image/webp,image/avif,image/png,image/jpeg,image/gif,image/svg+xml,*/*;q=0.8',
         'Accept-Encoding': 'identity',
         'Cache-Control': 'no-cache',
@@ -157,6 +181,10 @@ export async function GET(request: Request) {
     // 如果是 304 Not Modified，返回缓存的数据
     if (imageResponse.status === 304 && cached) {
       logoStats.cacheHits++;
+      
+      // 更新缓存时间戳
+      cached.timestamp = Date.now();
+      logoCache.set(cacheKey, cached);
       
       const responseTime = Date.now() - startTime;
       logoStats.avgResponseTime = (logoStats.avgResponseTime * (logoStats.requests - 1) + responseTime) / logoStats.requests;
@@ -250,29 +278,31 @@ export async function GET(request: Request) {
     logoStats.errors++;
     clearTimeout(timeoutId);
     
-    // 处理不同类型的错误
-    if (error.name === 'AbortError') {
-      return NextResponse.json({ error: 'Image request timeout' }, { status: 408 });
-    }
-    
-    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      return NextResponse.json({ error: 'Network connection failed' }, { status: 503 });
-    }
-
+    // 增强的错误处理
     if (process.env.NODE_ENV === 'development') {
       console.error('Logo proxy error:', error);
     }
+    let statusCode = 502; // Bad Gateway
+    let errorMessage = 'Failed to proxy image';
+    if (error.name === 'AbortError' || error.message.includes('timeout')) {
+      statusCode = 408;
+      errorMessage = 'Image request timeout';
+    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      statusCode = 503;
+      errorMessage = 'Network connection failed';
+    }
+    
     return NextResponse.json({
-      error: 'Error fetching image',
+      error: errorMessage,
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    }, { status: 500 });
+    }, { status: statusCode });
     
   } finally {
     clearTimeout(timeoutId);
     
     // 定期打印统计信息
     if (logoStats.requests % 200 === 0 && process.env.NODE_ENV === 'development') {
-      const hitRate = logoStats.cacheHits / logoStats.requests * 100;
+      const hitRate = logoStats.requests > 0 ? (logoStats.cacheHits / logoStats.requests * 100) : 0;
       console.log(`Logo Proxy Stats - Requests: ${logoStats.requests}, Cache Hits: ${logoStats.cacheHits} (${hitRate.toFixed(1)}%), Errors: ${logoStats.errors}, Avg Time: ${logoStats.avgResponseTime.toFixed(2)}ms, Cache Size: ${logoCache.size}, Total: ${(logoStats.totalBytes / 1024 / 1024).toFixed(2)}MB`);
     }
   }
