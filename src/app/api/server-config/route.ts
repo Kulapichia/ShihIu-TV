@@ -15,6 +15,10 @@ export async function GET(request: NextRequest) {
     SiteName: config.SiteConfig.SiteName,
     StorageType: process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage',
     Version: CURRENT_VERSION,
+    EnableRegistration: config.SiteConfig.EnableRegistration || false,
+    LinuxDoOAuth: {
+      enabled: config.SiteConfig.LinuxDoOAuth?.enabled || false,
+    },
   };
   return NextResponse.json(result);
 }
