@@ -2703,7 +2703,10 @@ function PlayPageClient() {
                 : Hls.DefaultConfig.loader,
             });
 
-            hls.loadSource(url);
+            const proxyUrl = `/api/proxy/m3u8?url=${encodeURIComponent(
+              url
+            )}&moontv-source=${currentSourceRef.current}`;
+            hls.loadSource(proxyUrl);
             hls.attachMedia(video);
             video.hls = hls;
 
@@ -2736,20 +2739,45 @@ function PlayPageClient() {
                 }
                 return;
               }
-
+              
+              const tryNextSource = () => {
+                if (artPlayerRef.current) {
+                  artPlayerRef.current.notice.show =
+                    '当前源播放失败，正在尝试下一个...';
+                }
+                const currentIndex = availableSourcesRef.current.findIndex(
+                  (s) =>
+                    s.source === currentSourceRef.current &&
+                    s.id === currentIdRef.current
+                );
+                if (currentIndex !== -1 && currentIndex + 1 < availableSourcesRef.current.length) {
+                  const nextSource = availableSourcesRef.current[currentIndex + 1];
+                  handleSourceChange(
+                    nextSource.source,
+                    nextSource.id,
+                    nextSource.title
+                  );
+                } else {
+                  if (artPlayerRef.current) {
+                    artPlayerRef.current.notice.show = '所有播放源均尝试失败';
+                  }
+                  setError('所有可用播放源均无法播放');
+                }
+              };
+              
               if (data.fatal) {
                 switch (data.type) {
                   case Hls.ErrorTypes.NETWORK_ERROR:
-                    console.log('网络错误，尝试恢复...');
-                    hls.startLoad();
+                    console.log('网络错误，尝试切换到下一个播放源...');
+                    tryNextSource();
                     break;
                   case Hls.ErrorTypes.MEDIA_ERROR:
-                    console.log('媒体错误，尝试恢复...');
-                    hls.recoverMediaError();
+                    console.log('媒体错误，尝试切换到下一个播放源...');
+                    tryNextSource();
                     break;
                   default:
-                    console.log('无法恢复的错误');
-                    hls.destroy();
+                    console.log('无法恢复的错误，尝试切换播放源');
+                    tryNextSource();
                     break;
                 }
               }
