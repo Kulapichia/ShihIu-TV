@@ -367,7 +367,18 @@ export class UpstashRedisStorage implements IStorage {
     const val = await withRetry(() =>
       this.client.get(this.skipConfigKey(userName, source, id))
     );
-    return val ? (val as EpisodeSkipConfig) : null;
+    if (!val) return null;
+    try {
+      return (
+        typeof val === 'string' ? JSON.parse(val) : val
+      ) as EpisodeSkipConfig;
+    } catch (e) {
+      console.error(
+        `[DB] Failed to parse SkipConfig for key ${source}+${id}:`,
+        e
+      );
+      return null;
+    }
   }
 
   async setSkipConfig(
@@ -412,8 +423,14 @@ export class UpstashRedisStorage implements IStorage {
             // 从key中提取source+id
             const match = key.match(/^u:.+?:skip:(.+)$/);
             if (match) {
-              const sourceAndId = match[1];
-              configs[sourceAndId] = value as EpisodeSkipConfig;
+              try {
+                const sourceAndId = match[1];
+                configs[sourceAndId] = (
+                  typeof value === 'string' ? JSON.parse(value) : value
+                ) as EpisodeSkipConfig;
+              } catch (e) {
+                console.error(`[DB] Failed to parse SkipConfig for key ${key}:`, e);
+              }
             }
           }
         });
@@ -436,7 +453,18 @@ export class UpstashRedisStorage implements IStorage {
     const val = await withRetry(() =>
       this.client.get(this.episodeSkipConfigKey(userName, source, id))
     );
-    return val ? (val as EpisodeSkipConfig) : null;
+    if (!val) return null;
+    try {
+      return (
+        typeof val === 'string' ? JSON.parse(val) : val
+      ) as EpisodeSkipConfig;
+    } catch (e) {
+      console.error(
+        `[DB] Failed to parse EpisodeSkipConfig for key ${source}+${id}:`,
+        e
+      );
+      return null;
+    }
   }
 
   async saveEpisodeSkipConfig(
@@ -481,8 +509,14 @@ export class UpstashRedisStorage implements IStorage {
             // 从key中提取source+id
             const match = key.match(/^u:.+?:episodeskip:(.+)$/);
             if (match) {
-              const sourceAndId = match[1];
-              configs[sourceAndId] = value as EpisodeSkipConfig;
+              try {
+                const sourceAndId = match[1];
+                configs[sourceAndId] = (
+                  typeof value === 'string' ? JSON.parse(value) : value
+                ) as EpisodeSkipConfig;
+              } catch (e) {
+                console.error(`[DB] Failed to parse EpisodeSkipConfig for key ${key}:`, e);
+              }
             }
           }
         });
@@ -599,16 +633,22 @@ export class UpstashRedisStorage implements IStorage {
         values.forEach(v => {
           if (v) {
             try {
-              users.push(JSON.parse(v as string));
+              const parsed = (typeof v === 'string' ? JSON.parse(v) : v) as PendingUser;
+              // 验证解析后的数据结构是否完整
+              if (parsed && parsed.username && typeof parsed.registeredAt === 'number') {
+                users.push(parsed);
+              } else {
+                console.warn('待审核用户数据结构不完整:', parsed);
+              }
             } catch(e) {
-              console.error('解析待审核用户数据失败:', v);
+              console.error('解析待审核用户数据失败:', v, e);
             }
           }
         });
       }
     } while (cursor !== '0');
     
-    return users;
+    return users.sort((a, b) => a.registeredAt - b.registeredAt);
   }
 
   async approvePendingUser(username: string): Promise<void> {
@@ -618,7 +658,19 @@ export class UpstashRedisStorage implements IStorage {
       throw new Error('待审核用户不存在或数据已损坏');
     }
     
-    const user = JSON.parse(pendingData as string) as PendingUser;
+    let user: PendingUser;
+    try {
+      user = (typeof pendingData === 'string' ? JSON.parse(pendingData) : pendingData) as PendingUser;
+      if (!user.username || !user.password) {
+        throw new Error('待审核用户数据不完整');
+      }
+    } catch (e) {
+      console.error(`[DB] Failed to parse PendingUser for ${username}:`, e);
+      // 如果解析失败，直接拒绝并删除该损坏的待审核记录
+      await this.rejectPendingUser(username);
+      throw new Error(`待审核用户 ${username} 的数据已损坏`);
+    }
+
     await this.registerUser(user.username, user.password);
     await withRetry(() => this.client.del(key));
   }
