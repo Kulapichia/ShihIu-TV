@@ -73,9 +73,8 @@ function RegisterPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [shouldShowRegister, setShouldShowRegister] = useState(false);
-  const [registrationDisabled, setRegistrationDisabled] = useState(false);
-  const [disabledReason, setDisabledReason] = useState('');
+  const [registrationEnabled, setRegistrationEnabled] = useState<boolean | null>(null);
+  const [storageType, setStorageType] = useState<string | null>(null);
   const [bingWallpaper, setBingWallpaper] = useState<string>('');
 
   const { siteName } = useSite();
@@ -99,41 +98,18 @@ function RegisterPageClient() {
 
   // 检查注册是否可用
   useEffect(() => {
-    const checkRegistrationAvailable = async () => {
-      try {
-        // 用空数据检测，这样不会创建用户但能得到正确的错误信息
-        const res = await fetch('/api/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: '', password: '', confirmPassword: '' }),
-        });
-        
-        const data = await res.json();
-        
-        // 如果是localStorage模式，跳转登录
-        if (data.error === 'localStorage 模式不支持用户注册') {
-          router.replace('/login');
-          return;
-        }
-        
-        // 如果是管理员关闭了注册
-        if (data.error === '管理员已关闭用户注册功能') {
-          setRegistrationDisabled(true);
-          setDisabledReason('管理员已关闭用户注册功能');
-          setShouldShowRegister(true);
-          return;
-        }
-        
-        // 其他情况显示注册表单（包括用户名已存在等正常的验证错误）
-        setShouldShowRegister(true);
-      } catch (error) {
-        // 网络错误也显示注册页面
-        setShouldShowRegister(true);
-      }
-    };
-
-    checkRegistrationAvailable();
-  }, [router]);
+    fetch('/api/server-config')
+      .then((res) => res.json())
+      .then((data) => {
+        setRegistrationEnabled(data.EnableRegistration || false);
+        setStorageType(data.StorageType || 'localstorage');
+      })
+      .catch(() => {
+        // 发生错误时，假定注册不可用以保证安全
+        setRegistrationEnabled(false);
+        setStorageType(null); // 表示配置加载失败
+      });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -162,19 +138,24 @@ function RegisterPageClient() {
         }),
       });
 
-      if (res.ok) {
-        await res.json(); // 读取响应但不使用
-        // 显示成功消息，稍等一下再跳转
+      const data = await res.json();
+
+      if (data.success) {
         setError(null);
-        setSuccess('注册成功！正在跳转...');
-        // 给用户一个成功提示，然后再跳转
-        setTimeout(() => {
-          const redirect = searchParams.get('redirect') || '/';
-          router.replace(redirect);
-        }, 1500); // 1.5秒后跳转，让用户看到成功消息
+        setSuccess(data.message);
+        setUsername('');
+        setPassword('');
+        setConfirmPassword('');
+
+        // 如果不需要审批，延时后跳转到登录页
+        if (!data.needsApproval) {
+          setTimeout(() => {
+            const redirect = searchParams.get('redirect') || '/login?message=registration-success';
+            router.push(redirect);
+          }, 2000); // 2秒后跳转，让用户看到成功消息
+        }
       } else {
-        const data = await res.json();
-        setError(data.error ?? '注册失败');
+        setError(data.message || '注册失败');
       }
     } catch (error) {
       setError('网络错误，请稍后重试');
@@ -183,12 +164,15 @@ function RegisterPageClient() {
     }
   };
 
-  if (!shouldShowRegister) {
+  if (registrationEnabled === null || storageType === null) {
     return <div>Loading...</div>;
   }
 
-  // 如果注册被禁用，显示提示页面
-  if (registrationDisabled) {
+  // 如果注册被禁用或为LocalStorage模式，显示提示页面
+  if (!registrationEnabled || storageType === 'localstorage') {
+    const reason = storageType === 'localstorage'
+      ? '当前系统为本地存储模式，不支持用户注册功能。'
+      : '管理员已关闭用户注册功能。';
     return (
       <div className='relative min-h-screen flex items-center justify-center px-4 overflow-hidden'>
         {/* Bing 每日壁纸背景 */}
@@ -225,7 +209,7 @@ function RegisterPageClient() {
             </h2>
             <div className='p-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800/50'>
               <p className='text-gray-700 dark:text-gray-300 text-sm leading-relaxed'>
-                {disabledReason || '管理员已关闭用户注册功能'}
+                {reason}
               </p>
             </div>
             <p className='text-gray-500 dark:text-gray-500 text-xs'>
