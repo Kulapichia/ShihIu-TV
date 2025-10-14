@@ -1,8 +1,15 @@
+
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthInfoFromCookie } from '@/lib/auth';
 import { db } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
+    const authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
 
@@ -29,6 +36,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { key, data, expireSeconds } = body;
 
