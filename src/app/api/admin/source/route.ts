@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
         if (keysToDelete.length > 0) {
           // 清理用户组权限
           if (adminConfig.UserConfig.Tags) {
-            adminConfig.UserConfig.Tags.forEach(tag => {
+            adminConfig.UserConfig.Tags.forEach((tag) => {
               if (tag.enabledApis) {
                 tag.enabledApis = tag.enabledApis.filter(
                   (api) => !keysToDelete.includes(api)
@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
           }
 
           // 清理用户权限
-          adminConfig.UserConfig.Users.forEach(user => {
+          adminConfig.UserConfig.Users.forEach((user) => {
             if (user.enabledApis) {
               user.enabledApis = user.enabledApis.filter(
                 (api) => !keysToDelete.includes(api)
