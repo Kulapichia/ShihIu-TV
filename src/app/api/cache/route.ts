@@ -46,21 +46,33 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
     const prefix = searchParams.get('prefix');
 
+    if (key) {
+      await db.deleteCache(key);
+      return NextResponse.json({ success: true, message: `Cache with key "${key}" deleted.` });
+    }
+    
     if (prefix) {
       await db.clearExpiredCache(prefix);
-    } else if (key) {
-      await db.deleteCache(key);
-    } else {
-      return NextResponse.json({ error: 'Key or prefix is required' }, { status: 400 });
+      return NextResponse.json({ success: true, message: `Expired cache with prefix "${prefix}" cleared.` });
     }
 
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Delete cache error:', error);
-    return NextResponse.json({ error: 'Failed to delete cache' }, { status: 500 });
+    // 如果没有key或prefix，则清理所有过期缓存
+    await db.clearExpiredCache();
+    return NextResponse.json({ success: true, message: 'All expired cache cleared.' });
+
+  } catch (error: any) {
+    console.error('删除缓存失败:', error);
+    return NextResponse.json(
+      { error: 'Internal Server Error', details: error.message },
+      { status: 500 }
+    );
   }
 }
