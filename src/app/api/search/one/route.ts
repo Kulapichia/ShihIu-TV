@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getAvailableApiSites, getCacheTime, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
-import { yellowWords } from '@/lib/yellow';
+import { decisionThresholds, moderateContent } from '@/lib/yellow';
+import { SearchResult } from '@/lib/types';
 
 export const runtime = 'nodejs';
 
@@ -52,9 +53,16 @@ export async function GET(request: NextRequest) {
     const results = await searchFromApi(targetSite, query);
     let result = results.filter((r) => r.title === query);
     if (!config.SiteConfig.DisableYellowFilter) {
-      result = result.filter((result) => {
-        const typeName = result.type_name || '';
-        return !yellowWords.some((word: string) => typeName.includes(word));
+      result = result.filter((item: SearchResult) => {
+        const typeName = item.type_name || '';
+        const title = item.title || '';
+        
+        // 使用新的审核函数检查标题和分类名
+        const titleModeration = moderateContent(title);
+        const typeModeration = moderateContent(typeName);
+        
+        return titleModeration.totalScore < decisionThresholds.FLAG && 
+               typeModeration.totalScore < decisionThresholds.FLAG;
       });
     }
     const cacheTime = await getCacheTime();
