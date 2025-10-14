@@ -79,10 +79,13 @@ export async function GET(request: NextRequest) {
           const timeoutId = setTimeout(() => controller.abort(), 10000);
 
           try {
+            const startTime = performance.now();
             const response = await fetch(searchUrl, {
               headers: API_CONFIG.search.headers,
               signal: controller.signal,
             });
+            const endTime = performance.now();
+            const latency = Math.round(endTime - startTime);
 
             clearTimeout(timeoutId);
 
@@ -122,7 +125,8 @@ export async function GET(request: NextRequest) {
               const sourceEvent = `data: ${JSON.stringify({
                 type: 'source_result',
                 source: site.key,
-                status
+                status,
+                latency,
               })}\n\n`;
 
               if (!safeEnqueue(encoder.encode(sourceEvent))) {
@@ -145,7 +149,8 @@ export async function GET(request: NextRequest) {
             const errorEvent = `data: ${JSON.stringify({
               type: 'source_error',
               source: site.key,
-              status: 'invalid'
+              status: 'invalid',
+              latency: -1,
             })}\n\n`;
 
             if (!safeEnqueue(encoder.encode(errorEvent))) {
