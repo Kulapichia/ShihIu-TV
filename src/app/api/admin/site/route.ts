@@ -39,6 +39,10 @@ export async function POST(request: NextRequest) {
       DoubanImageProxy,
       DisableYellowFilter,
       FluidSearch,
+      EnableVirtualScroll,
+      EnableRegistration,
+      RegistrationApproval,
+      IntelligentFilter, // 新增：从请求体中解构出 IntelligentFilter 对象
       TMDBApiKey,
       TMDBLanguage,
       EnableTMDBActorSearch,
@@ -53,6 +57,10 @@ export async function POST(request: NextRequest) {
       DoubanImageProxy: string;
       DisableYellowFilter: boolean;
       FluidSearch: boolean;
+      EnableVirtualScroll: boolean;
+      EnableRegistration: boolean;
+      RegistrationApproval: boolean;
+      IntelligentFilter: any; // 新增：为 IntelligentFilter 添加类型
       TMDBApiKey?: string;
       TMDBLanguage?: string;
       EnableTMDBActorSearch?: boolean;
@@ -69,7 +77,11 @@ export async function POST(request: NextRequest) {
       typeof DoubanImageProxyType !== 'string' ||
       typeof DoubanImageProxy !== 'string' ||
       typeof DisableYellowFilter !== 'boolean' ||
-      typeof FluidSearch !== 'boolean'
+      typeof FluidSearch !== 'boolean' ||
+      typeof EnableVirtualScroll !== 'boolean' ||
+      typeof EnableRegistration !== 'boolean' ||
+      typeof RegistrationApproval !== 'boolean' ||
+      typeof IntelligentFilter !== 'object' // 新增：校验 IntelligentFilter 是一个对象
     ) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
@@ -86,9 +98,53 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '权限不足' }, { status: 401 });
       }
     }
-
-    // 更新缓存中的站点设置
+    
+    // 日志记录：检查从前端接收到的原始参数
+    if (IntelligentFilter) {
+      const sightengineOpts = IntelligentFilter.options?.sightengine;
+      const customOpts = IntelligentFilter.options?.custom;
+      console.log('Received IntelligentFilter config from frontend:', {
+        ...IntelligentFilter,
+        options: {
+          sightengine: {
+            ...sightengineOpts,
+            // 安全处理：不直接打印密钥，只打印长度信息
+            apiSecret: sightengineOpts?.apiSecret 
+              ? `(present, length: ${sightengineOpts.apiSecret.length})` 
+              : '(not provided)',
+          },
+          custom: {
+            ...customOpts,
+            apiKeyValue: customOpts?.apiKeyValue 
+              ? `(present, length: ${customOpts.apiKeyValue.length})` 
+              : '(not provided)',
+          },
+        },
+      });
+    }
+    
+    // 安全检查：防止已保存的密钥被占位符意外覆盖
+    if (IntelligentFilter) {
+      const sightengineOpts = IntelligentFilter.options?.sightengine;
+      const customOpts = IntelligentFilter.options?.custom;
+      const baiduOpts = IntelligentFilter.options?.baidu;
+      // 只有当前端传来的密钥是占位符时，才保留数据库中已有的值
+      if (sightengineOpts && sightengineOpts.apiSecret === '********') {
+        console.log("Preserving existing sightengine apiSecret.");
+        sightengineOpts.apiSecret = adminConfig.SiteConfig.IntelligentFilter?.options?.sightengine?.apiSecret || '';
+      }
+      if (customOpts && customOpts.apiKeyValue === '********') {
+        console.log("Preserving existing custom apiKeyValue.");
+        customOpts.apiKeyValue = adminConfig.SiteConfig.IntelligentFilter?.options?.custom?.apiKeyValue || '';
+      }
+      if (baiduOpts && baiduOpts.secretKey === '********') {
+        console.log("Preserving existing baidu secretKey.");
+        baiduOpts.secretKey = adminConfig.SiteConfig.IntelligentFilter?.options?.baidu?.secretKey || '';
+      }
+    }
+    // 更新缓存中的站点设置（保留 OAuth 配置）
     adminConfig.SiteConfig = {
+      ...adminConfig.SiteConfig,
       SiteName,
       Announcement,
       SearchDownstreamMaxPage,
@@ -99,10 +155,15 @@ export async function POST(request: NextRequest) {
       DoubanImageProxy,
       DisableYellowFilter,
       FluidSearch,
+      EnableVirtualScroll,
+      EnableRegistration,
+      RegistrationApproval,
+      IntelligentFilter, // 新增：将处理过的 IntelligentFilter 对象加入保存
       TMDBApiKey: TMDBApiKey || '',
       TMDBLanguage: TMDBLanguage || 'zh-CN',
       EnableTMDBActorSearch: EnableTMDBActorSearch || false,
     };
+
 
     // 写入数据库
     await db.saveAdminConfig(adminConfig);
