@@ -1199,7 +1199,18 @@ export const changelog: ChangelogEntry[] = [
     fixed: [
       // 无修复内容
     ]
-  }
+  },
+  {
+    version: '0.0.1',
+    date: '2025-08-26',
+    added: [
+      '新增对 SITE_BASE 环境变量的支持，解决 m3u8 重写时 base url 错误的问题',
+    ],
+    changed: ['移除授权相关逻辑', '移除代码混淆', '移除 melody-cdn-sharon'],
+    fixed: [
+      // 无修复内容
+    ]
+  },
 ];
 
 export default changelog;
