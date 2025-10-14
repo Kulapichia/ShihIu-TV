@@ -6,7 +6,7 @@ import { AdminConfig } from '@/lib/admin.types';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
-import { yellowWords } from '@/lib/yellow';
+import { decisionThresholds, moderateContent } from '@/lib/yellow';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,9 +68,24 @@ async function generateSuggestions(config: AdminConfig, query: string, username:
     const results = await searchFromApi(firstSite, query);
 
     realKeywords = Array.from(
-      new Set(
+      new Set<string>(
         results
-          .filter((r: any) => config.SiteConfig.DisableYellowFilter || !yellowWords.some((word: string) => (r.type_name || '').includes(word)))
+          .filter(
+            (r: any) => {
+              if (config.SiteConfig.DisableYellowFilter) {
+                return true;
+              }
+              const typeName = r.type_name || '';
+              const title = r.title || '';
+              
+              // 使用新的审核函数检查分类名和标题
+              const titleModeration = moderateContent(title);
+              const typeModeration = moderateContent(typeName);
+              
+              return titleModeration.totalScore < decisionThresholds.FLAG && 
+                     typeModeration.totalScore < decisionThresholds.FLAG;
+            }
+          )
           .map((r: any) => r.title)
           .filter(Boolean)
           .flatMap((title: string) => title.split(/[ -:：·、-]/))
