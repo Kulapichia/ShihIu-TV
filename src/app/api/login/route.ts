@@ -165,8 +165,37 @@ export async function POST(req: NextRequest) {
 
     const config = await getConfig();
     const user = config.UserConfig.Users.find((u) => u.username === username);
-    if (user && user.banned) {
-      return NextResponse.json({ error: '用户被封禁' }, { status: 401 });
+    // 如果用户在配置中，先检查状态和封禁情况
+    if (user) {
+      if (user.banned) {
+        return NextResponse.json({ error: '用户被封禁' }, { status: 401 });
+      }
+
+      // 检查用户状态 - 优先检查，避免走到密码验证
+      if (user.status === 'pending') {
+        return NextResponse.json(
+          { error: '账号正在审核中，请等待管理员审批' },
+          { status: 401 }
+        );
+      }
+
+      if (user.status === 'rejected') {
+        return NextResponse.json(
+          { error: '账号申请已被拒绝' },
+          { status: 401 }
+        );
+      }
+    } else {
+      // 如果不在配置中，检查是否是待审核用户
+      const pendingUsers = await db.getPendingUsers();
+      const pendingUser = pendingUsers.find((u) => u.username === username);
+
+      if (pendingUser) {
+        return NextResponse.json(
+          { error: '账号正在审核中，请等待管理员审批' },
+          { status: 401 }
+        );
+      }
     }
 
     // 校验用户密码
