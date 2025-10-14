@@ -1,4 +1,5 @@
-import { AdminConfig } from './admin.types';
+import { AdminConfig, PendingUser, RegistrationStats } from './admin.types';
+
 
 // 播放记录数据结构
 export interface PlayRecord {
@@ -136,7 +137,14 @@ export interface IStorage {
   setCache(key: string, data: any, expireSeconds?: number): Promise<void>;
   deleteCache(key: string): Promise<void>;
   clearExpiredCache(prefix?: string): Promise<void>;
-
+  
+  // [新增] 注册相关方法
+  createPendingUser(username: string, password: string): Promise<void>;
+  getPendingUsers(): Promise<PendingUser[]>;
+  approvePendingUser(username: string): Promise<void>;
+  rejectPendingUser(username: string): Promise<void>;
+  getRegistrationStats(): Promise<RegistrationStats>;
+  
   // 播放统计相关
   getPlayStats(): Promise<PlayStatsResult>;
   getUserPlayStat(userName: string): Promise<UserPlayStat>;
