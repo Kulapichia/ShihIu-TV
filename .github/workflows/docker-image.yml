@@ -73,7 +73,7 @@ jobs:
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           if git show HEAD~1:package.json > package.json.old 2>/dev/null; then
-            PREVIOUS_VERSION=$(node -p "require('./package.json.old').version")
+            PREVIOUS_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./package.json.old', 'utf8')).version")
             rm package.json.old
           else
             PREVIOUS_VERSION="0.0.0"
