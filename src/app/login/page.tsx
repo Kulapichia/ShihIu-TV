@@ -73,6 +73,10 @@ function LoginPageClient() {
   const [loading, setLoading] = useState(false);
   const [shouldAskUsername, setShouldAskUsername] = useState(false);
   const [bingWallpaper, setBingWallpaper] = useState<string>('');
+  const [registrationEnabled, setRegistrationEnabled] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [oauthEnabled, setOauthEnabled] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   const { siteName } = useSite();
 
@@ -95,15 +99,40 @@ function LoginPageClient() {
 
   // 在客户端挂载后设置配置
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storageType = (window as any).RUNTIME_CONFIG?.STORAGE_TYPE;
-      setShouldAskUsername(storageType && storageType !== 'localstorage');
+    // 获取服务器配置
+    fetch('/api/server-config')
+      .then((res) => res.json())
+      .then((data) => {
+        setRegistrationEnabled(data.EnableRegistration || false);
+        setShouldAskUsername(
+          data.StorageType && data.StorageType !== 'localstorage'
+        );
+        setOauthEnabled(data.LinuxDoOAuth?.enabled || false);
+      })
+      .catch(() => {
+        setRegistrationEnabled(false);
+        setShouldAskUsername(false);
+        setOauthEnabled(false);
+      });
+
+    // 检查 URL 参数中的成功消息和 OAuth 错误
+    const message = searchParams.get('message');
+    const oauthErrorParam = searchParams.get('oauth_error');
+
+    if (message === 'registration-success') {
+      setSuccessMessage('注册成功！请使用您的用户名和密码登录。');
     }
-  }, []);
+
+    if (oauthErrorParam) {
+      setOauthError(decodeURIComponent(oauthErrorParam));
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
+    setOauthError(null);
 
     if (!password || (shouldAskUsername && !username)) return;
 
@@ -133,11 +162,9 @@ function LoginPageClient() {
 
         const redirect = searchParams.get('redirect') || '/';
         router.replace(redirect);
-      } else if (res.status === 401) {
-        setError('密码错误');
       } else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? '服务器错误');
+        setError(data.error ?? '登录失败，请重试');
       }
     } catch (error) {
       setError('网络错误，请稍后重试');
@@ -145,6 +172,12 @@ function LoginPageClient() {
       setLoading(false);
     }
   };
+
+  const handleOAuthLogin = () => {
+    // 跳转到 OAuth 授权页面
+    window.location.href = '/api/oauth/authorize';
+  };
+
 
 
 
@@ -224,10 +257,44 @@ function LoginPageClient() {
             </div>
           </div>
 
-          {error && (
+          {successMessage && (
+            <div className='flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 animate-slide-down'>
+              <CheckCircle className='h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0' />
+              <p className='text-sm text-green-600 dark:text-green-400'>{successMessage}</p>
+            </div>
+          )}
+
+          {oauthError && (
             <div className='flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 animate-slide-down'>
               <AlertCircle className='h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0' />
-              <p className='text-sm text-red-600 dark:text-red-400'>{error}</p>
+              <p className='text-sm text-red-600 dark:text-red-400'>{oauthError}</p>
+            </div>
+          )}
+
+          {error && (
+            <div
+              className={`flex items-start gap-3 p-3 rounded-lg border animate-slide-down ${error.includes('审核中')
+                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800/50'
+                : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50'
+                }`}
+            >
+              <AlertCircle className={`h-5 w-5 flex-shrink-0 ${error.includes('审核中')
+                ? 'text-amber-500 dark:text-amber-400'
+                : 'text-red-600 dark:text-red-400'
+                }`} />
+              <div>
+                <p className={`text-sm font-medium ${error.includes('审核中')
+                  ? 'text-amber-800 dark:text-amber-300'
+                  : 'text-red-700 dark:text-red-300'
+                  }`}>
+                  {error}
+                </p>
+                {error.includes('审核中') && (
+                  <p className='text-xs text-amber-600 dark:text-amber-400 mt-1'>
+                    您的注册申请已提交，管理员将会尽快处理。
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -244,24 +311,61 @@ function LoginPageClient() {
             {loading ? '登录中...' : '立即登录'}
           </button>
 
+          {/* LinuxDo OAuth 登录按钮 */}
+          {oauthEnabled && (
+            <>
+              <div className='flex items-center'>
+                <div className='flex-1 border-t border-gray-200 dark:border-gray-700'></div>
+                <div className='px-3 text-sm text-gray-500 dark:text-gray-400'>
+                  或者
+                </div>
+                <div className='flex-1 border-t border-gray-200 dark:border-gray-700'></div>
+              </div>
+
+              <button
+                type='button'
+                onClick={handleOAuthLogin}
+                className='group relative inline-flex w-full justify-center items-center gap-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 py-3.5 text-base font-semibold text-white shadow-lg shadow-blue-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-0.5'
+              >
+                <svg
+                  className='w-5 h-5'
+                  viewBox='0 0 24 24'
+                  fill='currentColor'
+                >
+                  <path
+                    d='M12 2L2 7L12 12L22 7L12 2ZM2 17L12 22L22 17M2 12L12 17L22 12'
+                    stroke='currentColor'
+                    strokeWidth='2'
+                    fill='none'
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                  />
+                </svg>
+                使用 LinuxDo 登录
+              </button>
+            </>
+          )}
+
           {/* 注册链接 - 仅在非 localStorage 模式下显示 */}
-          {shouldAskUsername && (
+          {registrationEnabled && shouldAskUsername && (
             <div className='mt-6 pt-6 border-t border-gray-200 dark:border-gray-700'>
               <p className='text-center text-gray-600 dark:text-gray-400 text-sm mb-3'>
                 还没有账户？
               </p>
-              <a
-                href='/register'
+              <button
+                type='button'
+                onClick={() => router.push('/register')}
                 className='group flex items-center justify-center gap-2 w-full px-6 py-2.5 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800/50 text-green-700 dark:text-green-400 text-sm font-semibold hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-900/30 dark:hover:to-emerald-900/30 hover:border-green-300 dark:hover:border-green-700 transition-all duration-300 hover:shadow-md hover:scale-[1.02] active:scale-100'
               >
                 <UserPlus className='w-4 h-4' />
                 <span>立即注册</span>
                 <span className='inline-block transition-transform group-hover:translate-x-1'>→</span>
-              </a>
+              </button>
             </div>
           )}
         </form>
       </div>
+
 
       {/* 版本信息显示 */}
       <VersionDisplay />
