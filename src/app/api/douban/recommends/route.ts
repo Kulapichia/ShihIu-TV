@@ -97,15 +97,29 @@ export async function GET(request: NextRequest) {
     const doubanData = await fetchDoubanData<DoubanRecommendApiResponse>(
       target
     );
-    const list = doubanData.items
-      .filter((item) => item.type == 'movie' || item.type == 'tv')
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        poster: item.pic?.normal || item.pic?.large || '',
-        rate: item.rating?.value ? item.rating.value.toFixed(1) : '',
-        year: item.year,
-      }));
+    
+    const list = (doubanData.items || [])
+      .filter((item: any) => item.type === 'movie' || item.type === 'tv')
+      .flatMap((item: any) => {
+        try {
+          // 1. 使用 Zod 验证原始数据
+          const parsedItem = RawDoubanItemSchema.parse(item);
+
+          // 2. 如果验证通过，安全地进行转换
+          return [{
+            id: parsedItem.id,
+            title: parsedItem.title,
+            poster: parsedItem.pic?.normal || parsedItem.pic?.large || '',
+            rate: parsedItem.rating?.value ? parsedItem.rating.value.toFixed(1) : '',
+            year: parsedItem.year || '',
+          }];
+        } catch (error) {
+          // 3. 如果验证失败，打印错误并跳过此项
+          console.error('Skipping invalid Douban recommend item:', item, error);
+          return []; // flatMap 会将空数组自动移除
+        }
+      });
+    
     const response: DoubanResult = {
       code: 200,
       message: '获取成功',
