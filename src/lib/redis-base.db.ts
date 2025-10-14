@@ -2,7 +2,7 @@
 
 import { createClient, RedisClientType } from 'redis';
 
-import { AdminConfig } from './admin.types';
+import { AdminConfig, PendingUser, RegistrationStats } from './admin.types';
 import {
   ContentStat,
   EpisodeSkipConfig,
@@ -172,7 +172,13 @@ export abstract class BaseRedisStorage implements IStorage {
     const val = await this.withRetry(() =>
       this.client.get(this.prKey(userName, key))
     );
-    return val ? (JSON.parse(val) as PlayRecord) : null;
+    if (!val) return null;
+    try {
+      return JSON.parse(val) as PlayRecord;
+    } catch (e) {
+      console.error(`[DB] Failed to parse PlayRecord for key ${key}:`, e);
+      return null;
+    }
   }
 
   async setPlayRecord(
@@ -199,10 +205,14 @@ export abstract class BaseRedisStorage implements IStorage {
     keys.forEach((fullKey: string, idx: number) => {
       const raw = values[idx];
       if (raw) {
-        const rec = JSON.parse(raw) as PlayRecord;
-        // 截取 source+id 部分
-        const keyPart = ensureString(fullKey.replace(`u:${userName}:pr:`, ''));
-        result[keyPart] = rec;
+        try {
+          const rec = JSON.parse(raw) as PlayRecord;
+          // 截取 source+id 部分
+          const keyPart = ensureString(fullKey.replace(`u:${userName}:pr:`, ''));
+          result[keyPart] = rec;
+        } catch (e) {
+          console.error(`[DB] Failed to parse PlayRecord for key ${fullKey}:`, e);
+        }
       }
     });
     return result;
@@ -221,7 +231,13 @@ export abstract class BaseRedisStorage implements IStorage {
     const val = await this.withRetry(() =>
       this.client.get(this.favKey(userName, key))
     );
-    return val ? (JSON.parse(val) as Favorite) : null;
+    if (!val) return null;
+    try {
+      return JSON.parse(val) as Favorite;
+    } catch (e) {
+      console.error(`[DB] Failed to parse Favorite for key ${key}:`, e);
+      return null;
+    }
   }
 
   async setFavorite(
@@ -236,6 +252,7 @@ export abstract class BaseRedisStorage implements IStorage {
 
   async getAllFavorites(userName: string): Promise<Record<string, Favorite>> {
     const pattern = `u:${userName}:fav:*`;
+    const keys: string[] = [];
     for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
       keys.push(key);
     }
@@ -245,9 +262,13 @@ export abstract class BaseRedisStorage implements IStorage {
     keys.forEach((fullKey: string, idx: number) => {
       const raw = values[idx];
       if (raw) {
-        const fav = JSON.parse(raw) as Favorite;
-        const keyPart = ensureString(fullKey.replace(`u:${userName}:fav:`, ''));
-        result[keyPart] = fav;
+        try {
+          const fav = JSON.parse(raw) as Favorite;
+          const keyPart = ensureString(fullKey.replace(`u:${userName}:fav:`, ''));
+          result[keyPart] = fav;
+        } catch (e) {
+          console.error(`[DB] Failed to parse Favorite for key ${fullKey}:`, e);
+        }
       }
     });
     return result;
@@ -300,40 +321,24 @@ export abstract class BaseRedisStorage implements IStorage {
     keysToDelete.push(this.userPwdKey(userName));
     // 删除搜索历史
     keysToDelete.push(this.shKey(userName));
-    
-    // 删除播放记录
-    for await (const key of this.client.scanIterator({ MATCH: `u:${userName}:pr:*`, COUNT: 100 })) {
-      keysToDelete.push(key);
+    // 删除用户登入统计
+    keysToDelete.push(this.userStatsKey(userName));
+
+    const patterns = [
+      `u:${userName}:pr:*`,
+      `u:${userName}:fav:*`,
+      `u:${userName}:skip:*`,
+      `u:${userName}:episodeskip:*`,
+    ];
+
+    for (const pattern of patterns) {
+      for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: 250 })) {
+        keysToDelete.push(key);
+      }
     }
-    // 删除收藏夹
-    for await (const key of this.client.scanIterator({ MATCH: `u:${userName}:fav:*`, COUNT: 100 })) {
-      keysToDelete.push(key);
-    }
-    // 删除跳过片头片尾配置
-    for await (const key of this.client.scanIterator({ MATCH: `u:${userName}:skip:*`, COUNT: 100 })) {
-      keysToDelete.push(key);
-    }
-    
+
     if (keysToDelete.length > 0) {
       await this.withRetry(() => this.client.del(keysToDelete));
-    }
-
-    // 删除收藏夹
-    const favoritePattern = `u:${userName}:fav:*`;
-    const favoriteKeys = await this.withRetry(() =>
-      this.client.keys(favoritePattern)
-    );
-    if (favoriteKeys.length > 0) {
-      await this.withRetry(() => this.client.del(favoriteKeys));
-    }
-
-    // 删除跳过片头片尾配置
-    const skipConfigPattern = `u:${userName}:skip:*`;
-    const skipConfigKeys = await this.withRetry(() =>
-      this.client.keys(skipConfigPattern)
-    );
-    if (skipConfigKeys.length > 0) {
-      await this.withRetry(() => this.client.del(skipConfigKeys));
     }
   }
 
@@ -379,10 +384,6 @@ export abstract class BaseRedisStorage implements IStorage {
       }
     }
     return users;
-        const match = k.match(/^u:(.+?):pwd$/);
-        return match ? ensureString(match[1]) : undefined;
-      })
-      .filter((u): u is string => typeof u === 'string');
   }
 
   // ---------- 管理员配置 ----------
@@ -392,7 +393,13 @@ export abstract class BaseRedisStorage implements IStorage {
 
   async getAdminConfig(): Promise<AdminConfig | null> {
     const val = await this.withRetry(() => this.client.get(this.adminConfigKey()));
-    return val ? (JSON.parse(val) as AdminConfig) : null;
+    if (!val) return null;
+    try {
+      return JSON.parse(val) as AdminConfig;
+    } catch (e) {
+      console.error(`[DB] Failed to parse AdminConfig:`, e);
+      return null;
+    }
   }
 
   async setAdminConfig(config: AdminConfig): Promise<void> {
@@ -414,7 +421,16 @@ export abstract class BaseRedisStorage implements IStorage {
     const val = await this.withRetry(() =>
       this.client.get(this.skipConfigKey(userName, source, id))
     );
-    return val ? (JSON.parse(val) as EpisodeSkipConfig) : null;
+    if (!val) return null;
+    try {
+      return JSON.parse(val) as EpisodeSkipConfig;
+    } catch (e) {
+      console.error(
+        `[DB] Failed to parse SkipConfig for key ${source}+${id}:`,
+        e
+      );
+      return null;
+    }
   }
 
   async setSkipConfig(
@@ -462,11 +478,15 @@ export abstract class BaseRedisStorage implements IStorage {
     keys.forEach((key, index) => {
       const value = values[index];
       if (value) {
-        // 从key中提取source+id
-        const match = key.match(/^u:.+?:skip:(.+)$/);
-        if (match) {
-          const sourceAndId = match[1];
-          configs[sourceAndId] = JSON.parse(value as string) as EpisodeSkipConfig;
+        try {
+          // 从key中提取source+id
+          const match = key.match(/^u:.+?:skip:(.+)$/);
+          if (match) {
+            const sourceAndId = match[1];
+            configs[sourceAndId] = JSON.parse(value as string) as EpisodeSkipConfig;
+          }
+        } catch (e) {
+          console.error(`[DB] Failed to parse SkipConfig for key ${key}:`, e);
         }
       }
     });
@@ -487,7 +507,16 @@ export abstract class BaseRedisStorage implements IStorage {
     const val = await this.withRetry(() =>
       this.client.get(this.episodeSkipConfigKey(userName, source, id))
     );
-    return val ? (JSON.parse(val) as EpisodeSkipConfig) : null;
+    if (!val) return null;
+    try {
+      return JSON.parse(val) as EpisodeSkipConfig;
+    } catch (e) {
+      console.error(
+        `[DB] Failed to parse EpisodeSkipConfig for key ${source}+${id}:`,
+        e
+      );
+      return null;
+    }
   }
 
   async saveEpisodeSkipConfig(
@@ -518,7 +547,10 @@ export abstract class BaseRedisStorage implements IStorage {
     userName: string
   ): Promise<{ [key: string]: EpisodeSkipConfig }> {
     const pattern = `u:${userName}:episodeskip:*`;
-    const keys = await this.withRetry(() => this.client.keys(pattern));
+    const keys: string[] = [];
+    for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      keys.push(key);
+    }
 
     if (keys.length === 0) {
       return {};
@@ -532,11 +564,15 @@ export abstract class BaseRedisStorage implements IStorage {
     keys.forEach((key, index) => {
       const value = values[index];
       if (value) {
-        // 从key中提取source+id
-        const match = key.match(/^u:.+?:episodeskip:(.+)$/);
-        if (match) {
-          const sourceAndId = match[1];
-          configs[sourceAndId] = JSON.parse(value as string) as EpisodeSkipConfig;
+        try {
+          // 从key中提取source+id
+          const match = key.match(/^u:.+?:episodeskip:(.+)$/);
+          if (match) {
+            const sourceAndId = match[1];
+            configs[sourceAndId] = JSON.parse(value as string) as EpisodeSkipConfig;
+          }
+        } catch (e) {
+          console.error(`[DB] Failed to parse EpisodeSkipConfig for key ${key}:`, e);
         }
       }
     });
