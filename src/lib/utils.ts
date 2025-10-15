@@ -1,6 +1,6 @@
 import he from 'he';
 import Hls from 'hls.js';
-
+import { AdminConfig } from './admin.types';
 // 增强的设备检测逻辑，参考最新的设备特征
 const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
 
