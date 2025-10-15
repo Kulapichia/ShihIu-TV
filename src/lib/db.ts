@@ -1,6 +1,6 @@
 /* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
-import { AdminConfig } from './admin.types';
+import { AdminConfig, PendingUser, RegistrationStats } from './admin.types';
 import { KvrocksStorage } from './kvrocks.db';
 import { RedisStorage } from './redis.db';
 import {
