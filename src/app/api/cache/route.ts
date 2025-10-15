@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { db } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+// GET: 获取缓存
 export async function GET(request: NextRequest) {
   try {
     const authInfo = getAuthInfoFromCookie(request);
@@ -34,6 +36,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// POST: 设置缓存
 export async function POST(request: NextRequest) {
   try {
     const authInfo = getAuthInfoFromCookie(request);
@@ -56,6 +59,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// DELETE: 删除缓存或清理过期缓存
 export async function DELETE(request: NextRequest) {
   try {
     const authInfo = getAuthInfoFromCookie(request);
