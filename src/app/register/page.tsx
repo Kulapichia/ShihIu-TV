@@ -324,9 +324,48 @@ function RegisterPageClient() {
           </div>
 
           {error && (
-            <div className='flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 animate-slide-down'>
-              <AlertCircle className='h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0' />
-              <p className='text-sm text-red-600 dark:text-red-400'>{error}</p>
+            <div
+              className={`flex items-start gap-3 p-3 rounded-lg border animate-slide-down ${
+                error.includes('所有字段都是必填') || error.includes('确认密码不匹配')
+                  ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800/50'
+                  : error.includes('用户名已存在') || error.includes('用户名')
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/50'
+                  : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50'
+              }`}
+            >
+              <AlertCircle className={`h-5 w-5 flex-shrink-0 ${
+                error.includes('所有字段都是必填') || error.includes('确认密码不匹配')
+                  ? 'text-amber-500 dark:text-amber-400'
+                  : error.includes('用户名已存在') || error.includes('用户名')
+                  ? 'text-blue-500 dark:text-blue-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`} />
+              <div>
+                <p className={`text-sm font-medium ${
+                  error.includes('所有字段都是必填') || error.includes('确认密码不匹配')
+                    ? 'text-amber-800 dark:text-amber-300'
+                    : error.includes('用户名已存在') || error.includes('用户名')
+                    ? 'text-blue-800 dark:text-blue-300'
+                    : 'text-red-700 dark:text-red-300'
+                }`}>
+                  {error}
+                </p>
+                {error.includes('所有字段都是必填') && (
+                  <p className='text-xs text-amber-600 dark:text-amber-400 mt-1'>
+                    💡 请确保所有信息都已填写
+                  </p>
+                )}
+                {error.includes('确认密码不匹配') && (
+                  <p className='text-xs text-amber-600 dark:text-amber-400 mt-1'>
+                    💡 请确保两次输入的密码完全相同
+                  </p>
+                )}
+                {error.includes('用户名已存在') && (
+                  <p className='text-xs text-blue-600 dark:text-blue-400 mt-1'>
+                    💡 请尝试使用其他用户名
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -349,16 +388,19 @@ function RegisterPageClient() {
             {loading ? '注册中...' : success ? '注册成功，正在跳转...' : '立即注册'}
           </button>
 
-          <div className='mt-6 pt-6 border-t border-gray-200 dark:border-gray-700'>
-            <p className='text-center text-gray-600 dark:text-gray-400 text-sm mb-3'>
-              已有账户？
-            </p>
+          <div className='mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-4'>
+            <div className='text-xs text-gray-500 dark:text-gray-500 text-center space-y-1.5'>
+              <div>• 用户名只能包含字母、数字和下划线</div>
+              <div>• 密码长度至少6个字符</div>
+              <div>• 注册后可能需要等待管理员审核</div>
+            </div>
+            
             <a
               href='/login'
               className='group flex items-center justify-center gap-2 w-full px-6 py-2.5 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800/50 text-blue-700 dark:text-blue-400 text-sm font-semibold hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-900/30 dark:hover:to-indigo-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-300 hover:shadow-md hover:scale-[1.02] active:scale-100'
             >
               <Lock className='w-4 h-4' />
-              <span>立即登录</span>
+              <span>已有账户？立即登录</span>
               <span className='inline-block transition-transform group-hover:translate-x-1'>→</span>
             </a>
           </div>
