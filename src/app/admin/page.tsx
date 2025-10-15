@@ -60,6 +60,7 @@ import { exportData, parseImportData } from '@/lib/utils';
 import AIRecommendConfig from '@/components/AIRecommendConfig';
 import CacheManager from '@/components/CacheManager';
 import DataMigration from '@/components/DataMigration';
+import NetDiskConfig from '@/components/NetDiskConfig';
 import TVBoxSecurityConfig from '@/components/TVBoxSecurityConfig';
 import { TVBoxTokenCell, TVBoxTokenModal } from '@/components/TVBoxTokenManager';
 import YouTubeConfig from '@/components/YouTubeConfig';
@@ -287,6 +288,7 @@ interface DataSource {
   detail?: string;
   disabled?: boolean;
   from: 'config' | 'custom';
+  lastCheck?: { status: string; latency: number };
 }
 
 // 直播源数据类型
@@ -2932,13 +2934,19 @@ const VideoSourceConfig = ({
 
   // 全选/取消全选
   const handleSelectAll = useCallback((checked: boolean) => {
+    const filteredKeys = new Set(filteredSources.map((s) => s.key));
     if (checked) {
-      const allKeys = sources.map(s => s.key);
-      setSelectedSources(new Set(allKeys));
+      setSelectedSources((prev) => new Set([...prev, ...filteredKeys]));
     } else {
-      setSelectedSources(new Set());
+      setSelectedSources((prev) => {
+        const next = new Set(prev);
+        for (const key of filteredKeys) {
+          next.delete(key);
+        }
+        return next;
+      });
     }
-  }, [sources]);
+  }, [filteredSources]);
 
   // 单个选择
   const handleSelectSource = useCallback((key: string, checked: boolean) => {
@@ -3075,6 +3083,76 @@ const VideoSourceConfig = ({
         </div>
       </div>
 
+      {/* 筛选和批量操作栏 */}
+      <div className='bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg flex flex-col sm:flex-row justify-between items-center gap-4 border dark:border-gray-700'>
+        <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
+          <div>
+            <label className='text-xs mr-2 text-gray-600 dark:text-gray-400'>
+              状态:
+            </label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as any)}
+              className='text-xs pl-2 pr-7 py-1 rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500'
+            >
+              <option value='all'>全部</option>
+              <option value='enabled'>启用中</option>
+              <option value='disabled'>已禁用</option>
+            </select>
+          </div>
+          <div>
+            <label className='text-xs mr-2 text-gray-600 dark:text-gray-400'>
+              有效性:
+            </label>
+            <select
+              value={filterValidity}
+              onChange={(e) => setFilterValidity(e.target.value as any)}
+              className='text-xs pl-2 pr-7 py-1 rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500'
+            >
+              <option value='all'>全部</option>
+              <option value='valid'>有效</option>
+              <option value='no_results'>无法搜索</option>
+              <option value='invalid'>无效</option>
+              <option value='untested'>未检测</option>
+            </select>
+          </div>
+        </div>
+
+        <div className='flex flex-wrap items-center gap-2'>
+          <span className='text-sm text-gray-600 dark:text-gray-400'>
+            已选择 {selectedSources.size} / {filteredSources.length} 项
+          </span>
+          <button
+            onClick={() => handleBatchOperation('batch_enable')}
+            disabled={
+              isLoading('batchSource_batch_enable') || selectedSources.size === 0
+            }
+            className={buttonStyles.successSmall}
+          >
+            批量启用
+          </button>
+          <button
+            onClick={() => handleBatchOperation('batch_disable')}
+            disabled={
+              isLoading('batchSource_batch_disable') ||
+              selectedSources.size === 0
+            }
+            className={buttonStyles.warningSmall}
+          >
+            批量禁用
+          </button>
+          <button
+            onClick={() => handleBatchOperation('batch_delete')}
+            disabled={
+              isLoading('batchSource_batch_delete') || selectedSources.size === 0
+            }
+            className={buttonStyles.dangerSmall}
+          >
+            批量删除
+          </button>
+        </div>
+      </div>
+      
       {showAddForm && (
         <div className='p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 space-y-4'>
           <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
