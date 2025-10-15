@@ -273,25 +273,50 @@ function LoginPageClient() {
 
           {error && (
             <div
-              className={`flex items-start gap-3 p-3 rounded-lg border animate-slide-down ${error.includes('审核中')
-                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800/50'
-                : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50'
-                }`}
+              className={`flex items-start gap-3 p-3 rounded-lg border animate-slide-down ${
+                error.includes('审核中')
+                  ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800/50'
+                  : error.includes('被拒绝')
+                  ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50'
+                  : error.includes('被封禁')
+                  ? 'bg-gray-100 dark:bg-gray-800/50 border-gray-300 dark:border-gray-700/50'
+                  : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50'
+              }`}
             >
-              <AlertCircle className={`h-5 w-5 flex-shrink-0 ${error.includes('审核中')
-                ? 'text-amber-500 dark:text-amber-400'
-                : 'text-red-600 dark:text-red-400'
-                }`} />
+              <AlertCircle className={`h-5 w-5 flex-shrink-0 ${
+                error.includes('审核中')
+                  ? 'text-amber-500 dark:text-amber-400'
+                  : error.includes('被拒绝')
+                  ? 'text-red-600 dark:text-red-400'
+                  : error.includes('被封禁')
+                  ? 'text-gray-500 dark:text-gray-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`} />
               <div>
-                <p className={`text-sm font-medium ${error.includes('审核中')
-                  ? 'text-amber-800 dark:text-amber-300'
-                  : 'text-red-700 dark:text-red-300'
-                  }`}>
+                <p className={`text-sm font-medium ${
+                  error.includes('审核中')
+                    ? 'text-amber-800 dark:text-amber-300'
+                    : error.includes('被拒绝')
+                    ? 'text-red-700 dark:text-red-300'
+                    : error.includes('被封禁')
+                    ? 'text-gray-700 dark:text-gray-300'
+                    : 'text-red-700 dark:text-red-300'
+                }`}>
                   {error}
                 </p>
                 {error.includes('审核中') && (
                   <p className='text-xs text-amber-600 dark:text-amber-400 mt-1'>
                     您的注册申请已提交，管理员将会尽快处理。
+                  </p>
+                )}
+                {error.includes('被拒绝') && (
+                  <p className='text-xs text-red-600 dark:text-red-400 mt-1'>
+                    您的注册申请已被拒绝，如有疑问请联系管理员。
+                  </p>
+                )}
+                {error.includes('被封禁') && (
+                  <p className='text-xs text-gray-600 dark:text-gray-400 mt-1'>
+                    您的账户已被封禁，如有疑问请联系管理员。
                   </p>
                 )}
               </div>
