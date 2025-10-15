@@ -178,6 +178,7 @@ export interface AdminConfig {
     enableRateLimit: boolean;            // 是否启用频率限制
     rateLimit: number;                   // 每分钟允许的请求次数
   };
+  HomeCustomize?: any;
 }
 
 export interface AdminConfigResult {
