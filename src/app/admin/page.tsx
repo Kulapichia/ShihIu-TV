@@ -5879,7 +5879,7 @@ const NetDiskConfig = ({
           </div>
         </div>
       </div>
-
+          
       {/* 支持的网盘类型 */}
       <div className='bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 shadow-sm'>
         <div className='flex items-center justify-between mb-4'>
@@ -5930,19 +5930,23 @@ const NetDiskConfig = ({
           </div>
         </div>
       </div>
+          
+          {/* 保存按钮 */}
+          <div className='flex justify-end'>
+            <button
+              onClick={handleSave}
+              disabled={isLoading('saveNetDiskConfig')}
+              className={`px-4 py-2 ${
+                isLoading('saveNetDiskConfig') ? buttonStyles.disabled : buttonStyles.success
+              } rounded-lg transition-colors`}
+            >
+              {isLoading('saveNetDiskConfig') ? '保存中…' : '保存配置'}
+            </button>
+          </div>
+        </div>
+      );
+    };
 
-      {/* 保存按钮 */}
-      <div className='flex justify-end'>
-        <button
-          onClick={handleSave}
-          disabled={isLoading('saveNetDiskConfig')}
-          className={`px-4 py-2 ${
-            isLoading('saveNetDiskConfig') ? buttonStyles.disabled : buttonStyles.success
-          } rounded-lg transition-colors`}
-        >
-          {isLoading('saveNetDiskConfig') ? '保存中…' : '保存配置'}
-        </button>
-      </div>
 
 // 注册管理组件
 interface RegistrationConfigProps {
