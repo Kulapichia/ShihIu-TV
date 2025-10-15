@@ -2447,8 +2447,6 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
         timer={alertModal.timer}
         showConfirm={alertModal.showConfirm}
       />
-
-
     </div>
   );
 }
@@ -3470,9 +3468,10 @@ const CategoryConfig = ({
         className='hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors select-none'
       >
         <td
-          className="px-2 py-4 cursor-grab text-gray-400"
+          className='px-2 py-4 cursor-grab text-gray-400'
           style={{ touchAction: 'none' }}
-          {...{ ...attributes, ...listeners }}
+          {...attributes}
+          {...listeners}
         >
           <GripVertical size={16} />
         </td>
@@ -5704,8 +5703,6 @@ const LiveSourceConfig = ({
         timer={alertModal.timer}
         showConfirm={alertModal.showConfirm}
       />
-
-
     </div>
   );
 };
@@ -5944,8 +5941,20 @@ const NetDiskConfig = ({
             </button>
           </div>
         </div>
-      );
-    };
+
+        {/* 通用弹窗组件 */}
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={hideAlert}
+          type={alertModal.type}
+          title={alertModal.title}
+          message={alertModal.message}
+          timer={alertModal.timer}
+          showConfirm={alertModal.showConfirm}
+        />
+      </div>
+    );
+  };
 
 
 // 注册管理组件
@@ -6787,7 +6796,6 @@ const OAuthConfigComponent = ({
         </ul>
       </div>
 
-      
       {/* 通用弹窗组件 */}
       <AlertModal
         isOpen={alertModal.isOpen}
