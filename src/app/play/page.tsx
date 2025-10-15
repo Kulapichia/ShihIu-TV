@@ -1770,7 +1770,7 @@ function PlayPageClient() {
         console.log(`智能搜索完成，最终返回 ${finalResults.length} 个结果`);
         setAvailableSources(finalResults);
         // 对最优源进行预连接
-        preconnectTopSources(finalSources);
+        preconnectTopSources(finalResults);
         return finalResults;
       } catch (err) {
         console.error('智能搜索失败:', err);
