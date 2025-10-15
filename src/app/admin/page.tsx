@@ -5909,33 +5909,32 @@ const NetDiskConfig = ({
         </div>
       </div>
           
-          {/* 保存按钮 */}
-          <div className='flex justify-end'>
-            <button
-              onClick={handleSave}
-              disabled={isLoading('saveNetDiskConfig')}
-              className={`px-4 py-2 ${
-                isLoading('saveNetDiskConfig') ? buttonStyles.disabled : buttonStyles.success
-              } rounded-lg transition-colors`}
-            >
-              {isLoading('saveNetDiskConfig') ? '保存中…' : '保存配置'}
-            </button>
-          </div>
-        </div>
-
-        {/* 通用弹窗组件 */}
-        <AlertModal
-          isOpen={alertModal.isOpen}
-          onClose={hideAlert}
-          type={alertModal.type}
-          title={alertModal.title}
-          message={alertModal.message}
-          timer={alertModal.timer}
-          showConfirm={alertModal.showConfirm}
-        />
+      {/* 保存按钮 */}
+      <div className='flex justify-end'>
+        <button
+          onClick={handleSave}
+          disabled={isLoading('saveNetDiskConfig')}
+          className={`px-4 py-2 ${
+            isLoading('saveNetDiskConfig') ? buttonStyles.disabled : buttonStyles.success
+          } rounded-lg transition-colors`}
+        >
+          {isLoading('saveNetDiskConfig') ? '保存中…' : '保存配置'}
+        </button>
       </div>
-    );
-  };
+
+      {/* 通用弹窗组件 */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={hideAlert}
+        type={alertModal.type}
+        title={alertModal.title}
+        message={alertModal.message}
+        timer={alertModal.timer}
+        showConfirm={alertModal.showConfirm}
+      />
+    </div>
+  );
+};
 
 
 // 注册管理组件
