@@ -3026,6 +3026,375 @@ const VideoSourceConfig = ({
     });
   };
 
+  // 处理导出操作，增加按筛选结果导出
+  const handleExport = (
+    format: 'json' | 'csv' | 'text',
+    scope: 'all' | 'selected' | 'filtered'
+  ) => {
+    let dataToExport: AdminConfig['SourceConfig'];
+    switch (scope) {
+      case 'selected':
+        dataToExport = sources.filter((s) => selectedSources.has(s.key));
+        break;
+      case 'filtered':
+        dataToExport = filteredSources;
+        break;
+      default:
+        dataToExport = sources;
+        break;
+    }
+
+    if (dataToExport.length === 0) {
+      showAlert({ type: 'warning', title: '没有可导出的数据' });
+      return;
+    }
+
+    try {
+      // 当导出json时，传入cache_time
+      exportData(
+        dataToExport,
+        format,
+        config?.SiteConfig.SiteInterfaceCacheTime
+      );
+      setShowExportModal(false);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '导出失败', showAlert);
+    }
+  };
+
+  // 导入模态框组件
+  const ImportModal = () => {
+    const [rawText, setRawText] = useState('');
+    const [file, setFile] = useState<File | null>(null);
+    const [preview, setPreview] = useState<{
+      data: any[];
+      format: string;
+      errors: string[];
+    } | null>(null);
+    const [isImporting, setIsImporting] = useState(false);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0];
+      if (f) {
+        setFile(f);
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          setRawText(ev.target?.result as string);
+        };
+        reader.readAsText(f);
+      }
+    };
+
+    const handlePreview = () => {
+      if (!rawText.trim()) {
+        showAlert({ type: 'warning', title: '请输入或上传数据' });
+        return;
+      }
+      const existingKeys = new Set(sources.map((s) => s.key));
+      const result = parseImportData(rawText, existingKeys);
+      setPreview(result);
+    };
+
+    const handleConfirmImport = async () => {
+      if (!preview || preview.data.length === 0) {
+        showAlert({ type: 'error', title: '数据校验失败或无数据可导入' });
+        return;
+      }
+      if (preview.errors.length > 0) {
+        showAlert({
+          type: 'warning',
+          title: '数据存在问题',
+          message: '请处理所有错误后再导入',
+        });
+        return;
+      }
+      setIsImporting(true);
+      try {
+        const result = await withLoading('batchImport', () =>
+          callSourceApi({ action: 'batch_import', sources: preview.data })
+        );
+        showSuccess(result.message || '导入成功', showAlert);
+        setShowImportModal(false);
+      } catch (err) {
+        // 错误已由 callSourceApi 和 withLoading 处理
+      } finally {
+        setIsImporting(false);
+      }
+    };
+
+    return createPortal(
+      <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4'>
+        <div className='bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col'>
+          <div className='p-4 border-b dark:border-gray-700'>
+            <h3 className='text-lg font-semibold'>导入视频源</h3>
+          </div>
+          <div className='p-6 space-y-4 overflow-y-auto'>
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+              {/* Left: Input */}
+              <div className='space-y-3'>
+                <label className='block text-sm font-medium'>
+                  粘贴文本内容
+                </label>
+                <textarea
+                  value={rawText}
+                  onChange={(e) => setRawText(e.target.value)}
+                  placeholder='在此处粘贴 JSON, CSV, 或纯文本(一行一个API地址)...'
+                  className='w-full h-40 p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600'
+                />
+                <div className='flex items-center justify-center w-full'>
+                  <label
+                    htmlFor='dropzone-file'
+                    className='flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700'
+                  >
+                    <div className='flex flex-col items-center justify-center pt-5 pb-6'>
+                      <Upload className='w-8 h-8 mb-2 text-gray-500' />
+                      <p className='mb-1 text-sm text-gray-500'>
+                        <span className='font-semibold'>点击上传</span>{' '}
+                        或拖拽文件
+                      </p>
+                      <p className='text-xs text-gray-500'>
+                        {file ? file.name : 'JSON, CSV, or TXT'}
+                      </p>
+                    </div>
+                    <input
+                      id='dropzone-file'
+                      type='file'
+                      className='hidden'
+                      onChange={handleFileChange}
+                      accept='.json,.csv,.txt'
+                    />
+                  </label>
+                </div>
+                <button
+                  onClick={handlePreview}
+                  className={`${buttonStyles.primary} w-full`}
+                >
+                  预览和校验数据
+                </button>
+              </div>
+
+              {/* Right: Preview */}
+              <div className='space-y-3'>
+                <label className='block text-sm font-medium'>
+                  数据预览与校验
+                </label>
+                {!preview && (
+                  <div className='h-full flex items-center justify-center text-gray-500 bg-gray-50 dark:bg-gray-700/50 rounded-md'>
+                    点击预览按钮后显示结果
+                  </div>
+                )}
+                {preview && (
+                  <div className='space-y-2'>
+                    <div className='flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded'>
+                      {preview.errors.length === 0 ? (
+                        <CheckCircle className='text-green-500' />
+                      ) : (
+                        <AlertCircle className='text-red-500' />
+                      )}
+                      <p className='text-sm'>
+                        检测到{' '}
+                        <span className='font-bold'>
+                          {preview.format.toUpperCase()}
+                        </span>{' '}
+                        格式, 共{' '}
+                        <span className='font-bold'>
+                          {preview.data.length}
+                        </span>{' '}
+                        条有效记录, 发现{' '}
+                        <span
+                          className={`font-bold ${
+                            preview.errors.length > 0
+                              ? 'text-red-500'
+                              : 'text-green-500'
+                          }`}
+                        >
+                          {preview.errors.length}
+                        </span>{' '}
+                        个问题。
+                      </p>
+                    </div>
+                    {preview.errors.length > 0 && (
+                      <div className='p-2 border border-red-500/50 bg-red-50 dark:bg-red-900/20 rounded-md max-h-24 overflow-y-auto text-sm'>
+                        <ul className='list-disc list-inside'>
+                          {preview.errors.slice(0, 5).map((err, i) => (
+                            <li
+                              key={i}
+                              className='text-red-600 dark:text-red-400'
+                            >
+                              {err}
+                            </li>
+                          ))}
+                          {preview.errors.length > 5 && (
+                            <li>
+                              ...还有 {preview.errors.length - 5} 个问题
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    <div className='border rounded-md max-h-48 overflow-y-auto'>
+                      <table className='w-full text-sm text-left'>
+                        <thead className='bg-gray-50 dark:bg-gray-900 sticky top-0'>
+                          <tr>
+                            <th className='p-2'>Name</th>
+                            <th className='p-2'>Key</th>
+                            <th className='p-2'>API</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {preview.data.map((item, i) => (
+                            <tr
+                              key={i}
+                              className='border-t dark:border-gray-700'
+                            >
+                              <td className='p-2 truncate'>{item.name}</td>
+                              <td className='p-2 truncate'>{item.key}</td>
+                              <td
+                                className='p-2 truncate'
+                                title={item.api}
+                              >
+                                {item.api}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className='p-4 flex justify-end gap-2 border-t dark:border-gray-700'>
+            <button
+              onClick={() => setShowImportModal(false)}
+              className={buttonStyles.secondary}
+            >
+              取消
+            </button>
+            <button
+              onClick={handleConfirmImport}
+              className={buttonStyles.success}
+              disabled={
+                isImporting ||
+                !preview ||
+                preview.errors.length > 0 ||
+                preview.data.length === 0
+              }
+            >
+              {isImporting ? '导入中...' : '确认导入'}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+
+  // 导出模态框组件
+  const ExportModal = () => {
+    const [format, setFormat] = useState<'json' | 'csv' | 'text'>('json');
+    const [scope, setScope] = useState<'all' | 'selected'>('all');
+    const selectedCount = selectedSources.size;
+
+    return createPortal(
+      <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4'>
+        <div className='bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md'>
+          <div className='p-4 border-b dark:border-gray-700'>
+            <h3 className='text-lg font-semibold'>导出视频源</h3>
+          </div>
+          <div className='p-6 space-y-6'>
+            <div>
+              <label className='text-sm font-medium'>导出范围</label>
+              <div className='mt-2 flex gap-4'>
+                <label className='flex items-center gap-2'>
+                  <input
+                    type='radio'
+                    name='scope'
+                    value='all'
+                    checked={scope === 'all'}
+                    onChange={() => setScope('all')}
+                  />{' '}
+                  全部 ({sources.length}项)
+                </label>
+                <label className='flex items-center gap-2'>
+                  <input
+                    type='radio'
+                    name='scope'
+                    value='selected'
+                    checked={scope === 'selected'}
+                    onChange={() => setScope('selected')}
+                    disabled={selectedCount === 0}
+                  />{' '}
+                  选中项 ({selectedCount}项)
+                </label>
+              </div>
+            </div>
+            <div>
+              <label className='text-sm font-medium'>导出格式</label>
+              <div className='mt-2 grid grid-cols-3 gap-2'>
+                <button
+                  onClick={() => setFormat('json')}
+                  className={`${
+                    buttonStyles.primary
+                  } flex items-center justify-center ${
+                    format !== 'json'
+                      ? '!bg-gray-200 !text-gray-800 dark:!bg-gray-700 dark:!text-gray-200'
+                      : ''
+                  }`}
+                >
+                  <FileJson size={16} className='mr-1' /> JSON
+                </button>
+                <button
+                  onClick={() => setFormat('csv')}
+                  className={`${
+                    buttonStyles.primary
+                  } flex items-center justify-center ${
+                    format !== 'csv'
+                      ? '!bg-gray-200 !text-gray-800 dark:!bg-gray-700 dark:!text-gray-200'
+                      : ''
+                  }`}
+                >
+                  <Sheet size={16} className='mr-1' /> CSV
+                </button>
+                <button
+                  onClick={() => setFormat('text')}
+                  className={`${
+                    buttonStyles.primary
+                  } flex items-center justify-center ${
+                    format !== 'text'
+                      ? '!bg-gray-200 !text-gray-800 dark:!bg-gray-700 dark:!text-gray-200'
+                      : ''
+                  }`}
+                >
+                  <FileText size={16} className='mr-1' /> 纯文本
+                </button>
+              </div>
+              <p className='text-xs text-gray-500 mt-2'>
+                纯文本格式仅导出API地址。
+              </p>
+            </div>
+          </div>
+          <div className='p-4 flex justify-end gap-2 border-t dark:border-gray-700'>
+            <button
+              onClick={() => setShowExportModal(false)}
+              className={buttonStyles.secondary}
+            >
+              取消
+            </button>
+            <button
+              onClick={() => handleExport(format, scope)}
+              className={buttonStyles.success}
+            >
+              导出
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+  
   if (!config) {
     return (
       <div className='flex justify-center items-center py-8'>
