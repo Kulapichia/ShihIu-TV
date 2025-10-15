@@ -379,6 +379,45 @@ function PlayPageClient() {
 
   // Wake Lock 相关
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  // -----------------------------------------------------------------------------
+  // 亮点功能：源预连接与预加载
+  // -----------------------------------------------------------------------------
+  // 对最优的几个源进行预连接，减少后续请求的握手时间
+  const preconnectTopSources = (sortedSources: SearchResult[]) => {
+    // 移除旧的预连接标签
+    document.querySelectorAll('link[rel="preconnect"]').forEach(link => link.remove());
+    
+    // 只对前3个最优源进行预连接
+    sortedSources.slice(0, 3).forEach((source) => {
+      try {
+        if (source.episodes?.length > 0) {
+          const origin = new URL(source.episodes[0]).origin;
+          // 避免重复添加同一个 origin
+          if (!document.querySelector(`link[href="${origin}"]`)) {
+            const link = document.createElement('link');
+            link.rel = 'preconnect';
+            link.href = origin;
+            document.head.appendChild(link);
+          }
+        }
+      } catch (e) {
+        // 忽略无效的URL
+      }
+    });
+  };
+  
+  // 预加载下一个备选源的 m3u8 文件
+  const preloadNextSource = (currentIndex: number, sources: SearchResult[]) => {
+    if (currentIndex + 1 < sources.length) {
+      const nextSource = sources[currentIndex + 1];
+      if (nextSource && nextSource.episodes && nextSource.episodes.length > 0) {
+        const nextEpisodeUrl = nextSource.episodes[currentEpisodeIndexRef.current] || nextSource.episodes[0];
+        const proxyUrl = `/api/proxy/m3u8?url=${encodeURIComponent(nextEpisodeUrl)}&moontv-source=${nextSource.source}`;
+        // 使用 fetch 发起低优先级预加载，静默失败
+        fetch(proxyUrl, { cache: 'force-cache' }).catch(() => {});
+      }
+    }
+  };
 
   // -----------------------------------------------------------------------------
   // 工具函数（Utils）
@@ -1730,6 +1769,8 @@ function PlayPageClient() {
           
         console.log(`智能搜索完成，最终返回 ${finalResults.length} 个结果`);
         setAvailableSources(finalResults);
+        // 对最优源进行预连接
+        preconnectTopSources(finalSources);
         return finalResults;
       } catch (err) {
         console.error('智能搜索失败:', err);
@@ -1992,7 +2033,13 @@ function PlayPageClient() {
       setCurrentId(newId);
       setDetail(newDetail);
       setCurrentEpisodeIndex(targetIndex);
-
+      
+      // 预加载下一个备选源
+      const newSourceIndex = availableSources.findIndex(s => s.source === newSource && s.id === newId);
+      if (newSourceIndex !== -1) {
+        preloadNextSource(newSourceIndex, availableSources);
+      }
+      
       // 🚀 换源完成后，优化弹幕加载流程
       setTimeout(async () => {
         isSourceChangingRef.current = false; // 重置换源标识
