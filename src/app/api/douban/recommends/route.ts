@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getCacheTime } from '@/lib/config';
 import { fetchDoubanData } from '@/lib/douban';
+import { RawDoubanItemSchema } from '@/lib/schemas';
 import { DoubanResult } from '@/lib/types';
 
 interface DoubanRecommendApiResponse {
