@@ -277,23 +277,7 @@ const useLoadingState = () => {
   return { loadingStates, setLoading, isLoading, withLoading };
 };
 
-// 新增站点配置类型
-interface SiteConfig {
-  SiteName: string;
-  Announcement: string;
-  SearchDownstreamMaxPage: number;
-  SiteInterfaceCacheTime: number;
-  DoubanProxyType: string;
-  DoubanProxy: string;
-  DoubanImageProxyType: string;
-  DoubanImageProxy: string;
-  DisableYellowFilter: boolean;
-  FluidSearch: boolean;
-  // TMDB配置
-  TMDBApiKey?: string;
-  TMDBLanguage?: string;
-  EnableTMDBActorSearch?: boolean;
-}
+
 
 // 视频源数据类型
 interface DataSource {
@@ -2476,10 +2460,7 @@ const VideoSourceConfig = ({
   // 批量操作相关状态
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
 
-  // 使用 useMemo 计算全选状态，避免每次渲染都重新计算
-  const selectAll = useMemo(() => {
-    return selectedSources.size === sources.length && selectedSources.size > 0;
-  }, [selectedSources.size, sources.length]);
+
 
   // 确认弹窗状态
   const [confirmModal, setConfirmModal] = useState<{
