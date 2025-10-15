@@ -3961,7 +3961,7 @@ const SiteConfigComponent = ({
     key: keyof SiteConfig['IntelligentFilter'],
     value: any
   ) => {
-    setSiteSettings((prev) => ({
+    setSiteSettings((prev: SiteConfig) => ({
       ...prev,
       IntelligentFilter: {
         ...prev.IntelligentFilter!,
@@ -3974,7 +3974,7 @@ const SiteConfigComponent = ({
     key: string,
     value: string
   ) => {
-    setSiteSettings((prev) => ({
+    setSiteSettings((prev: SiteConfig) => ({
       ...prev,
       IntelligentFilter: {
         ...prev.IntelligentFilter!,
@@ -4060,8 +4060,8 @@ const SiteConfigComponent = ({
         return merged;
       };
 
-      setSiteSettings((prevSettings) => {
-        // 步骤 1: 深度合并，处理所有 ?? 逻辑
+      setSiteSettings((prevSettings: SiteConfig) => {
+        // 步骤 1: 深度合并，处理所有逻辑
         const newConfig = deepMerge(prevSettings, config.SiteConfig);
         
         // 步骤 2: 处理密钥占位符
@@ -4164,7 +4164,7 @@ const SiteConfigComponent = ({
 
   // 处理豆瓣数据源变化
   const handleDoubanDataSourceChange = (value: string) => {
-    setSiteSettings((prev) => ({
+    setSiteSettings((prev: SiteConfig) => ({
       ...prev,
       DoubanProxyType: value,
     }));
@@ -4172,7 +4172,7 @@ const SiteConfigComponent = ({
 
   // 处理豆瓣图片代理变化
   const handleDoubanImageProxyChange = (value: string) => {
-    setSiteSettings((prev) => ({
+    setSiteSettings((prev: SiteConfig) => ({
       ...prev,
       DoubanImageProxyType: value,
     }));
@@ -4270,7 +4270,7 @@ const SiteConfigComponent = ({
           type='text'
           value={siteSettings.SiteName}
           onChange={(e) =>
-            setSiteSettings((prev) => ({ ...prev, SiteName: e.target.value }))
+            setSiteSettings((prev: SiteConfig) => ({ ...prev, SiteName: e.target.value }))
           }
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent"
         />
@@ -4286,7 +4286,7 @@ const SiteConfigComponent = ({
         <textarea
           value={siteSettings.Announcement}
           onChange={(e) =>
-            setSiteSettings((prev) => ({
+            setSiteSettings((prev: SiteConfig) => ({
               ...prev,
               Announcement: e.target.value,
             }))
@@ -4390,7 +4390,7 @@ const SiteConfigComponent = ({
               placeholder='例如: https://proxy.example.com/fetch?url='
               value={siteSettings.DoubanProxy}
               onChange={(e) =>
-                setSiteSettings((prev) => ({
+                setSiteSettings((prev: SiteConfig) => ({
                   ...prev,
                   DoubanProxy: e.target.value,
                 }))
@@ -4502,7 +4502,7 @@ const SiteConfigComponent = ({
               placeholder='例如: https://proxy.example.com/fetch?url='
               value={siteSettings.DoubanImageProxy}
               onChange={(e) =>
-                setSiteSettings((prev) => ({
+                setSiteSettings((prev: SiteConfig) => ({
                   ...prev,
                   DoubanImageProxy: e.target.value,
                 }))
@@ -4526,7 +4526,7 @@ const SiteConfigComponent = ({
           min={1}
           value={siteSettings.SearchDownstreamMaxPage}
           onChange={(e) =>
-            setSiteSettings((prev) => ({
+            setSiteSettings((prev: SiteConfig) => ({
               ...prev,
               SearchDownstreamMaxPage: Number(e.target.value),
             }))
@@ -4545,7 +4545,7 @@ const SiteConfigComponent = ({
           min={1}
           value={siteSettings.SiteInterfaceCacheTime}
           onChange={(e) =>
-            setSiteSettings((prev) => ({
+            setSiteSettings((prev: SiteConfig) => ({
               ...prev,
               SiteInterfaceCacheTime: Number(e.target.value),
             }))
@@ -4565,7 +4565,7 @@ const SiteConfigComponent = ({
           <button
             type='button'
             onClick={() =>
-              setSiteSettings((prev) => ({
+              setSiteSettings((prev: SiteConfig) => ({
                 ...prev,
                 DisableYellowFilter: !prev.DisableYellowFilter,
               }))
@@ -4599,7 +4599,7 @@ const SiteConfigComponent = ({
           <button
             type='button'
             onClick={() =>
-              setSiteSettings((prev) => ({
+              setSiteSettings((prev: SiteConfig) => ({
                 ...prev,
                 FluidSearch: !prev.FluidSearch,
               }))
@@ -4631,7 +4631,7 @@ const SiteConfigComponent = ({
           <button
             type='button'
             onClick={() =>
-              setSiteSettings((prev) => ({
+              setSiteSettings((prev: SiteConfig) => ({
                 ...prev,
                 ShowContentFilter: !(prev.ShowContentFilter ?? true),
               }))
@@ -4996,7 +4996,7 @@ const SiteConfigComponent = ({
           <button
             type='button'
             onClick={() =>
-              setSiteSettings((prev) => ({
+              setSiteSettings((prev: SiteConfig) => ({
                 ...prev,
                 EnableVirtualScroll: !(prev.EnableVirtualScroll ?? true),
               }))
@@ -5034,7 +5034,7 @@ const SiteConfigComponent = ({
             type='password'
             value={siteSettings.TMDBApiKey || ''}
             onChange={(e) =>
-              setSiteSettings((prev) => ({ ...prev, TMDBApiKey: e.target.value }))
+              setSiteSettings((prev: SiteConfig) => ({ ...prev, TMDBApiKey: e.target.value }))
             }
             placeholder='请输入TMDB API Key'
             className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
@@ -5052,7 +5052,7 @@ const SiteConfigComponent = ({
           <select
             value={siteSettings.TMDBLanguage || 'zh-CN'}
             onChange={(e) =>
-              setSiteSettings((prev) => ({ ...prev, TMDBLanguage: e.target.value }))
+              setSiteSettings((prev: SiteConfig) => ({ ...prev, TMDBLanguage: e.target.value }))
             }
             className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
           >
@@ -5077,7 +5077,7 @@ const SiteConfigComponent = ({
           <button
             type='button'
             onClick={() =>
-              setSiteSettings((prev) => ({
+              setSiteSettings((prev: SiteConfig) => ({
                 ...prev,
                 EnableTMDBActorSearch: !prev.EnableTMDBActorSearch,
               }))
