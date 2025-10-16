@@ -7261,6 +7261,7 @@ function AdminPageClient() {
     dataMigration: false,
     registrationConfig: false,
     oauthConfig: false,
+    telegramConfig: false,
   });
 
   // 获取管理员配置
