@@ -423,7 +423,7 @@ export async function GET(request: NextRequest) {
         });
   
         // 根据 isYellow 标签进行过滤
-        flattenedResults = flattenedResults.filter((result) => !result.isYellow);
+        // flattenedResults = flattenedResults.filter((result) => !result.isYellow);
   
         // --- 1b. 智能 AI 图片审核 (仅在关键词过滤后，且AI审核开启时执行) ---
         if (config.SiteConfig.IntelligentFilter?.enabled) {
