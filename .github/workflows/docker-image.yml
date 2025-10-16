@@ -185,7 +185,7 @@ jobs:
             exit 1
           fi
 
-      # 【最终修正】采用 push-by-digest 模式的正确写法
+      # 【最终修正】push-by-digest 模式的正确写法
       - name: 🚀 Build and push image with digest
         id: build
         uses: docker/build-push-action@v5
@@ -193,12 +193,10 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
-          # 1. 保留顶层 push 参数作为推送开关
-          push: ${{ github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true' }}
-          # 2. 【关键修复】移除与 push-by-digest 模式冲突的 tags 参数
-          # tags: ${{ needs.determine-strategy.outputs.image_name }}
-          # 3. 在 outputs 中定义推送方式和目标仓库
-          outputs: type=image,name=${{ needs.determine-strategy.outputs.image_name }},name-canonical=true,push-by-digest=true
+          # 【关键1】不使用顶层 push 参数（与 push-by-digest 冲突）
+          # 【关键2】不使用 tags 参数（push-by-digest 模式不需要）
+          # 【关键3】所有推送控制在 outputs 中完成，必须包含 push= 参数
+          outputs: type=image,name=${{ needs.determine-strategy.outputs.image_name }},name-canonical=true,push-by-digest=true,push=${{ github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true' }}
           cache-from: type=gha,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
           cache-to: type=gha,mode=max,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
           no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
@@ -208,6 +206,7 @@ jobs:
             BUILDKIT_INLINE_CACHE=1
             NODE_ENV=production
             SHARP_IGNORE_GLOBAL_LIBVIPS=1
+
 
 
       - name: 📄 Export digest
