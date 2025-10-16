@@ -89,7 +89,7 @@ const TelegramConfigComponent = ({ config, refreshConfig }: TelegramConfigCompon
       <div className='space-y-4'>
         <div>
           <label className='block text-sm font-medium'>Bot 用户名 *</label>
-          <input type='text' value={telegramSettings.botName} onChange={(e) => setTelegramSettings(p => ({...p, botName: e.target.value}))} placeholder='@your_bot_name' className='w-full input-class' />
+          <input type='text' value={telegramSettings.botName} onChange={(e) => setTelegramSettings(p => ({...p, botName: e.target.value.replace(/^@/, '')}))} placeholder='your_bot_name (不含@)' className='w-full input-class' />
         </div>
         <div>
           <label className='block text-sm font-medium'>Bot Token *</label>
