@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig, setCachedConfig } from '@/lib/config';
+import { getConfig, clearConfigCache } from '@/lib/config';
 import { db } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -168,7 +168,10 @@ export async function POST(request: NextRequest) {
     // 写入数据库和缓存
     await db.saveAdminConfig(adminConfig);
     await setCachedConfig(adminConfig);
-
+    
+    // 清除配置缓存，强制下次重新从数据库读取
+    clearConfigCache();
+    
     return NextResponse.json(
       { ok: true },
       {
