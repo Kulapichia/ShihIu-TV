@@ -86,6 +86,9 @@ function PlayPageClient() {
   const isDraggingProgressRef = useRef(false);
   const seekResetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
+  // 用于跟踪在一次自动换源序列中已尝试过的源，防止循环
+  const autoSwitchAttemptRef = useRef<Set<string>>(new Set());
+  
   // resize事件防抖管理
   const resizeResetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -2800,8 +2803,24 @@ function PlayPageClient() {
                     s.source === currentSourceRef.current &&
                     s.id === currentIdRef.current
                 );
-                if (currentIndex !== -1 && currentIndex + 1 < availableSourcesRef.current.length) {
-                  const nextSource = availableSourcesRef.current[currentIndex + 1];
+
+                // 将当前失败的源加入尝试过的集合
+                const currentKey = `${currentSourceRef.current}-${currentIdRef.current}`;
+                autoSwitchAttemptRef.current.add(currentKey);
+
+                // 寻找下一个未尝试过的源
+                let nextIndex = -1;
+                for (let i = currentIndex + 1; i < availableSourcesRef.current.length; i++) {
+                  const nextSource = availableSourcesRef.current[i];
+                  const nextKey = `${nextSource.source}-${nextSource.id}`;
+                  if (!autoSwitchAttemptRef.current.has(nextKey)) {
+                    nextIndex = i;
+                    break;
+                  }
+                }
+                
+                if (nextIndex !== -1) {
+                  const nextSource = availableSourcesRef.current[nextIndex];
                   handleSourceChange(
                     nextSource.source,
                     nextSource.id,
@@ -2812,6 +2831,8 @@ function PlayPageClient() {
                     artPlayerRef.current.notice.show = '所有播放源均尝试失败';
                   }
                   setError('所有可用播放源均无法播放');
+                  // 重置尝试记录，以便用户可以手动重试
+                  autoSwitchAttemptRef.current.clear();
                 }
               };
               
@@ -3640,6 +3661,9 @@ function PlayPageClient() {
         // 🔥 重置 video:ended 处理标志，因为这是新视频
         videoEndedHandledRef.current = false;
 
+        // 源成功播放，清空自动切换的失败记录
+        autoSwitchAttemptRef.current.clear();
+        
         // 若存在需要恢复的播放进度，则跳转
         if (resumeTimeRef.current && resumeTimeRef.current > 0) {
           try {
