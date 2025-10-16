@@ -2840,6 +2840,10 @@ function PlayPageClient() {
                       tryNextSource();
                     }
                     break;
+                  default:
+                    console.log('无法恢复的错误，尝试切换播放源');
+                    tryNextSource();
+                    break;
                 }
               }
             });
