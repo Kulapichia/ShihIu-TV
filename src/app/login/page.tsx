@@ -336,8 +336,8 @@ function LoginPageClient() {
             {loading ? '登录中...' : '立即登录'}
           </button>
 
-          {/* LinuxDo OAuth 登录按钮 */}
-          {oauthEnabled && (
+          {/* 其他登录方式 */}
+          {(oauthEnabled || telegramAuthEnabled) && (
             <>
               <div className='flex items-center'>
                 <div className='flex-1 border-t border-gray-200 dark:border-gray-700'></div>
@@ -346,11 +346,14 @@ function LoginPageClient() {
                 </div>
                 <div className='flex-1 border-t border-gray-200 dark:border-gray-700'></div>
               </div>
-
+              
+              {/* LinuxDo OAuth 登录按钮 */}
+              {oauthEnabled && (
+              
               <button
                 type='button'
                 onClick={handleOAuthLogin}
-                className='group relative inline-flex w-full justify-center items-center gap-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 py-3.5 text-base font-semibold text-white shadow-lg shadow-blue-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-0.5'
+                  className='group relative inline-flex w-full justify-center items-center gap-3 rounded-xl bg-gradient-to-r from-gray-800 to-gray-900 hover:from-gray-700 hover:to-gray-800 py-3.5 text-base font-semibold text-white shadow-lg shadow-gray-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-gray-500/40 hover:-translate-y-0.5'
               >
                 <svg
                   className='w-5 h-5'
@@ -368,6 +371,17 @@ function LoginPageClient() {
                 </svg>
                 使用 LinuxDo 登录
               </button>
+              )}
+
+              {/* Telegram 登录按钮 */}
+              {telegramAuthEnabled && telegramBotName && (
+                <div className="flex justify-center">
+                  <TelegramLoginButton
+                    botName={telegramBotName}
+                    onAuth={handleTelegramAuth}
+                  />
+                </div>
+              )}
             </>
           )}
 
