@@ -132,10 +132,18 @@ const AIRecommendConfig = ({ config, refreshConfig }: AIRecommendConfigProps) =>
       if (!response.ok) {
         let errorMessage = 'API连接测试失败';
         try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
+          // 先检查 Content-Type
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || `API返回错误: ${JSON.stringify(errorData)}`;
+          } else {
+            // 如果不是JSON，则读取文本内容
+            const errorText = await response.text();
+            errorMessage = `API返回非JSON格式错误 (HTTP ${response.status}): ${errorText.substring(0, 150)}...`;
+          }
         } catch (e) {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+          errorMessage = `HTTP ${response.status}: ${response.statusText} (无法解析响应体)`;
         }
         throw new Error(errorMessage);
       }
