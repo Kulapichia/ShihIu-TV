@@ -56,6 +56,7 @@ function SearchPageClient() {
 
   const [showContentFilterUI, setShowContentFilterUI] = useState(false);
   const [contentFilter, setContentFilter] = useState<'all' | 'normal' | 'yellow'>('all');
+  const [isYellowFilterDisabled, setIsYellowFilterDisabled] = useState(false);
   const [isDeepSearching, setIsDeepSearching] = useState(false);
 
   // 网盘搜索相关状态
@@ -454,15 +455,31 @@ function SearchPageClient() {
 
     // 内容类型筛选
     if (showContentFilterUI) {
-      switch (contentFilter) {
-        case 'normal':
-          filtered = filtered.filter((item) => item.isYellow !== true);
-          break;
-        case 'yellow':
-          filtered = filtered.filter((item) => item.isYellow === true);
-          break;
-        default:
-          break;
+      if (isYellowFilterDisabled) {
+        // 管理后台禁用过滤器(打开状态)，前端按标签正常筛选
+        switch (contentFilter) {
+          case 'normal':
+            filtered = filtered.filter((item) => item.isYellow !== true);
+            break;
+          case 'yellow':
+            filtered = filtered.filter((item) => item.isYellow === true);
+            break;
+          default: // 'all'
+            break;
+        }
+      } else {
+        // 管理后台启用过滤器(关闭状态)
+        switch (contentFilter) {
+          case 'yellow':
+            filtered = []; // 探索内容为空
+            break;
+          case 'all':
+          case 'normal':
+          default:
+            // 全部和常规都显示过滤后的内容
+            filtered = filtered.filter((item) => item.isYellow !== true);
+            break;
+        }
       }
     }
 
@@ -481,7 +498,7 @@ function SearchPageClient() {
         (b as any).relevanceScore || calculateRelevanceScore(b, searchQuery);
       return scoreB - scoreA;
     });
-  }, [searchResults, filterAll, searchQuery, contentFilter, showContentFilterUI]);
+  }, [searchResults, filterAll, searchQuery, contentFilter, showContentFilterUI, isYellowFilterDisabled]);
 
   // 聚合：应用筛选与排序
   const filteredAggResults = useMemo(() => {
@@ -498,19 +515,37 @@ function SearchPageClient() {
     
     // 内容类型筛选
     if (showContentFilterUI) {
-      switch (contentFilter) {
-        case 'normal':
-          filtered = filtered.filter(
-            ([, group]) => !group.some((item) => item.isYellow === true)
-          );
-          break;
-        case 'yellow':
-          filtered = filtered.filter(([, group]) =>
-            group.some((item) => item.isYellow === true)
-          );
-          break;
-        default:
-          break;
+      if (isYellowFilterDisabled) {
+        // 管理后台禁用过滤器(打开状态)，前端按标签正常筛选
+        switch (contentFilter) {
+          case 'normal':
+            filtered = filtered.filter(
+              ([, group]) => !group.some((item) => item.isYellow === true)
+            );
+            break;
+          case 'yellow':
+            filtered = filtered.filter(([, group]) =>
+              group.some((item) => item.isYellow === true)
+            );
+            break;
+          default: // 'all'
+            break;
+        }
+      } else {
+        // 管理后台启用过滤器(关闭状态)
+        switch (contentFilter) {
+          case 'yellow':
+            filtered = []; // 探索内容为空
+            break;
+          case 'all':
+          case 'normal':
+          default:
+            // 全部和常规都显示过滤后的内容
+            filtered = filtered.filter(
+              ([, group]) => !group.some((item) => item.isYellow === true)
+            );
+            break;
+        }
       }
     }
 
@@ -539,7 +574,7 @@ function SearchPageClient() {
       );
       return scoreB - scoreA;
     });
-  }, [aggregatedResults, filterAgg, searchQuery, contentFilter, showContentFilterUI]);
+  }, [aggregatedResults, filterAgg, searchQuery, contentFilter, showContentFilterUI, isYellowFilterDisabled]);
 
   useEffect(() => {
     // 无搜索参数时聚焦搜索框
@@ -563,6 +598,7 @@ function SearchPageClient() {
     if (typeof window !== 'undefined') {
       const shouldShow = (window as any).RUNTIME_CONFIG?.SHOW_CONTENT_FILTER;
       setShowContentFilterUI(shouldShow);
+      setIsYellowFilterDisabled((window as any).RUNTIME_CONFIG?.DISABLE_YELLOW_FILTER === true);
       const savedFluidSearch = localStorage.getItem('fluidSearch');
       const defaultFluidSearch =
         (window as any).RUNTIME_CONFIG?.FLUID_SEARCH !== false;
