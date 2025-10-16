@@ -54,9 +54,22 @@ jobs:
     steps:
       - name: 📋 Decide build strategy and normalize image name
         id: decide
+        # 【推荐的修复方案】
+        # 使用 env 关键字将 secrets 显式传递给脚本。
+        # 这是最可靠的方式，可以避免在复杂的插值中丢失 secrets 上下文。
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_REPO: ${{ secrets.DOCKERHUB_REPO_NAME }}
         run: |
-          # 将 Docker 镜像名称转换为小写（Docker 要求）
-          IMAGE_NAME_LOWER=$(echo "${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO_NAME }}" | tr '[:upper:]' '[:lower:]')
+          # 【新增的健壮性检查】
+          # 如果 secrets 未设置，立即报错并停止，而不是在后续任务中产生难以理解的错误。
+          if [ -z "$DH_USER" ] || [ -z "$DH_REPO" ]; then
+            echo "::error::Error: DOCKERHUB_USERNAME or DOCKERHUB_REPO_NAME secret is not set."
+            exit 1
+          fi
+          
+          # 现在使用可靠的环境变量来构建镜像名称
+          IMAGE_NAME_LOWER=$(echo "$DH_USER/$DH_REPO" | tr '[:upper:]' '[:lower:]')
           echo "image_name=$IMAGE_NAME_LOWER" >> $GITHUB_OUTPUT
           echo "Normalized image name: $IMAGE_NAME_LOWER"
           
@@ -92,6 +105,10 @@ jobs:
           
           echo "Final decision - use_native_arm: $(cat $GITHUB_OUTPUT | grep use_native_arm)"
 
+  # --- 后续的所有 Job (build-native, build-and-push, merge, cleanup) 保持不变 ---
+  # --- 因为它们接收 needs.determine-strategy.outputs.image_name 的方式是正确的 ---
+  # --- 问题的根源只在 determine-strategy 的生成步骤中 ---
+
   # 使用矩阵策略在原生Runner上构建（仅公开仓库）
   build-native:
     name: 🚀 Build image for ${{ matrix.platform }} (Native)
@@ -116,13 +133,11 @@ jobs:
           sudo apt-get clean
           df -h
 
-      # fetch-depth 必须是 2 才能比较版本，这是唯一必须改的地方
       - name: 📥 Checkout source code
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
-      # Node.js 构建环境
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -133,19 +148,6 @@ jobs:
         run: pnpm install
       - name: 📜 Generate version and changelog
         run: node scripts/convert-changelog.js
-
-      - name: 🐛 Debug image name
-        run: |
-          echo "IMAGE_NAME from env: ${{ env.IMAGE_NAME }}"
-          echo "IMAGE_NAME from needs: ${{ needs.determine-strategy.outputs.image_name }}"
-          echo "Direct secrets: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO_NAME }}"
-
-      - name: 🔧 Normalize image name for this job
-        id: image_name
-        run: |
-          IMAGE_NAME_LOWER=$(echo "${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO_NAME }}" | tr '[:upper:]' '[:lower:]')
-          echo "image_name=$IMAGE_NAME_LOWER" >> $GITHUB_OUTPUT
-          echo "Normalized image name: $IMAGE_NAME_LOWER"
 
       - name: 🔧 Setup Docker Buildx for advanced features
         uses: docker/setup-buildx-action@v3
@@ -168,16 +170,11 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
-          # 仅在非 pull_request 事件时推送
           push: ${{ github.event_name != 'pull_request' }}
-          # 输出类型为镜像，并推送到仓库
-          outputs: type=image,name=${{ steps.image_name.outputs.image_name }},name-canonical=true,push-by-digest=true,push=${{ github.event_name != 'pull_request' }}
-          # 只使用 GitHub Actions 自带的缓存 (GHA Cache)。
+          outputs: type=image,name=${{ needs.determine-strategy.outputs.image_name }},name-canonical=true,push-by-digest=true,push=${{ github.event_name != 'pull_request' }}
           cache-from: type=gha,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
           cache-to: type=gha,mode=max,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
-          # force_rebuild 时禁用缓存
           no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
-          # 性能优化配置
           provenance: false
           sbom: false
           build-args: |
@@ -215,13 +212,11 @@ jobs:
           sudo apt-get clean
           df -h
 
-      # fetch-depth 必须是 2 才能比较版本，这是唯一必须改的地方
       - name: 📥 Checkout source code
         uses: actions/checkout@v4
         with:
           fetch-depth: 2 
 
-      # Node.js 构建环境
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -232,13 +227,6 @@ jobs:
         run: pnpm install
       - name: 📜 Generate version and changelog
         run: node scripts/convert-changelog.js
-
-      - name: 🔧 Normalize image name for this job
-        id: image_name
-        run: |
-          IMAGE_NAME_LOWER=$(echo "${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO_NAME }}" | tr '[:upper:]' '[:lower:]')
-          echo "image_name=$IMAGE_NAME_LOWER" >> $GITHUB_OUTPUT
-          echo "Normalized image name: $IMAGE_NAME_LOWER"
 
       - name: 🔍 Check if version changed in package.json
         id: version_check
@@ -273,48 +261,31 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 在原有的标签规则基础上，增加一条基于 package.json 的规则
       - name: 🏷️ Extract intelligent Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.image_name.outputs.image_name }}
+          images: ${{ needs.determine-strategy.outputs.image_name }}
           tags: |
-            # 规则一 (dev): 推送到默认分支时打 'dev' 标签 (保留您的逻辑)
-            # 这用于 CI 检查，确保代码总是可构建和推送的。
             type=raw,value=dev,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
-
-            # 规则二 (git tag): 推送 "v" 开头 Git 标签时，生成 'latest' 和版本号 (保留您的逻辑)
-            # 这是正式发布的唯一途径。
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            
-            # 规则三 (package.json): 如果 package.json 版本变化，也打上版本号标签
             type=raw,value=${{ steps.version_check.outputs.current_version }},enable=${{ steps.version_check.outputs.version_changed == 'true' }}
-
-            # 规则四 (手动): 手动触发
             type=raw,value=${{ github.event.inputs.tag || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
-
-            # 规则五 (调试): SHA 标签
             type=sha,prefix=sha-,format=short
 
-      # 核心构建与推送
       - name: 🚀 Build and push multi-platform image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
-          # 仅在非 pull_request 事件时推送
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # 只使用 GitHub Actions 自带的缓存 (GHA Cache)。
           cache-from: type=gha,scope=multiarch-qemu-${{ github.workflow }}
           cache-to: type=gha,mode=max,scope=multiarch-qemu-${{ github.workflow }}
-          # force_rebuild 时禁用缓存
           no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
-          # 性能优化配置
           provenance: false
           sbom: false
           build-args: |
@@ -334,13 +305,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
-      
-      - name: 🔧 Normalize image name for this job
-        id: image_name
-        run: |
-          IMAGE_NAME_LOWER=$(echo "${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO_NAME }}" | tr '[:upper:]' '[:lower:]')
-          echo "image_name=$IMAGE_NAME_LOWER" >> $GITHUB_OUTPUT
-          echo "Normalized image name: $IMAGE_NAME_LOWER"
       
       - name: 🔍 Check if version changed in package.json
         id: version_check
@@ -379,24 +343,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.image_name.outputs.image_name }}
+          images: ${{ needs.determine-strategy.outputs.image_name }}
           tags: |
-            # 规则一 (dev): 推送到默认分支时打 'dev' 标签 (保留您的逻辑)
-            # 这用于 CI 检查，确保代码总是可构建和推送的。
             type=raw,value=dev,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
-
-            # 规则二 (git tag): 推送 "v" 开头 Git 标签时，生成 'latest' 和版本号 (保留您的逻辑)
-            # 这是正式发布的唯一途径。
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            
-            # 规则三 (package.json): 如果 package.json 版本变化，也打上版本号标签
             type=raw,value=${{ steps.version_check.outputs.current_version }},enable=${{ steps.version_check.outputs.version_changed == 'true' }}
-
-            # 规则四 (手动): 手动触发
             type=raw,value=${{ github.event.inputs.tag || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
-
-            # 规则五 (调试): SHA 标签
             type=sha,prefix=sha-,format=short
 
       - name: 🚀 Create manifest list and push
@@ -411,7 +364,6 @@ jobs:
           
           echo "Applying tags: $TAGS"
           
-          # 格式化标签以便传递给 -t 参数
           FORMATTED_TAGS=""
           for TAG in $TAGS; do
             FORMATTED_TAGS="$FORMATTED_TAGS -t $TAG"
@@ -419,9 +371,8 @@ jobs:
           
           echo "Formatted tags: $FORMATTED_TAGS"
           
-          # 创建并推送清单
           docker buildx imagetools create $FORMATTED_TAGS \
-            $(printf '${{ steps.image_name.outputs.image_name }}@sha256:%s ' *)
+            $(printf '${{ needs.determine-strategy.outputs.image_name }}@sha256:%s ' *)
 
   # 清理任务
   cleanup:
