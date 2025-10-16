@@ -19,6 +19,10 @@ export async function GET(request: NextRequest) {
     LinuxDoOAuth: {
       enabled: config.SiteConfig.LinuxDoOAuth?.enabled || false,
     },
+    TelegramAuth: {
+      enabled: config.SiteConfig.TelegramAuth?.enabled || false,
+      botName: config.SiteConfig.TelegramAuth?.botName || '',
+    },
   };
   return NextResponse.json(result);
 }
