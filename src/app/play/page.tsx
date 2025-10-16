@@ -2749,7 +2749,10 @@ function PlayPageClient() {
                 ? CustomHlsJsLoader
                 : Hls.DefaultConfig.loader,
             });
-
+            
+            // 为HLS实例初始化重试计数器
+            (hls as any).retryCount = 0;
+            
             const proxyUrl = `/api/proxy/m3u8?url=${encodeURIComponent(
               url
             )}&moontv-source=${currentSourceRef.current}`;
@@ -2813,18 +2816,29 @@ function PlayPageClient() {
               };
               
               if (data.fatal) {
+                const retryLimit = 3;
+                (hls as any).retryCount = (hls as any).retryCount || 0;
+
                 switch (data.type) {
                   case Hls.ErrorTypes.NETWORK_ERROR:
-                    console.log('网络错误，尝试切换到下一个播放源...');
-                    tryNextSource();
+                    if ((hls as any).retryCount < retryLimit) {
+                      console.log(`网络错误，尝试恢复... (第 ${(hls as any).retryCount + 1} 次)`);
+                      (hls as any).retryCount++;
+                      hls.startLoad();
+                    } else {
+                      console.log('网络错误恢复失败，尝试切换到下一个播放源...');
+                      tryNextSource();
+                    }
                     break;
                   case Hls.ErrorTypes.MEDIA_ERROR:
-                    console.log('媒体错误，尝试切换到下一个播放源...');
-                    tryNextSource();
-                    break;
-                  default:
-                    console.log('无法恢复的错误，尝试切换播放源');
-                    tryNextSource();
+                    if ((hls as any).retryCount < retryLimit) {
+                      console.log(`媒体错误，尝试恢复... (第 ${(hls as any).retryCount + 1} 次)`);
+                      (hls as any).retryCount++;
+                      hls.recoverMediaError();
+                    } else {
+                      console.log('媒体错误恢复失败，尝试切换到下一个播放源...');
+                      tryNextSource();
+                    }
                     break;
                 }
               }
