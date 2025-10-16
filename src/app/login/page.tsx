@@ -77,6 +77,9 @@ function LoginPageClient() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [oauthEnabled, setOauthEnabled] = useState(false);
   const [oauthError, setOauthError] = useState<string | null>(null);
+  // 新增 Telegram 状态
+  const [telegramAuthEnabled, setTelegramAuthEnabled] = useState(false);
+  const [telegramBotName, setTelegramBotName] = useState('');
 
   const { siteName } = useSite();
 
@@ -108,11 +111,17 @@ function LoginPageClient() {
           data.StorageType && data.StorageType !== 'localstorage'
         );
         setOauthEnabled(data.LinuxDoOAuth?.enabled || false);
+        // 新增：设置 Telegram 配置
+        setTelegramAuthEnabled(data.TelegramAuth?.enabled || false);
+        setTelegramBotName(data.TelegramAuth?.botName || '');
       })
       .catch(() => {
         setRegistrationEnabled(false);
         setShouldAskUsername(false);
         setOauthEnabled(false);
+        // 新增：错误处理
+        setTelegramAuthEnabled(false);
+        setTelegramBotName('');
       });
 
     // 检查 URL 参数中的成功消息和 OAuth 错误
@@ -177,9 +186,76 @@ function LoginPageClient() {
     // 跳转到 OAuth 授权页面
     window.location.href = '/api/oauth/authorize';
   };
+  
+  // 新增：Telegram 登录回调处理函数
+  const handleTelegramAuth = async (user: any) => {
+    setError(null);
+    setSuccessMessage(null);
+    setOauthError(null);
+    setLoading(true);
 
+    try {
+      // 将 Telegram 返回的用户数据 POST 到后端进行验证和登录
+      const res = await fetch('/api/oauth/telegram/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(user),
+      });
 
+      if (res.ok) {
+        // 登录成功，跳转页面
+        const redirect = searchParams.get('redirect') || '/';
+        router.replace(redirect);
+      } else {
+        // 登录失败，显示错误信息
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? 'Telegram 登录失败，请重试');
+      }
+    } catch (error) {
+      setError('网络错误，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // 新增：Telegram 登录按钮组件
+  const TelegramLoginButton = ({ botName, onAuth }: { botName: string, onAuth: (user: any) => void }) => {
+    useEffect(() => {
+      // 将回调函数挂载到 window 对象，以便 Telegram 的脚本可以调用
+      (window as any).onTelegramAuth = (user: any) => {
+        onAuth(user);
+      };
+
+      // 创建并注入 Telegram 的官方 widget 脚本
+      const script = document.createElement('script');
+      script.src = 'https://telegram.org/js/telegram-widget.js?22';
+      script.async = true;
+      script.setAttribute('data-telegram-login', botName);
+      script.setAttribute('data-size', 'large'); // 按钮大小: small, medium, large
+      script.setAttribute('data-onauth', 'onTelegramAuth(user)'); // 授权成功后调用的函数
+      script.setAttribute('data-request-access', 'write'); // 请求写入权限
+
+      // 将脚本添加到容器中
+      const container = document.getElementById('telegram-login-container');
+      if (container) {
+        // 清理旧脚本，防止重复渲染
+        while (container.firstChild) {
+          container.removeChild(container.firstChild);
+        }
+        container.appendChild(script);
+      }
+
+      // 组件卸载时清理全局函数
+      return () => {
+        if ((window as any).onTelegramAuth) {
+          delete (window as any).onTelegramAuth;
+        }
+      };
+    }, [botName, onAuth]);
+
+    // 这是 Telegram widget 脚本将要挂载的 DOM 节点
+    return <div id="telegram-login-container"></div>;
+  };
 
   return (
     <div className='relative min-h-screen flex items-center justify-center px-4 overflow-hidden'>
@@ -346,33 +422,32 @@ function LoginPageClient() {
                 </div>
                 <div className='flex-1 border-t border-gray-200 dark:border-gray-700'></div>
               </div>
-              
+
               {/* LinuxDo OAuth 登录按钮 */}
               {oauthEnabled && (
-              
-              <button
-                type='button'
-                onClick={handleOAuthLogin}
+                <button
+                  type='button'
+                  onClick={handleOAuthLogin}
                   className='group relative inline-flex w-full justify-center items-center gap-3 rounded-xl bg-gradient-to-r from-gray-800 to-gray-900 hover:from-gray-700 hover:to-gray-800 py-3.5 text-base font-semibold text-white shadow-lg shadow-gray-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-gray-500/40 hover:-translate-y-0.5'
-              >
-                <svg
-                  className='w-5 h-5'
-                  viewBox='0 0 24 24'
-                  fill='currentColor'
                 >
-                  <path
-                    d='M12 2L2 7L12 12L22 7L12 2ZM2 17L12 22L22 17M2 12L12 17L22 12'
-                    stroke='currentColor'
-                    strokeWidth='2'
-                    fill='none'
-                    strokeLinecap='round'
-                    strokeLinejoin='round'
-                  />
-                </svg>
-                使用 LinuxDo 登录
-              </button>
+                  <svg
+                    className='w-5 h-5'
+                    viewBox='0 0 24 24'
+                    fill='currentColor'
+                  >
+                    <path
+                      d='M12 2L2 7L12 12L22 7L12 2ZM2 17L12 22L22 17M2 12L12 17L22 12'
+                      stroke='currentColor'
+                      strokeWidth='2'
+                      fill='none'
+                      strokeLinecap='round'
+                      strokeLinejoin='round'
+                    />
+                  </svg>
+                  使用 LinuxDo 登录
+                </button>
               )}
-
+              
               {/* Telegram 登录按钮 */}
               {telegramAuthEnabled && telegramBotName && (
                 <div className="flex justify-center">
