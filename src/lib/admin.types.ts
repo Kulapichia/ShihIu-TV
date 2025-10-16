@@ -25,6 +25,14 @@ export interface OAuthConfig {
   userInfoUrl: string; // 用户信息端点
 }
 
+export interface TelegramConfig {
+  enabled: boolean; // Telegram 登录开关
+  autoRegister: boolean; // 自动注册开关
+  botName: string; // Bot 用户名
+  botToken: string; // Bot Token
+  defaultRole: 'user' | 'admin'; // 自动注册默认角色
+}
+
 export interface SiteConfig {
   SiteName: string;
   Announcement: string;
@@ -92,6 +100,7 @@ export interface SiteConfig {
   RegistrationApproval: boolean; // 是否需要管理员审批
   MaxUsers?: number; // 最大用户数限制（可选）
   LinuxDoOAuth: OAuthConfig;
+  TelegramAuth: TelegramConfig; // 新增 Telegram 配置
 }
 
 export interface AdminConfig {
@@ -118,6 +127,8 @@ export interface AdminConfig {
       tvboxEnabledSources?: string[]; // TVBox 可访问的源（为空则返回所有源）
       linuxdoId?: number; // LinuxDo 用户 ID
       linuxdoUsername?: string; // LinuxDo 用户名
+      telegramId?: number; // 新增 Telegram 用户 ID
+      telegramUsername?: string; // 新增 Telegram 用户名
     }[];
     Tags?: {
       name: string;
