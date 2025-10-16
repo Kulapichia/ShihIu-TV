@@ -14,15 +14,6 @@ on:
         required: false
         default: false
         type: boolean
-      build_strategy:
-        description: 'Build strategy: native-arm (faster, public repos only) or qemu (universal)'
-        required: false
-        default: 'auto'
-        type: choice
-        options:
-          - auto
-          - native-arm
-          - qemu
   # 触发器二：推送到分支或标签
   push:
     branches: [ main, master ] # 对应 dev 标签的构建
@@ -32,6 +23,8 @@ on:
     branches: [ main, master ]
 
 env:
+
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO_NAME }}
   REGISTRY: docker.io
 
 concurrency:
@@ -44,194 +37,8 @@ permissions:
   actions: write
 
 jobs:
-  # 决策job：根据仓库类型自动选择构建策略
-  determine-strategy:
-    name: 🎯 Determine Build Strategy
-    runs-on: ubuntu-latest
-    outputs:
-      use_native_arm: ${{ steps.decide.outputs.use_native_arm }}
-      image_name_b64: ${{ steps.decide.outputs.image_name_b64}}
-      should_push: ${{ steps.decide.outputs.should_push }}
-    steps:
-      - name: 📋 Decide build strategy and normalize image name
-        id: decide
-        run: |
-          # --- 阶段一：在本地变量中完成所有决策 ---
-          
-          DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
-          DOCKERHUB_REPO="${{ secrets.DOCKERHUB_REPO_NAME }}"
-          
-          # 决策1: 镜像名称和是否推送
-          local_image_name=""
-          local_should_push="false"
-          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_REPO" ]; then
-            local_image_name="${DOCKERHUB_USERNAME}/${DOCKERHUB_REPO}"
-            local_should_push="true"
-            echo "✅ Using Docker Hub credentials from secrets"
-          else
-            local_image_name="${{ github.repository }}"
-            local_should_push="false"
-            echo "⚠️  Docker Hub secrets not found. Using github.repository for build-only mode."
-            echo "⚠️  Images will be built but NOT pushed to Docker Hub."
-          fi
-          
-          local_image_name_lower=$(echo "$local_image_name" | tr '[:upper:]' '[:lower:]')
-          echo "Normalized image name: [REDACTED]"
-          
-          # 决策2: 构建策略
-          local_use_native_arm="false" # 默认值
-          STRATEGY="${{ github.event.inputs.build_strategy }}"
-          IS_PUBLIC="${{ github.event.repository.private == false }}"
-          
-          echo "Repository is public: $IS_PUBLIC"
-          echo "Requested strategy: $STRATEGY"
-          
-          if [ "$STRATEGY" = "auto" ] || [ -z "$STRATEGY" ]; then
-            if [ "$IS_PUBLIC" = "true" ]; then
-              local_use_native_arm="true"
-              echo "✅ Auto-selected: Native ARM (public repo)"
-            else
-              local_use_native_arm="false"
-              echo "✅ Auto-selected: QEMU (private repo - ARM runners not available)"
-            fi
-          elif [ "$STRATEGY" = "native-arm" ]; then
-            if [ "$IS_PUBLIC" = "true" ]; then
-              local_use_native_arm="true"
-              echo "✅ Manual-selected: Native ARM"
-            else
-              local_use_native_arm="false"
-              echo "⚠️  Native ARM not available for private repos, fallback to QEMU"
-            fi
-          else
-            local_use_native_arm="false"
-            echo "✅ Manual-selected: QEMU"
-          fi
-
-          # --- 阶段二：使用 Base64 编码绕过 GitHub Actions 的 secret 检测 ---
-          # GitHub Actions 会自动屏蔽包含 secret 的输出，使用 Base64 可以安全传递
-          local_image_name_b64=$(echo -n "${local_image_name_lower}" | base64 -w 0)
-          
-          {
-            echo "image_name_b64=${local_image_name_b64}"
-            echo "should_push=${local_should_push}"
-            echo "use_native_arm=${local_use_native_arm}"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "--- Final outputs sent to downstream jobs ---"
-          echo "image_name_b64: ${local_image_name_b64}"
-          echo "should_push: ${local_should_push}"
-          echo "use_native_arm: ${local_use_native_arm}"
-          echo "-------------------------------------------"
-
-
-  # 使用矩阵策略在原生Runner上构建（仅公开仓库）
-  build-native:
-    name: 🚀 Build image for ${{ matrix.platform }} (Native)
-    needs: [determine-strategy]
-    if: needs.determine-strategy.outputs.use_native_arm == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            os: ubuntu-latest
-            platform_tag: amd64
-          - platform: linux/arm64
-            os: ubuntu-24.04-arm
-            platform_tag: arm64
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: ⚡ Maximize build space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo apt-get clean
-          df -h
-
-      - name: 📥 Checkout source code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: ⚙️ Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: 📦 Install dependencies
-        run: pnpm install
-      - name: 📜 Generate version and changelog
-        run: node scripts/convert-changelog.js
-
-      - name: 🔧 Setup Docker Buildx for advanced features
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:buildx-stable-1
-            network=host
-
-      - name: 🔐 Login to Docker Hub
-        if: github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: 🏷️ Decode image name from Base64
-        id: decode
-        run: |
-          IMAGE_NAME=$(echo "${{ needs.determine-strategy.outputs.image_name_b64 }}" | base64 -d)
-          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
-          echo "Decoded image name: $IMAGE_NAME"
-
-      - name: 🧐 Verify image name from previous job
-        run: |
-          echo "Image name from determine-strategy job is: '${{ env.IMAGE_NAME }}'"
-          if [ -z "${{ env.IMAGE_NAME }}" ]; then
-            echo "::error::FATAL: image_name is empty. Halting workflow."
-            exit 1
-          fi
-
-      - name: 🚀 Build and push image with digest
-        id: build
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: ${{ matrix.platform }}
-          outputs: type=image,name=${{ env.IMAGE_NAME }},name-canonical=true,push-by-digest=true,push=${{ github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true' }}
-          cache-from: type=gha,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
-          cache-to: type=gha,mode=max,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
-          no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
-          provenance: false
-          sbom: false
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-            NODE_ENV=production
-            SHARP_IGNORE_GLOBAL_LIBVIPS=1
-
-      - name: 📄 Export digest
-        if: github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true'
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: 📤 Upload digest artifact
-        if: github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-${{ matrix.platform_tag }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  # 使用QEMU进行跨平台构建（默认方式，支持所有仓库类型）
   build-and-push:
-    name: 🚀 Build & Push Multi-Platform Image to Docker Hub (QEMU)
-    needs: [determine-strategy]
-    if: needs.determine-strategy.outputs.use_native_arm == 'false'
+    name: 🚀 Build & Push Multi-Platform Image to Docker Hub
     runs-on: ubuntu-latest
     
     steps:
@@ -241,11 +48,13 @@ jobs:
           sudo apt-get clean
           df -h
 
+      # fetch-depth 必须是 2 才能比较版本，这是唯一必须改的地方
       - name: 📥 Checkout source code
         uses: actions/checkout@v4
         with:
           fetch-depth: 2 
 
+      # Node.js 构建环境
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -257,6 +66,7 @@ jobs:
       - name: 📜 Generate version and changelog
         run: node scripts/convert-changelog.js
 
+      # 【新增】移植过来的 package.json 版本检查逻辑
       - name: 🔍 Check if version changed in package.json
         id: version_check
         run: |
@@ -284,43 +94,54 @@ jobs:
             network=host
       
       - name: 🔐 Login to Docker Hub
-        if: github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true'
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # 在原有的标签规则基础上，增加一条基于 package.json 的规则
       - name: 🏷️ Extract intelligent Docker metadata
         id: meta
-        run: |
-          IMAGE_NAME=$(echo "${{ needs.determine-strategy.outputs.image_name_b64 }}" | base64 -d)
-          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
-        
-      - name: 🏷️ Generate Docker tags
-        id: meta_tags
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
+            # 规则一 (dev): 推送到默认分支时打 'dev' 标签 (保留您的逻辑)
+            # 这用于 CI 检查，确保代码总是可构建和推送的。
             type=raw,value=dev,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+            # 规则二 (git tag): 推送 "v" 开头 Git 标签时，生成 'latest' 和版本号 (保留您的逻辑)
+            # 这是正式发布的唯一途径。
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            
+            # 规则三 (package.json): 如果 package.json 版本变化，也打上版本号标签
             type=raw,value=${{ steps.version_check.outputs.current_version }},enable=${{ steps.version_check.outputs.version_changed == 'true' }}
+
+            # 规则四 (手动): 手动触发
             type=raw,value=${{ github.event.inputs.tag || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
+
+            # 规则五 (调试): SHA 标签
             type=sha,prefix=sha-,format=short
 
+      # 核心构建与推送
       - name: 🚀 Build and push multi-platform image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true' }}
-          tags: ${{ steps.meta_tags.outputs.tags }}
-          labels: ${{ steps.meta_tags.outputs.labels }}
-          cache-from: type=gha,scope=multiarch-qemu-${{ github.workflow }}
-          cache-to: type=gha,mode=max,scope=multiarch-qemu-${{ github.workflow }}
+          # 仅在非 pull_request 事件时推送
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 只使用 GitHub Actions 自带的缓存 (GHA Cache)。
+          cache-from: type=gha,scope=multiarch-${{ github.workflow }}
+          cache-to: type=gha,mode=max,scope=multiarch-${{ github.workflow }}
+          # force_rebuild 时禁用缓存
           no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
+          # 性能优化配置
           provenance: false
           sbom: false
           build-args: |
@@ -328,98 +149,10 @@ jobs:
             NODE_ENV=production
             SHARP_IGNORE_GLOBAL_LIBVIPS=1
 
-  # 合并原生构建的清单并打标签
-  merge:
-    name: 🔗 Merge manifests and apply tags
-    runs-on: ubuntu-latest
-    needs: [determine-strategy, build-native]
-    if: needs.determine-strategy.outputs.use_native_arm == 'true' && github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true'
-    
-    steps:
-      - name: 📥 Checkout source code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-      
-      - name: 🔍 Check if version changed in package.json
-        id: version_check
-        run: |
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          if git show HEAD~1:package.json > package.json.old 2>/dev/null; then
-            PREVIOUS_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./package.json.old', 'utf8')).version")
-            rm package.json.old
-          else
-            PREVIOUS_VERSION="0.0.0"
-          fi
-          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
-            echo "version_changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "version_changed=false" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: 📥 Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/digests
-          pattern: digests-*
-          merge-multiple: true
-      
-      - name: 🔧 Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        
-      - name: 🔐 Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
-      - name: 🏷️ Extract intelligent Docker metadata
-        id: meta
-        run: |
-          IMAGE_NAME=$(echo "${{ needs.determine-strategy.outputs.image_name_b64 }}" | base64 -d)
-          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
-        
-      - name: 🏷️ Generate Docker tags  
-        id: meta_tags
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=dev,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=${{ steps.version_check.outputs.current_version }},enable=${{ steps.version_check.outputs.version_changed == 'true' }}
-            type=raw,value=${{ github.event.inputs.tag || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=sha,prefix=sha-,format=short
-
-      - name: 🚀 Create manifest list and push
-        working-directory: /tmp/digests
-        run: |
-          IMAGE_NAME=$(echo "${{ needs.determine-strategy.outputs.image_name_b64 }}" | base64 -d)
-          TAGS=$(echo "${{ steps.meta_tags.outputs.tags }}" | tr '\n' ' ')
-          
-          if [ -z "$TAGS" ]; then
-            echo "No tags to apply. Skipping manifest creation."
-            exit 0
-          fi
-          
-          echo "Applying tags: $TAGS"
-          
-          FORMATTED_TAGS=""
-          for TAG in $TAGS; do
-            FORMATTED_TAGS="$FORMATTED_TAGS -t $TAG"
-          done
-          
-          echo "Formatted tags: $FORMATTED_TAGS"
-          
-          docker buildx imagetools create $FORMATTED_TAGS \
-            $(printf "${IMAGE_NAME}@sha256:%s " *)
-
   # 清理任务
   cleanup:
     runs-on: ubuntu-latest
-    needs: [build-and-push, build-native, merge]
+    needs: [build-and-push]
     if: always()
     steps:
       - name: 🧹 Cleanup workflow runs
