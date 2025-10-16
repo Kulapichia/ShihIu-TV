@@ -421,6 +421,17 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
       userInfoUrl: 'https://connect.linux.do/api/user',
     };
   }
+
+  // 确保 Telegram Auth 配置存在
+  if (!adminConfig.SiteConfig.TelegramAuth) {
+    adminConfig.SiteConfig.TelegramAuth = {
+      enabled: false,
+      autoRegister: false,
+      botName: '',
+      botToken: '',
+      defaultRole: 'user',
+    };
+  }
   
   // 确保网盘搜索配置有默认值
   if (!adminConfig.NetDiskConfig) {
