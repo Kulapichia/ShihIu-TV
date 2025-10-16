@@ -104,7 +104,7 @@ const TelegramConfigComponent = ({ config, refreshConfig }: TelegramConfigCompon
         </div>
       </div>
       
-      <AlertModal isOpen={alertModal.isOpen} onClose={hideAlert} {...alertModal} />
+      <AlertModal onClose={hideAlert} {...alertModal} />
     </div>
   );
 };
