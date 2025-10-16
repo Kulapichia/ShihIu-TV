@@ -70,8 +70,13 @@ export async function POST(req: NextRequest) {
       .map(key => `${key}=${dataToCheck[key]}`)
       .join('\n');
 
-    const secretKey = crypto.createHash('sha256').update(tgConfig.botToken).digest();
-    const hmac = crypto.createHmac('sha256', secretKey).update(checkString).digest('hex');
+    // 根据 Telegram 文档，secret_key 是 Bot Token 的 SHA256 哈希值
+    const secretKey = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tgConfig.botToken));
+    
+    // 使用 secret_key 对数据字符串进行 HMAC-SHA256 签名
+    const key = await crypto.subtle.importKey('raw', secretKey, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(checkString));
+    const hmac = Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
 
     if (hmac !== hash) {
       return NextResponse.json({ error: '数据验证失败，签名不匹配' }, { status: 400 });
