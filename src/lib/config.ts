@@ -282,6 +282,14 @@ async function getInitConfig(configFile: string, subConfig: {
         tokenUrl: 'https://connect.linux.do/oauth2/token',
         userInfoUrl: 'https://connect.linux.do/api/user',
       },
+      // 新增 TelegramAuth 的默认值
+      TelegramAuth: {
+        enabled: false,
+        autoRegister: false,
+        botName: '',
+        botToken: '',
+        defaultRole: 'user',
+      },
     },
     UserConfig: {
       AllowRegister: true, // 默认允许注册
