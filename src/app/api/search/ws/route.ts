@@ -341,7 +341,8 @@ export async function GET(request: NextRequest) {
                     result.isYellow = true;
                   }
                 });
-                results = results.filter((result) => !result.isYellow);
+                
+                // results = results.filter((result) => !result.isYellow);
   
                 // 1b. 智能 AI 图片审核 (带熔断)
                 if (config.SiteConfig.IntelligentFilter?.enabled) {
