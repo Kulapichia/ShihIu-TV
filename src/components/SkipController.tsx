@@ -46,8 +46,8 @@ export default function SkipController({
   const [batchSettings, setBatchSettings] = useState(() => {
     const savedEnableAutoSkip = typeof window !== 'undefined' ? localStorage.getItem('enableAutoSkip') : null;
     const savedEnableAutoNextEpisode = typeof window !== 'undefined' ? localStorage.getItem('enableAutoNextEpisode') : null;
-    const userAutoSkip = savedEnableAutoSkip !== null ? JSON.parse(savedEnableAutoSkip) : true;
-    const userAutoNextEpisode = savedEnableAutoNextEpisode !== null ? JSON.parse(savedEnableAutoNextEpisode) : true;
+    const userAutoSkip = savedEnableAutoSkip !== null ? JSON.parse(savedEnableAutoSkip) : false;
+    const userAutoNextEpisode = savedEnableAutoNextEpisode !== null ? JSON.parse(savedEnableAutoNextEpisode) : false;
 
     return {
       openingStart: '0:00',   // 片头开始时间（分:秒格式）
@@ -817,8 +817,8 @@ export default function SkipController({
     // 取消时从 localStorage 读取用户设置，不能硬编码默认值
     const savedEnableAutoSkip = localStorage.getItem('enableAutoSkip');
     const savedEnableAutoNextEpisode = localStorage.getItem('enableAutoNextEpisode');
-    const userAutoSkip = savedEnableAutoSkip !== null ? JSON.parse(savedEnableAutoSkip) : true;
-    const userAutoNextEpisode = savedEnableAutoNextEpisode !== null ? JSON.parse(savedEnableAutoNextEpisode) : true;
+    const userAutoSkip = savedEnableAutoSkip !== null ? JSON.parse(savedEnableAutoSkip) : false;
+    const userAutoNextEpisode = savedEnableAutoNextEpisode !== null ? JSON.parse(savedEnableAutoNextEpisode) : false;
 
     setBatchSettings({
       openingStart: '0:00',
