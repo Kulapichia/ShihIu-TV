@@ -156,6 +156,14 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # 【最终修正】根据 Buildx 的底层要求，`outputs` 中必须显式包含 `name`
+      # 【诊断步骤】在构建前，打印出即将使用的 image_name，确认其值
+      - name: 🧐 Verify image name from previous job
+        run: |
+          echo "Image name from determine-strategy job is: '${{ needs.determine-strategy.outputs.image_name }}'"
+          if [ -z "${{ needs.determine-strategy.outputs.image_name }}" ]; then
+            echo "::error::FATAL: image_name is empty. Halting workflow."
+            exit 1
+          fi
       - name: 🚀 Build and push image with digest
         id: build
         uses: docker/build-push-action@v5
