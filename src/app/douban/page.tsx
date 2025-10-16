@@ -445,7 +445,7 @@ function DoubanPageClient() {
 
         if (keyParamsMatch) {
           setDoubanData(data.list);
-          setHasMore(data.list.length >= 25);
+          setHasMore(data.list.length !== 0);
           setLoading(false);
         } else {
           console.log('关键参数不一致，不执行任何操作，避免设置过期数据');
@@ -617,7 +617,7 @@ function DoubanPageClient() {
 
             if (keyParamsMatch) {
               setDoubanData((prev) => [...prev, ...data.list]);
-              setHasMore(data.list.length >= 25);
+              setHasMore(data.list.length !== 0);
             } else {
               console.log('关键参数不一致，不执行任何操作，避免设置过期数据');
             }
