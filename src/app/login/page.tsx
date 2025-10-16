@@ -452,7 +452,7 @@ function LoginPageClient() {
               {telegramAuthEnabled && telegramBotName && (
                 <div className="flex justify-center">
                   <TelegramLoginButton
-                    botName={telegramBotName}
+                    botName={telegramBotName.replace(/^@/, '')}
                     onAuth={handleTelegramAuth}
                   />
                 </div>
