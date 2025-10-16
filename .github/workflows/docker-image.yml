@@ -185,7 +185,7 @@ jobs:
             exit 1
           fi
 
-      # 【最终修正】使用经过验证的、最清晰的写法
+      # 【最终修正】push-by-digest 模式的正确写法
       - name: 🚀 Build and push image with digest
         id: build
         uses: docker/build-push-action@v5
@@ -193,10 +193,11 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
-          push: ${{ github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true' }}
-          tags: ${{ needs.determine-strategy.outputs.image_name }}
-          # 【关键修复】`name` 属性必须在这里显式提供，这是 buildx 的硬性要求
-          outputs: type=image,name=${{ needs.determine-strategy.outputs.image_name }},name-canonical=true,push-by-digest=true
+          # 【关键修复】push-by-digest 模式下：
+          # 1. 不使用顶层 push 参数
+          # 2. 不使用 tags 参数
+          # 3. 在 outputs 中完整指定：name、push-by-digest、name-canonical、push
+          outputs: type=image,name=${{ needs.determine-strategy.outputs.image_name }},name-canonical=true,push-by-digest=true,push=${{ github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true' }}
           cache-from: type=gha,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
           cache-to: type=gha,mode=max,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
           no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
