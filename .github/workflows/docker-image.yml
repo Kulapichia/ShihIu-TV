@@ -59,10 +59,10 @@ jobs:
           # 【核心修复】健壮地处理镜像名称生成
           # 优先使用 secrets（如果存在），否则使用 github.repository 作为后备方案
           # 这确保了在各种触发条件下都能正常工作
-          
+        
           DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
           DOCKERHUB_REPO="${{ secrets.DOCKERHUB_REPO_NAME }}"
-          
+        
           # 检查 secrets 是否存在
           if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_REPO" ]; then
             # Secrets 存在，使用 secrets 构建镜像名称
@@ -76,20 +76,20 @@ jobs:
             echo "⚠️  Docker Hub secrets not found. Using github.repository for build-only mode."
             echo "⚠️  Images will be built but NOT pushed to Docker Hub."
           fi
-          
+        
           # 将镜像名称转换为小写（Docker 要求）
           IMAGE_NAME_LOWER=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
           echo "image_name=$IMAGE_NAME_LOWER" >> $GITHUB_OUTPUT
           echo "Normalized image name: $IMAGE_NAME_LOWER"
-          
+        
           STRATEGY="${{ github.event.inputs.build_strategy }}"
           IS_PUBLIC="${{ github.event.repository.private == false }}"
-          
+        
           echo "Repository name: ${{ github.repository }}"
           echo "Repository is public: $IS_PUBLIC"
           echo "Repository private flag: ${{ github.event.repository.private }}"
           echo "Requested strategy: $STRATEGY"
-          
+        
           # 如果是auto模式，根据仓库类型自动决定
           if [ "$STRATEGY" = "auto" ] || [ -z "$STRATEGY" ]; then
             if [ "$IS_PUBLIC" = "true" ]; then
@@ -111,7 +111,7 @@ jobs:
             echo "use_native_arm=false" >> $GITHUB_OUTPUT
             echo "✅ Manual-selected: QEMU"
           fi
-          
+        
           echo "Final decision - use_native_arm: $(grep use_native_arm $GITHUB_OUTPUT || echo 'not set')"
           echo "Final decision - should_push: $(grep should_push $GITHUB_OUTPUT || echo 'not set')"
 
@@ -178,10 +178,12 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
-          # 仅在非 pull_request 事件且有 secrets 时推送
+          # 【修复】push-by-digest 模式下需要通过 outputs 控制推送
+          # 但保留 push 参数以明确表达推送意图
           push: ${{ github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true' }}
-          # 输出类型为镜像，并推送到仓库
-          outputs: type=image,name=${{ needs.determine-strategy.outputs.image_name }},name-canonical=true,push-by-digest=true,push=${{ github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true' }}
+          # 【修复】outputs 参数需要在 push-by-digest 模式下正确指定镜像名称
+          # 格式：type=image,name=<镜像名>,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ needs.determine-strategy.outputs.image_name }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true' }}
           # 只使用 GitHub Actions 自带的缓存 (GHA Cache)。
           cache-from: type=gha,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
           cache-to: type=gha,mode=max,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
@@ -217,7 +219,7 @@ jobs:
     needs: [determine-strategy]
     if: needs.determine-strategy.outputs.use_native_arm == 'false'
     runs-on: ubuntu-latest
-    
+  
     steps:
       - name: ⚡ Maximize build space
         run: |
@@ -269,7 +271,7 @@ jobs:
           driver-opts: |
             image=moby/buildkit:buildx-stable-1
             network=host
-      
+    
       - name: 🔐 Login to Docker Hub
         if: github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true'
         uses: docker/login-action@v3
@@ -292,7 +294,7 @@ jobs:
             # 这是正式发布的唯一途径。
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            
+          
             # 规则三 (package.json): 如果 package.json 版本变化，也打上版本号标签
             type=raw,value=${{ steps.version_check.outputs.current_version }},enable=${{ steps.version_check.outputs.version_changed == 'true' }}
 
@@ -332,13 +334,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-strategy, build-native]
     if: needs.determine-strategy.outputs.use_native_arm == 'true' && github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true'
-    
+  
     steps:
       - name: 📥 Checkout source code
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
-      
+    
       - name: 🔍 Check if version changed in package.json
         id: version_check
         run: |
@@ -355,23 +357,23 @@ jobs:
           else
             echo "version_changed=false" >> $GITHUB_OUTPUT
           fi
-      
+    
       - name: 📥 Download digests
         uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
           pattern: digests-*
           merge-multiple: true
-      
+    
       - name: 🔧 Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
-        
+      
       - name: 🔐 Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
+        
       - name: 🏷️ Extract intelligent Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -386,7 +388,7 @@ jobs:
             # 这是正式发布的唯一途径。
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            
+          
             # 规则三 (package.json): 如果 package.json 版本变化，也打上版本号标签
             type=raw,value=${{ steps.version_check.outputs.current_version }},enable=${{ steps.version_check.outputs.version_changed == 'true' }}
 
@@ -400,22 +402,22 @@ jobs:
         working-directory: /tmp/digests
         run: |
           TAGS=$(echo "${{ steps.meta.outputs.tags }}" | tr '\n' ' ')
-          
+        
           if [ -z "$TAGS" ]; then
             echo "No tags to apply. Skipping manifest creation."
             exit 0
           fi
-          
+        
           echo "Applying tags: $TAGS"
-          
+        
           # 格式化标签以便传递给 -t 参数
           FORMATTED_TAGS=""
           for TAG in $TAGS; do
             FORMATTED_TAGS="$FORMATTED_TAGS -t $TAG"
           done
-          
+        
           echo "Formatted tags: $FORMATTED_TAGS"
-          
+        
           # 创建并推送清单
           docker buildx imagetools create $FORMATTED_TAGS \
             $(printf '${{ needs.determine-strategy.outputs.image_name }}@sha256:%s ' *)
