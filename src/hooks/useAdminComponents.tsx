@@ -1,4 +1,4 @@
-// src/hooks/useAdminComponents.ts
+// src/hooks/useAdminComponents.tsx
 
 'use client'; // 确保这是一个客户端组件文件
 
