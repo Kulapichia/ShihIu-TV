@@ -171,6 +171,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # 【最终修正】遵循官方最佳实践，使用 `tags` 参数传递镜像名称，`outputs` 仅用于声明模式
       - name: 🚀 Build and push image with digest
         id: build
         uses: docker/build-push-action@v5
@@ -180,9 +181,9 @@ jobs:
           platforms: ${{ matrix.platform }}
           # 仅在非 pull_request 事件且有 secrets 时推送
           push: ${{ github.event_name != 'pull_request' && needs.determine-strategy.outputs.should_push == 'true' }}
-          # 正确：使用 tags 参数传递基础镜像名称
+          # 正确：使用 `tags` 参数来提供镜像仓库的基础名称
           tags: ${{ needs.determine-strategy.outputs.image_name }}
-          # 正确：outputs 参数只定义输出类型，不再包含 name
+          # 正确：`outputs` 参数只负责定义输出类型和开启 push-by-digest 模式，完全移除 name=...
           outputs: type=image,name-canonical=true,push-by-digest=true
           # 只使用 GitHub Actions 自带的缓存 (GHA Cache)。
           cache-from: type=gha,scope=multiarch-native-${{ github.workflow }}-${{ matrix.platform_tag }}
