@@ -7436,6 +7436,25 @@ function AdminPageClient() {
             </CollapsibleTab>
           )}
 
+          {/* Telegram Auth 配置标签 - 仅非 localStorage 模式下显示 */}
+          {storageType !== 'localstorage' && (
+            <CollapsibleTab
+              title='Telegram 登录配置'
+              icon={
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className='text-gray-600 dark:text-gray-400'>
+                  <path d="M15 10l-4 4 6 6 4-16-18 7 4 2 2 6 3-4" />
+                </svg>
+              }
+              isExpanded={expandedTabs.telegramConfig}
+              onToggle={() => toggleTab('telegramConfig')}
+            >
+              <TelegramConfigComponent
+                config={config}
+                refreshConfig={fetchConfig}
+              />
+            </CollapsibleTab>
+          )}
+          
           <div className='space-y-4'>
             {/* 用户配置标签 */}
             <CollapsibleTab
