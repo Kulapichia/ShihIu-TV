@@ -73,8 +73,9 @@ function RegisterPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [registrationEnabled, setRegistrationEnabled] = useState<boolean | null>(null);
-  const [storageType, setStorageType] = useState<string | null>(null);
+  const [shouldShowRegister, setShouldShowRegister] = useState(false);
+  const [registrationDisabled, setRegistrationDisabled] = useState(false);
+  const [disabledReason, setDisabledReason] = useState('');
   const [bingWallpaper, setBingWallpaper] = useState<string>('');
 
   const { siteName } = useSite();
@@ -96,20 +97,43 @@ function RegisterPageClient() {
     fetchBingWallpaper();
   }, []);
 
-  // 检查注册是否可用
+  // 检查注册是否可用 (新架构)
   useEffect(() => {
-    fetch('/api/server-config')
-      .then((res) => res.json())
-      .then((data) => {
-        setRegistrationEnabled(data.EnableRegistration || false);
-        setStorageType(data.StorageType || 'localstorage');
-      })
-      .catch(() => {
-        // 发生错误时，假定注册不可用以保证安全
-        setRegistrationEnabled(false);
-        setStorageType(null); // 表示配置加载失败
-      });
-  }, []);
+    const checkRegistrationAvailable = async () => {
+      try {
+        // 用空数据进行“试运行”请求，这样不会创建用户，但能从API响应中判断注册状态
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: '', password: '', confirmPassword: '' }),
+        });
+        
+        const data = await res.json();
+        
+        // 如果是本地存储模式，直接重定向到登录页
+        if (data.message === '当前系统为本地存储模式，不支持用户注册功能。') {
+          router.replace('/login');
+          return;
+        }
+        
+        // 如果管理员关闭了注册
+        if (data.message === '管理员已关闭用户注册功能。') {
+          setRegistrationDisabled(true);
+          setDisabledReason('管理员已关闭用户注册功能。');
+          setShouldShowRegister(true); // 准备好显示“已禁用”页面
+          return;
+        }
+        
+        // 其他情况（如“用户名不能为空”的验证错误）都意味着注册功能是开启的
+        setShouldShowRegister(true); // 准备好显示注册表单
+      } catch (error) {
+        // 如果API请求本身失败（网络错误等），也默认显示注册页面，让用户可以尝试提交
+        setShouldShowRegister(true);
+      }
+    };
+
+    checkRegistrationAvailable();
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -164,15 +188,13 @@ function RegisterPageClient() {
     }
   };
 
-  if (registrationEnabled === null || storageType === null) {
+  if (!shouldShowRegister) {
     return <div>Loading...</div>;
   }
 
-  // 如果注册被禁用或为LocalStorage模式，显示提示页面
-  if (!registrationEnabled || storageType === 'localstorage') {
-    const reason = storageType === 'localstorage'
-      ? '当前系统为本地存储模式，不支持用户注册功能。'
-      : '管理员已关闭用户注册功能。';
+  // 如果注册被禁用，显示提示页面
+  if (registrationDisabled) {
+    const reason = disabledReason || '管理员已关闭用户注册功能。';
     return (
       <div className='relative min-h-screen flex items-center justify-center px-4 overflow-hidden'>
         {/* Bing 每日壁纸背景 */}
