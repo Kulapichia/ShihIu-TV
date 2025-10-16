@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { AdminConfig } from '@/lib/admin.types';
+import { buttonStyles, AlertModal, useAlertModal, useLoadingState, showError, showSuccess } from '@/hooks/useAdminComponents';
 
 // 假设 buttonStyles 和 useAlertModal, useLoadingState 已被定义或导入
 // ...
