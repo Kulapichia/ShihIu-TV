@@ -405,27 +405,23 @@ export async function GET(request: NextRequest) {
       });
       
       // --- 1. 内容安全审核流程 ---
-      // 只有当“禁用黄色过滤器”开关是关闭的时候，才执行所有过滤逻辑
+      // --- 1a. 关键词过滤 ---
+      flattenedResults.forEach((result: any) => {
+        const typeName = result.type_name || '';
+        const title = result.title || '';
+        const titleModeration = moderateContent(title);
+        const typeModeration = moderateContent(typeName);
+        if (
+          titleModeration.totalScore >= decisionThresholds.FLAG ||
+          typeModeration.totalScore >= decisionThresholds.FLAG
+        ) {
+          result.isYellow = true;
+        }
+      });
+      
+      // --- 1b. 智能 AI 图片审核 (仅在过滤器开启时执行) ---
+      // 只有当“禁用黄色过滤器”开关是关闭的时候，才执行过滤逻辑
       if (!config.SiteConfig.DisableYellowFilter) {
-        // --- 1a. 关键词过滤 ---
-        // 先根据关键词给内容打上 isYellow 标签
-        flattenedResults.forEach((result: any) => {
-          const typeName = result.type_name || '';
-          const title = result.title || '';
-          const titleModeration = moderateContent(title);
-          const typeModeration = moderateContent(typeName);
-          if (
-            titleModeration.totalScore >= decisionThresholds.FLAG ||
-            typeModeration.totalScore >= decisionThresholds.FLAG
-          ) {
-            result.isYellow = true;
-          }
-        });
-  
-        // 根据 isYellow 标签进行过滤
-        // flattenedResults = flattenedResults.filter((result) => !result.isYellow);
-  
-        // --- 1b. 智能 AI 图片审核 (仅在关键词过滤后，且AI审核开启时执行) ---
         if (config.SiteConfig.IntelligentFilter?.enabled) {
           console.log('[AI Filter DEBUG] IntelligentFilter is ENABLED. Starting moderation process...');
           
@@ -491,13 +487,7 @@ export async function GET(request: NextRequest) {
           flattenedResults = moderatedResults.filter((item): item is any => item !== null);
         }
       } else {
-        // 如果禁用了黄色过滤器，则清除所有可能存在的 isYellow 标记
-        flattenedResults.forEach((result: any) => {
-          if (result.isYellow) {
-            delete result.isYellow;
-          }
-        });
-        console.log('[Search API] Yellow filter is disabled. Skipping all content moderation.');
+        console.log('[Search API] Yellow filter is disabled. Skipping content removal moderation.');
       }
       
       // Create a map for quick lookup of site health status
