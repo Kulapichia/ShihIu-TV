@@ -186,37 +186,6 @@ function LoginPageClient() {
     // 跳转到 OAuth 授权页面
     window.location.href = '/api/oauth/authorize';
   };
-  
-  // 新增：Telegram 登录回调处理函数
-  const handleTelegramAuth = async (user: any) => {
-    setError(null);
-    setSuccessMessage(null);
-    setOauthError(null);
-    setLoading(true);
-
-    try {
-      // 将 Telegram 返回的用户数据 POST 到后端进行验证和登录
-      const res = await fetch('/api/oauth/telegram/callback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(user),
-      });
-
-      if (res.ok) {
-        // 登录成功，跳转页面
-        const redirect = searchParams.get('redirect') || '/';
-        router.replace(redirect);
-      } else {
-        // 登录失败，显示错误信息
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? 'Telegram 登录失败，请重试');
-      }
-    } catch (error) {
-      setError('网络错误，请稍后重试');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // 新增：Telegram 登录按钮组件
   const TelegramLoginButton = ({ botName }: { botName: string }) => {
