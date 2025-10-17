@@ -219,12 +219,8 @@ function LoginPageClient() {
   };
 
   // 新增：Telegram 登录按钮组件
-  const TelegramLoginButton = ({ botName, onAuth }: { botName: string, onAuth: (user: any) => void }) => {
+  const TelegramLoginButton = ({ botName }: { botName: string }) => {
     useEffect(() => {
-      // 将回调函数挂载到 window 对象，以便 Telegram 的脚本可以调用
-      (window as any).onTelegramAuth = (user: any) => {
-        onAuth(user);
-      };
 
       // 创建并注入 Telegram 的官方 widget 脚本
       const script = document.createElement('script');
@@ -232,7 +228,9 @@ function LoginPageClient() {
       script.async = true;
       script.setAttribute('data-telegram-login', botName);
       script.setAttribute('data-size', 'large'); // 按钮大小: small, medium, large
-      script.setAttribute('data-onauth', 'onTelegramAuth(user)'); // 授权成功后调用的函数
+      // 这会告诉 Telegram 登录成功后，将浏览器重定向到我们的后端 API
+      const callbackUrl = new URL('/api/oauth/telegram/callback', window.location.origin).toString();
+      script.setAttribute('data-auth-url', callbackUrl);
       script.setAttribute('data-request-access', 'write'); // 请求写入权限
 
       // 将脚本添加到容器中
@@ -244,14 +242,7 @@ function LoginPageClient() {
         }
         container.appendChild(script);
       }
-
-      // 组件卸载时清理全局函数
-      return () => {
-        if ((window as any).onTelegramAuth) {
-          delete (window as any).onTelegramAuth;
-        }
-      };
-    }, [botName, onAuth]);
+    }, [botName]);
 
     // 这是 Telegram widget 脚本将要挂载的 DOM 节点
     return <div id="telegram-login-container"></div>;
@@ -453,7 +444,6 @@ function LoginPageClient() {
                 <div className="flex justify-center">
                   <TelegramLoginButton
                     botName={telegramBotName.replace(/^@/, '')}
-                    onAuth={handleTelegramAuth}
                   />
                 </div>
               )}
