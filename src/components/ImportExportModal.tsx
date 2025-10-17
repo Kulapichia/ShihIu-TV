@@ -267,6 +267,7 @@ export default function ImportExportModal({
                   <li>• 支持 JSON, CSV, 或纯文本(一行一个API)格式</li>
                   <li>• 重复的 key 将被跳过，不会覆盖现有配置</li>
                   <li>• 导入完成后会显示详细的导入结果</li>
+                  <li>• 建议先导出备份，再进行导入操作</li>
                 </ul>
               </div>
             </div>
