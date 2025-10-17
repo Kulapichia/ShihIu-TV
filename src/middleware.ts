@@ -145,6 +145,7 @@ function shouldSkipAuth(pathname: string): boolean {
     '/api/server-config',
     '/api/oauth/authorize',
     '/api/oauth/callback',
+    '/api/oauth/telegram/callback', 
     '/api/oauth/exchange-token',
 
     // --- 公开API路径 ---
