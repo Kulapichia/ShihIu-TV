@@ -1,9 +1,11 @@
 'use client';
 
-import { AlertCircle, CheckCircle, Download, Upload, X } from 'lucide-react';
+// 从lucide-react导入了更多图标，用于显示不同的文件格式
+import { AlertCircle, CheckCircle, Download, FileJson, FileText, Sheet, Upload, X } from 'lucide-react';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 
+// 接口定义保持不变
 interface ImportResult {
   success: number;
   failed: number;
@@ -16,6 +18,11 @@ interface ImportResult {
   }>;
 }
 
+// 为强大的导出功能定义类型
+type ExportFormat = 'json' | 'csv' | 'text';
+type ExportScope = 'all' | 'selected' | 'filtered';
+
+// 增强了Props接口，以接收和处理新的导出选项
 interface ImportExportModalProps {
   isOpen: boolean;
   mode: 'import' | 'export' | 'result';
@@ -24,8 +31,17 @@ interface ImportExportModalProps {
     file: File,
     onProgress?: (current: number, total: number) => void
   ) => Promise<ImportResult>;
-  onExport?: () => void;
+  // onExport现在可以接收格式和范围参数
+  onExport?: (format: ExportFormat, scope: ExportScope) => void;
   result?: ImportResult;
+  // 导出功能所需的所有props
+  exportScope?: ExportScope;
+  setExportScope?: (scope: ExportScope) => void;
+  exportFormat?: ExportFormat;
+  setExportFormat?: (format: ExportFormat) => void;
+  totalCount?: number;
+  selectedCount?: number;
+  filteredCount?: number;
 }
 
 export default function ImportExportModal({
@@ -35,7 +51,16 @@ export default function ImportExportModal({
   onImport,
   onExport,
   result,
+  // 为新增的props提供默认值，增强组件的健壮性
+  exportScope = 'all',
+  setExportScope = () => {},
+  exportFormat = 'json',
+  setExportFormat = () => {},
+  totalCount = 0,
+  selectedCount = 0,
+  filteredCount = 0,
 }: ImportExportModalProps) {
+  // 内部状态变量保持不变
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [importProgress, setImportProgress] = useState({
@@ -45,9 +70,11 @@ export default function ImportExportModal({
 
   if (!isOpen) return null;
 
+  // 增强文件选择逻辑，以支持多种导入格式
   const handleFileSelect = async (file: File) => {
-    if (!file.name.endsWith('.json')) {
-      alert('请选择 JSON 格式的文件');
+    // 支持 json, csv, 和 txt 格式，而不仅仅是 json
+    if (!['.json', '.csv', '.txt'].some(ext => file.name.endsWith(ext))) {
+      alert('请选择 JSON, CSV, 或 TXT 格式的文件');
       return;
     }
 
@@ -66,6 +93,7 @@ export default function ImportExportModal({
     }
   };
 
+  // 拖放处理函数保持不变
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
@@ -127,9 +155,9 @@ export default function ImportExportModal({
                   {mode === 'import'
                     ? isProcessing && importProgress.total > 0
                       ? `正在导入 ${importProgress.current}/${importProgress.total}`
-                      : '从 JSON 文件导入配置'
+                      : '从文件导入配置' // 文本微调
                     : mode === 'export'
-                    ? '导出为 JSON 文件'
+                    ? '导出为多种格式的文件' // 文本微调
                     : '查看导入详情'}
                 </p>
               </div>
@@ -210,7 +238,8 @@ export default function ImportExportModal({
                   <label className='cursor-pointer'>
                     <input
                       type='file'
-                      accept='.json'
+                      // 允许更多文件类型
+                      accept='.json,.csv,.txt'
                       onChange={handleFileInput}
                       className='hidden'
                       disabled={isProcessing}
@@ -222,55 +251,75 @@ export default function ImportExportModal({
                           : 'bg-blue-600 hover:bg-blue-700 text-white'
                       }`}
                     >
-                      {isProcessing ? '处理中...' : '选择 JSON 文件'}
+                      {/* 文本微调 */}
+                      {isProcessing ? '处理中...' : '选择文件'}
                     </div>
                   </label>
                 </div>
               </div>
 
-              {/* 说明文档 - 更紧凑 */}
+              {/* 说明文档 - 更紧凑 (更新说明文本) */}
               <div className='bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3'>
                 <h4 className='font-semibold text-blue-900 dark:text-blue-200 mb-1.5 text-sm'>
                   📝 导入说明
                 </h4>
                 <ul className='text-xs text-blue-800 dark:text-blue-300 space-y-0.5'>
-                  <li>• 支持标准 JSON 格式的视频源配置文件</li>
+                  <li>• 支持 JSON, CSV, 或纯文本(一行一个API)格式</li>
                   <li>• 重复的 key 将被跳过，不会覆盖现有配置</li>
                   <li>• 导入完成后会显示详细的导入结果</li>
-                  <li>• 建议先导出备份，再进行导入操作</li>
                 </ul>
               </div>
             </div>
           )}
 
+          {/* 将原有的简单导出界面替换为功能强大的导出选项界面 */}
           {mode === 'export' && (
-            <div className='space-y-3'>
-              <div className='text-center py-6'>
-                <div className='inline-flex p-3 bg-green-100 dark:bg-green-900/40 rounded-full mb-3'>
-                  <CheckCircle className='w-12 h-12 text-green-600 dark:text-green-400' />
+            <div className='space-y-6'>
+              <div>
+                <label className='text-sm font-medium text-gray-700 dark:text-gray-300'>导出范围</label>
+                <div className='mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2'>
+                  <label className={`flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-colors ${exportScope === 'all' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                    <input type='radio' name='scope' value='all' checked={exportScope === 'all'} onChange={() => setExportScope('all')} className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-500" />
+                    <span>全部 ({totalCount})</span>
+                  </label>
+                  <label className={`flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-colors ${exportScope === 'selected' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50'} ${selectedCount === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <input type='radio' name='scope' value='selected' checked={exportScope === 'selected'} onChange={() => setExportScope('selected')} disabled={selectedCount === 0} className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-500" />
+                    <span>已选 ({selectedCount})</span>
+                  </label>
+                  <label className={`flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-colors ${exportScope === 'filtered' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                    <input type='radio' name='scope' value='filtered' checked={exportScope === 'filtered'} onChange={() => setExportScope('filtered')} className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-500" />
+                    <span>筛选结果 ({filteredCount})</span>
+                  </label>
                 </div>
-                <h3 className='text-lg font-semibold text-gray-800 dark:text-gray-200 mb-1.5'>
-                  准备导出
-                </h3>
-                <p className='text-sm text-gray-600 dark:text-gray-400'>
-                  点击下方按钮开始导出视频源配置
+              </div>
+              <div>
+                <label className='text-sm font-medium text-gray-700 dark:text-gray-300'>导出格式</label>
+                <div className='mt-2 grid grid-cols-3 gap-2'>
+                  {(['json', 'csv', 'text'] as ExportFormat[]).map((format) => (
+                    <button
+                      key={format}
+                      onClick={() => setExportFormat(format)}
+                      className={`flex items-center justify-center gap-2 py-3 rounded-lg border transition-colors ${
+                        exportFormat === format
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 font-semibold'
+                          : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      }`}
+                    >
+                      {format === 'json' && <FileJson size={16} />}
+                      {format === 'csv' && <Sheet size={16} />}
+                      {format === 'text' && <FileText size={16} />}
+                      {format.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <p className='text-xs text-gray-500 dark:text-gray-400 mt-2'>
+                  纯文本(TEXT)格式仅导出API地址。
                 </p>
               </div>
-
-              <div className='bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3'>
-                <h4 className='font-semibold text-green-900 dark:text-green-200 mb-1.5 text-sm'>
-                  📦 导出内容
-                </h4>
-                <ul className='text-xs text-green-800 dark:text-green-300 space-y-0.5'>
-                  <li>• 视频源配置将导出为 JSON 格式</li>
-                  <li>• 文件名：video_sources_YYYYMMDD_HHMMSS.json</li>
-                  <li>• 包含所有视频源的完整配置信息</li>
-                  <li>• 可用于备份或迁移到其他设备</li>
-                </ul>
-              </div>
             </div>
           )}
 
+          {/* 结果页 */}
           {mode === 'result' && result && (
             <div className='space-y-3'>
               {/* 统计信息 - 更紧凑 */}
@@ -349,11 +398,12 @@ export default function ImportExportModal({
           )}
         </div>
 
-        {/* 底部按钮 - 更紧凑 */}
+        {/* 底部按钮 - 更紧凑*/}
         <div className='flex-shrink-0 px-5 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end space-x-2.5'>
-          {mode === 'export' && (
+          {/* onClick事件现在会传递用户选择的格式和范围 */}
+          {mode === 'export' && onExport && (
             <button
-              onClick={onExport}
+              onClick={() => onExport(exportFormat, exportScope)}
               className='px-4 py-2 text-sm bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg font-medium'
             >
               确认导出
@@ -375,7 +425,7 @@ export default function ImportExportModal({
     </div>
   );
 
-  // 使用 createPortal 渲染到 body，确保覆盖整个页面
+  // createPortal
   if (typeof window === 'undefined') return null;
   return createPortal(modalContent, document.body);
 }
