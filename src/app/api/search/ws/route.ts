@@ -326,25 +326,24 @@ export async function GET(request: NextRequest) {
               };
               
               // --- [关键修复] 完整的内容安全审核流程 ---
-              // 只有当“禁用黄色过滤器”开关是关闭的时候，才执行所有过滤逻辑
+              // --- 1a. 关键词过滤 (始终执行，用于前端分类) ---
+              results.forEach((result: any) => {
+                const typeName = result.type_name || '';
+                const title = result.title || '';
+                const titleModeration = moderateContent(title);
+                const typeModeration = moderateContent(typeName);
+                if (
+                  titleModeration.totalScore >= decisionThresholds.FLAG ||
+                  typeModeration.totalScore >= decisionThresholds.FLAG
+                ) {
+                  result.isYellow = true;
+                }
+              });
+
+              // --- 1b. 内容移除 (仅在过滤器开启时执行) ---
+              // 只有当“禁用黄色过滤器”开关是关闭的时候，才执行过滤逻辑
               if (!config.SiteConfig.DisableYellowFilter) {
-                // 1a. 关键词过滤
-                results.forEach((result: any) => {
-                  const typeName = result.type_name || '';
-                  const title = result.title || '';
-                  const titleModeration = moderateContent(title);
-                  const typeModeration = moderateContent(typeName);
-                  if (
-                    titleModeration.totalScore >= decisionThresholds.FLAG ||
-                    typeModeration.totalScore >= decisionThresholds.FLAG
-                  ) {
-                    result.isYellow = true;
-                  }
-                });
-                
-                // results = results.filter((result) => !result.isYellow);
-  
-                // 1b. 智能 AI 图片审核 (带熔断)
+                // 智能 AI 图片审核 (带熔断)
                 if (config.SiteConfig.IntelligentFilter?.enabled) {
                   let failureCount = 0;
                   const failureThreshold = 5;
@@ -379,12 +378,8 @@ export async function GET(request: NextRequest) {
                   results = moderatedResults;
                 }
               } else {
-                // 如果禁用了过滤器，清除 isYellow 标记
-                results.forEach((result: any) => {
-                  if (result.isYellow) {
-                    delete result.isYellow;
-                  }
-                });
+                // 如果禁用了过滤器，仅打印日志，不清除 isYellow 标记
+                console.log('[WS Search API] Yellow filter is disabled. Skipping content removal moderation.');
               }
   
               const scoredResults = results
