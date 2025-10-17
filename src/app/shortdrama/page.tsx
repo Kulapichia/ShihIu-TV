@@ -97,6 +97,8 @@ export default function ShortDramaPage() {
   // 加载短剧列表
   const loadDramas = useCallback(
     async (pageNum: number, reset = false) => {
+      // 防止在已经没有更多数据的情况下，由于滚动到底部而触发不必要的API请求
+      if (!hasMore && !reset) return;
       setLoading(true);
       try {
         let result: { list: ShortDramaItem[]; hasMore: boolean };
@@ -119,7 +121,7 @@ export default function ShortDramaPage() {
         setLoading(false);
       }
     },
-    [selectedCategory, searchQuery, isSearchMode]
+    [selectedCategory, searchQuery, isSearchMode, hasMore] // 补充依赖项 hasMore
   );
 
   // 当分类变化时重新加载
@@ -127,16 +129,17 @@ export default function ShortDramaPage() {
     if (selectedCategory && !isSearchMode) {
       setPage(1);
       setHasMore(true);
+      // setDramas([]); // 立即清空，避免旧内容闪烁
       loadDramas(1, true);
     }
-  }, [selectedCategory, isSearchMode, loadDramas]);
+  }, [selectedCategory, isSearchMode]);
 
   // 当页码变化时加载更多
   useEffect(() => {
     if (page > 1) {
       loadDramas(page, false);
     }
-  }, [page, loadDramas]);
+  }, [page]);
 
   // 处理搜索
   const handleSearch = useCallback(
