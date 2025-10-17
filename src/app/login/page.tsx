@@ -428,7 +428,7 @@ function LoginPageClient() {
                 <button
                   type='button'
                   onClick={handleOAuthLogin}
-                  className='group relative inline-flex w-full justify-center items-center gap-3 rounded-xl bg-gradient-to-r from-gray-800 to-gray-900 hover:from-gray-700 hover:to-gray-800 py-3.5 text-base font-semibold text-white shadow-lg shadow-gray-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-gray-500/40 hover:-translate-y-0.5'
+                  className='group relative inline-flex w-full justify-center items-center gap-3 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 py-3.5 text-base font-semibold text-white shadow-lg shadow-green-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-green-500/40 hover:-translate-y-0.5'
                 >
                   <svg
                     className='w-5 h-5'
