@@ -158,7 +158,7 @@ export default function ShortDramaPage() {
         loadDramas(1, true);
       }
     },
-    [] // 移除 loadDramas 依赖
+    [loadDramas]
   );
 
   // 返回顶部功能
