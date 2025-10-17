@@ -176,6 +176,14 @@ export async function GET(req: NextRequest) {
       console.log(`   - ✅ 新用户 ${newUsername} 创建成功!`);
     }
 
+    // 此处添加一个检查以确保 'user' 变量在此刻必然有值，从而解决 TypeScript 的类型错误。
+    // 在正常逻辑下，如果 user 未能被找到或创建，函数应该在上面的 if/else 块中就已经 return 了。
+    if (!user) {
+      console.error('❌ 严重错误: 用户对象在查找或创建流程后仍然未定义。这是一个不应发生的逻辑错误。');
+      const errorUrl = new URL('/login?oauth_error=处理用户信息时发生意外的内部错误', req.url);
+      return NextResponse.redirect(errorUrl);
+    }
+    
     // 检查用户是否被封禁
     if (user.banned) {
       console.error(`❌ 登录失败: 用户 ${user.username} 已被封禁。`);
