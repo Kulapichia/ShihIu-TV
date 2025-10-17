@@ -50,18 +50,25 @@ async function generateAuthCookie(
  * POST /api/oauth/telegram/callback
  */
 export async function POST(req: NextRequest) {
+  console.log('\n--- [Telegram Auth] ---');
   try {
     const telegramUser = await req.json();
+    console.log('✅ 1. 收到 Telegram 回调数据:', JSON.stringify(telegramUser, null, 2));
 
     const config = await getConfig();
     const tgConfig = config.SiteConfig.TelegramAuth;
 
     if (!tgConfig || !tgConfig.enabled) {
+      console.error('❌ 错误: Telegram 登录功能未在后台启用。');
       return NextResponse.json({ error: 'Telegram 登录未启用' }, { status: 403 });
     }
     if (!tgConfig.botToken) {
-        return NextResponse.json({ error: 'Telegram Bot Token 未配置' }, { status: 500 });
+      console.error('❌ 错误: Telegram Bot Token 未在后台配置。');
+      return NextResponse.json({ error: 'Telegram Bot Token 未配置' }, { status: 500 });
     }
+    // 关键安全日志：检查Bot Token是否已配置，但不打印完整Token
+    console.log(`✅ 2. 配置检查: Bot Token 已配置 (长度: ${tgConfig.botToken.length})`);
+
 
     // 1. 验证数据来源的真实性
     const { hash, ...dataToCheck } = telegramUser;
@@ -69,6 +76,8 @@ export async function POST(req: NextRequest) {
       .sort()
       .map(key => `${key}=${dataToCheck[key]}`)
       .join('\n');
+    
+    console.log('✅ 3. 构建用于签名的 data-check-string:\n' + checkString);
 
     // 根据 Telegram 文档，secret_key 是 Bot Token 的 SHA256 哈希值
     const secretKey = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tgConfig.botToken));
@@ -78,30 +87,47 @@ export async function POST(req: NextRequest) {
     const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(checkString));
     const hmac = Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
 
+    console.log('✅ 4. 签名比对:');
+    console.log('   - Telegram 返回的 Hash: ' + hash);
+    console.log('   - 服务器计算的 HMAC  : ' + hmac);
+
     if (hmac !== hash) {
+      console.error('❌ 验证失败: 签名不匹配! 请立即检查您的 Bot Token 是否正确且完整。');
       return NextResponse.json({ error: '数据验证失败，签名不匹配' }, { status: 401 });
     }
+    console.log('✅ 签名验证通过!');
 
     // 2. 验证数据时效性 (auth_date)
     const auth_date = parseInt(telegramUser.auth_date, 10);
-    if (Date.now() / 1000 - auth_date > 300) { // 5分钟有效期
+    const currentTime = Math.floor(Date.now() / 1000);
+    const timeDiff = currentTime - auth_date;
+    console.log(`✅ 5. 时间戳验证: (服务器时间: ${currentTime}, Telegram时间: ${auth_date}, 时间差: ${timeDiff}秒)`);
+
+    if (timeDiff > 300) { // 5分钟有效期
+      console.error('❌ 验证失败: 登录请求已过期。');
       return NextResponse.json({ error: '登录请求已过期，请重试' }, { status: 400 });
     }
+    console.log('✅ 时间戳验证通过!');
 
     // 3. 查找或创建用户
+    console.log('✅ 6. 开始查找或创建用户...');
     const { id: telegramId, username: telegramUsername, first_name, last_name } = telegramUser;
     
     let user = config.UserConfig.Users.find(u => u.telegramId === telegramId);
 
     if (user) {
+      console.log(`   - 找到已存在的用户: ${user.username}`);
       // 用户已存在，更新信息并登录
       if (user.telegramUsername !== telegramUsername) {
+        console.log(`   - 更新用户 Telegram 用户名: ${user.telegramUsername} -> ${telegramUsername}`);
         user.telegramUsername = telegramUsername;
         await saveAndCacheConfig(config);
       }
     } else {
+      console.log('   - 用户不存在，尝试自动注册...');
       // 用户不存在，检查是否允许自动注册
       if (!tgConfig.autoRegister) {
+        console.error('❌ 注册失败: 自动注册功能已关闭。');
         return NextResponse.json({ error: '此 Telegram 账户尚未关联系统用户，且自动注册已关闭' }, { status: 403 });
       }
 
@@ -112,6 +138,7 @@ export async function POST(req: NextRequest) {
       while (await db.checkUserExist(newUsername)) {
         newUsername = `${baseUsername}_${counter++}`;
       }
+      console.log(`   - 为新用户生成的用户名为: ${newUsername}`);
 
       const newPassword = generateRandomPassword();
       await db.registerUser(newUsername, newPassword);
@@ -128,14 +155,17 @@ export async function POST(req: NextRequest) {
       config.UserConfig.Users.push(newUserEntry);
       await saveAndCacheConfig(config);
       user = newUserEntry;
+      console.log(`   - ✅ 新用户 ${newUsername} 创建成功!`);
     }
 
     // 检查用户是否被封禁
     if (user.banned) {
+      console.error(`❌ 登录失败: 用户 ${user.username} 已被封禁。`);
       return NextResponse.json({ error: '您的账户已被封禁' }, { status: 403 });
     }
     
     // 4. 生成 Cookie 并返回
+    console.log(`✅ 7. 为用户 ${user.username} 生成认证Cookie...`);
     const authCookie = await generateAuthCookie(user.username, user.role);
     const response = NextResponse.json({ success: true, message: '登录成功' });
 
@@ -150,10 +180,14 @@ export async function POST(req: NextRequest) {
       secure: req.url.startsWith('https://'),
     });
 
+    console.log('✅ 登录流程全部成功! 返回响应。');
+    console.log('--- [Telegram Auth End] ---\n');
     return response;
 
   } catch (error) {
-    console.error('Telegram callback error:', error);
+    console.error('❌ Telegram 回调处理中发生严重错误:', error);
+    console.log('--- [Telegram Auth End with Error] ---\n');
     return NextResponse.json({ error: '处理 Telegram 登录时发生内部错误' }, { status: 500 });
   }
 }
+
