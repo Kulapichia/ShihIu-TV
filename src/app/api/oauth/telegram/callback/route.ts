@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
 
     if (!telegramUser.hash) {
       console.error('❌ 错误: Telegram 回调缺少 hash 参数。');
-      const errorUrl = new URL('/login?oauth_error=Telegram回调参数错误', req.url);
+      const errorUrl = new URL('/login?oauth_error=Telegram回调参数错误', req.nextUrl.origin);
       return NextResponse.redirect(errorUrl);
     }
     
@@ -73,12 +73,12 @@ export async function GET(req: NextRequest) {
 
     if (!tgConfig || !tgConfig.enabled) {
       console.error('❌ 错误: Telegram 登录功能未在后台启用。');
-      const errorUrl = new URL('/login?oauth_error=Telegram登录未启用', req.url);
+      const errorUrl = new URL('/login?oauth_error=Telegram登录未启用', req.nextUrl.origin);
       return NextResponse.redirect(errorUrl);
     }
     if (!tgConfig.botToken) {
       console.error('❌ 错误: Telegram Bot Token 未在后台配置。');
-      const errorUrl = new URL('/login?oauth_error=Telegram Bot Token 未配置', req.url);
+      const errorUrl = new URL('/login?oauth_error=Telegram Bot Token 未配置', req.nextUrl.origin);
       return NextResponse.redirect(errorUrl);
     }
     // 关键安全日志：检查Bot Token是否已配置，但不打印完整Token
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
 
     if (hmac !== hash) {
       console.error('❌ 验证失败: 签名不匹配! 请立即检查您的 Bot Token 是否正确且完整。');
-      const errorUrl = new URL('/login?oauth_error=数据验证失败，签名不匹配', req.url);
+      const errorUrl = new URL('/login?oauth_error=数据验证失败，签名不匹配', req.nextUrl.origin);
       return NextResponse.redirect(errorUrl);
     }
     console.log('✅ 签名验证通过!');
@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
 
     if (timeDiff > 300) { // 5分钟有效期
       console.error('❌ 验证失败: 登录请求已过期。');
-      const errorUrl = new URL('/login?oauth_error=登录请求已过期，请重试', req.url);
+      const errorUrl = new URL('/login?oauth_error=登录请求已过期，请重试', req.nextUrl.origin);
       return NextResponse.redirect(errorUrl);
     }
     console.log('✅ 时间戳验证通过!');
@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
       // 用户不存在，检查是否允许自动注册
       if (!tgConfig.autoRegister) {
         console.error('❌ 注册失败: 自动注册功能已关闭。');
-        const errorUrl = new URL('/login?oauth_error=此 Telegram 账户尚未关联系统用户，且自动注册已关闭', req.url);
+        const errorUrl = new URL('/login?oauth_error=此 Telegram 账户尚未关联系统用户，且自动注册已关闭', req.nextUrl.origin);
         return NextResponse.redirect(errorUrl);
       }
 
@@ -180,14 +180,14 @@ export async function GET(req: NextRequest) {
     // 在正常逻辑下，如果 user 未能被找到或创建，函数应该在上面的 if/else 块中就已经 return 了。
     if (!user) {
       console.error('❌ 严重错误: 用户对象在查找或创建流程后仍然未定义。这是一个不应发生的逻辑错误。');
-      const errorUrl = new URL('/login?oauth_error=处理用户信息时发生意外的内部错误', req.url);
+      const errorUrl = new URL('/login?oauth_error=处理用户信息时发生意外的内部错误', req.nextUrl.origin);
       return NextResponse.redirect(errorUrl);
     }
     
     // 检查用户是否被封禁
     if (user.banned) {
       console.error(`❌ 登录失败: 用户 ${user.username} 已被封禁。`);
-      const errorUrl = new URL('/login?oauth_error=您的账户已被封禁', req.url);
+      const errorUrl = new URL('/login?oauth_error=您的账户已被封禁', req.nextUrl.origin);
       return NextResponse.redirect(errorUrl);
     }
     
@@ -195,7 +195,7 @@ export async function GET(req: NextRequest) {
     console.log(`✅ 7. 为用户 ${user.username} 生成认证Cookie...`);
     const authCookie = await generateAuthCookie(user.username, user.role);
     
-    const redirectUrl = new URL('/', req.url);
+    const redirectUrl = new URL('/', req.nextUrl.origin);
     const response = NextResponse.redirect(redirectUrl);
 
     const expires = new Date();
@@ -206,7 +206,7 @@ export async function GET(req: NextRequest) {
       expires,
       sameSite: 'lax',
       httpOnly: false, // 保持与项目其他部分一致
-      secure: req.url.startsWith('https://'),
+      secure: req.nextUrl.protocol === 'https:',
     });
 
     console.log('✅ 登录流程全部成功! 重定向到首页。');
@@ -216,7 +216,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error('❌ Telegram 回调处理中发生严重错误:', error);
     console.log('--- [Telegram Auth End with Error] ---\n');
-    const errorUrl = new URL('/login?oauth_error=处理 Telegram 登录时发生内部错误', req.url);
+    const errorUrl = new URL('/login?oauth_error=处理 Telegram 登录时发生内部错误', req.nextUrl.origin);
     return NextResponse.redirect(errorUrl);
   }
 }
