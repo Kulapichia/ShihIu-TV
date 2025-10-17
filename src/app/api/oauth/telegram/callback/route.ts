@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     const hmac = Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
 
     if (hmac !== hash) {
-      return NextResponse.json({ error: '数据验证失败，签名不匹配' }, { status: 400 });
+      return NextResponse.json({ error: '数据验证失败，签名不匹配' }, { status: 401 });
     }
 
     // 2. 验证数据时效性 (auth_date)
