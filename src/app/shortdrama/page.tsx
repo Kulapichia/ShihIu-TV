@@ -99,6 +99,7 @@ export default function ShortDramaPage() {
     async (pageNum: number, reset = false) => {
       // 防止在已经没有更多数据的情况下，由于滚动到底部而触发不必要的API请求
       if (!hasMore && !reset) return;
+
       setLoading(true);
       try {
         let result: { list: ShortDramaItem[]; hasMore: boolean };
@@ -129,7 +130,6 @@ export default function ShortDramaPage() {
     if (selectedCategory && !isSearchMode) {
       setPage(1);
       setHasMore(true);
-      // setDramas([]); // 立即清空，避免旧内容闪烁
       loadDramas(1, true);
     }
   }, [selectedCategory, isSearchMode]);
@@ -158,7 +158,7 @@ export default function ShortDramaPage() {
         loadDramas(1, true);
       }
     },
-    [loadDramas]
+    [] // 移除 loadDramas 依赖
   );
 
   // 返回顶部功能
