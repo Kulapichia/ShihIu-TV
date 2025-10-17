@@ -2249,7 +2249,27 @@ const VideoSourceConfig = ({
 
   // 批量操作相关状态
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
-
+  
+  // 导入导出模态框状态
+  const [importExportModal, setImportExportModal] = useState<{
+    isOpen: boolean;
+    mode: 'import' | 'export' | 'result';
+    result?: {
+      success: number;
+      failed: number;
+      skipped: number;
+      details: Array<{
+        name: string;
+        key: string;
+        status: 'success' | 'failed' | 'skipped';
+        reason?: string;
+      }>;
+    };
+  }>({
+    isOpen: false,
+    mode: 'export',
+  });
+  
   // 导入导出模态框状态
   const [importExportModal, setImportExportModal] = useState<{
     isOpen: boolean;
