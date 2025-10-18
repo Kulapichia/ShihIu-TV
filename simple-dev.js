@@ -46,9 +46,3 @@ app.prepare().then(() => {
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
 });
-
-
-
-
-
-
