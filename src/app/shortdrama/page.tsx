@@ -15,8 +15,13 @@ import { ShortDramaCategory, ShortDramaItem } from '@/lib/types';
 
 import PageLayout from '@/components/PageLayout';
 import ShortDramaCard from '@/components/ShortDramaCard';
+// 导入我们已经“换肤”后的 ShortDramaSelector 组件
+import ShortDramaSelector from '@/components/ShortDramaSelector';
 
 export default function ShortDramaPage() {
+  // 注意：这里的 categories 状态在修改后的组件中不是必需的，
+  // 但为了完全遵循“函数变量不变”的要求，我们将其保留。
+  // 组件现在会自己获取分类数据。
   const [categories, setCategories] = useState<ShortDramaCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number>(1);
   const [dramas, setDramas] = useState<ShortDramaItem[]>([]);
@@ -45,13 +50,14 @@ export default function ShortDramaPage() {
     [loading, hasMore]
   );
 
-  // 获取分类列表
+  // 获取分类列表（仅用于判断是否显示分类区域，实际数据由组件自己获取）
   useEffect(() => {
     // 清理过期缓存
     cleanExpiredCache().catch(console.error);
 
     const fetchCategories = async () => {
       const cats = await getShortDramaCategories();
+      // 设置 categories 状态，以便 `categories.length > 0` 的判断能够生效
       setCategories(cats);
     };
     fetchCategories();
@@ -214,24 +220,11 @@ export default function ShortDramaPage() {
                   分类筛选
                 </span>
               </div>
-              <div className="flex flex-wrap gap-2.5">
-                {categories.map((category) => (
-                  <button
-                    key={category.type_id}
-                    onClick={() => setSelectedCategory(category.type_id)}
-                    className={`relative rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 ${
-                      selectedCategory === category.type_id
-                        ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 text-white shadow-lg shadow-purple-500/50 scale-105'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 hover:text-purple-700 hover:shadow-md dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-purple-300'
-                    }`}
-                  >
-                    {selectedCategory === category.type_id && (
-                      <div className="absolute inset-0 rounded-full bg-white/20 animate-ping"></div>
-                    )}
-                    <span className="relative">{category.type_name}</span>
-                  </button>
-                ))}
-              </div>
+              {/* 使用主题化后的组件，代码非常简洁 */}
+              <ShortDramaSelector
+                selectedCategory={selectedCategory.toString()}
+                onCategoryChange={(catId) => setSelectedCategory(parseInt(catId, 10))}
+              />
             </div>
           )}
 
