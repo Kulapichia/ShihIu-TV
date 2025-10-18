@@ -442,7 +442,50 @@ export class DbManager {
     const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
     return storageType !== 'localstorage';
   }
+
+  // ---------- 机器码绑定相关方法 ----------
+  
+  async getUserMachineCode(userName: string): Promise<string | null> {
+    if (typeof (this.storage as any).getUserMachineCode === 'function') {
+      return (this.storage as any).getUserMachineCode(userName);
+    }
+    console.warn('存储类型不支持 getUserMachineCode 方法');
+    return null;
+  }
+
+  async setUserMachineCode(userName: string, machineCode: string, deviceInfo?: any): Promise<void> {
+    if (typeof (this.storage as any).setUserMachineCode === 'function') {
+      await (this.storage as any).setUserMachineCode(userName, machineCode, deviceInfo);
+    } else {
+      console.warn('存储类型不支持 setUserMachineCode 方法');
+    }
+  }
+
+  async unbindMachineCode(userName: string): Promise<void> {
+    if (typeof (this.storage as any).unbindMachineCode === 'function') {
+      await (this.storage as any).unbindMachineCode(userName);
+    } else {
+      console.warn('存储类型不支持 unbindMachineCode 方法');
+    }
+  }
+
+  async isMachineCodeBound(machineCode: string): Promise<string | null> {
+    if (typeof (this.storage as any).isMachineCodeBound === 'function') {
+      return (this.storage as any).isMachineCodeBound(machineCode);
+    }
+    console.warn('存储类型不支持 isMachineCodeBound 方法');
+    return null;
+  }
+
+  async getAllMachineCodes(): Promise<{ username: string; machine_code: string; device_info?: any; bind_time: number }[]> {
+    if (typeof (this.storage as any).getAllMachineCodes === 'function') {
+      return (this.storage as any).getAllMachineCodes();
+    }
+    console.warn('存储类型不支持 getAllMachineCodes 方法');
+    return [];
+  }
 }
 
 // 导出默认实例
 export const db = new DbManager();
+
