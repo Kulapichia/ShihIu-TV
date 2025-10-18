@@ -2,7 +2,7 @@
 
 'use client';
 
-import { AlertCircle, CheckCircle, User, Lock, Sparkles, UserPlus } from 'lucide-react';
+import { AlertCircle, CheckCircle, User, Lock, Sparkles, UserPlus, Shield } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 
@@ -11,6 +11,7 @@ import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
 
 import { useSite } from '@/components/SiteProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import MachineCode from '@/lib/machine-code';
 
 // 版本显示组件
 function VersionDisplay() {
@@ -80,6 +81,13 @@ function LoginPageClient() {
   // 新增 Telegram 状态
   const [telegramAuthEnabled, setTelegramAuthEnabled] = useState(false);
   const [telegramBotName, setTelegramBotName] = useState('');
+  // 机器码相关状态
+  const [machineCode, setMachineCode] = useState<string>('');
+  const [deviceInfo, setDeviceInfo] = useState<string>('');
+  const [requireMachineCode, setRequireMachineCode] = useState(false);
+  const [machineCodeGenerated, setMachineCodeGenerated] = useState(false);
+  const [bindMachineCode, setBindMachineCode] = useState(false);
+  const [deviceCodeEnabled, setDeviceCodeEnabled] = useState(true); // 站点是否启用设备码功能
 
   const { siteName } = useSite();
 
@@ -107,11 +115,21 @@ function LoginPageClient() {
       .then((res) => res.json())
       .then((data) => {
         setRegistrationEnabled(data.EnableRegistration || false);
-        setShouldAskUsername(
-          data.StorageType && data.StorageType !== 'localstorage'
-        );
+        const isDbMode = data.StorageType && data.StorageType !== 'localstorage';
+        setShouldAskUsername(isDbMode);
+        
+        const runtimeConfig = (window as any).RUNTIME_CONFIG;
+        const requireDeviceCode = runtimeConfig?.REQUIRE_DEVICE_CODE;
+        const effectiveDeviceCodeEnabled = requireDeviceCode !== false;
+        setDeviceCodeEnabled(effectiveDeviceCodeEnabled);
+
+        if (isDbMode && effectiveDeviceCodeEnabled && MachineCode.isSupported()) {
+          MachineCode.generateMachineCode().then(setMachineCode).catch(console.error);
+          MachineCode.getDeviceInfo().then(setDeviceInfo).catch(console.error);
+          setMachineCodeGenerated(true);
+        }
+
         setOauthEnabled(data.LinuxDoOAuth?.enabled || false);
-        // 新增：设置 Telegram 配置
         setTelegramAuthEnabled(data.TelegramAuth?.enabled || false);
         setTelegramBotName(data.TelegramAuth?.botName || '');
       })
@@ -119,7 +137,6 @@ function LoginPageClient() {
         setRegistrationEnabled(false);
         setShouldAskUsername(false);
         setOauthEnabled(false);
-        // 新增：错误处理
         setTelegramAuthEnabled(false);
         setTelegramBotName('');
       });
@@ -147,17 +164,36 @@ function LoginPageClient() {
 
     try {
       setLoading(true);
+      const requestData: any = {
+        password,
+        ...(shouldAskUsername ? { username } : {}),
+      };
+
+      if (deviceCodeEnabled && (requireMachineCode || bindMachineCode) && machineCode) {
+        requestData.machineCode = machineCode;
+      }
+      
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password,
-          ...(shouldAskUsername ? { username } : {}),
-        }),
+        body: JSON.stringify(requestData),
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
-        // 记录登入时间
+        if (deviceCodeEnabled && bindMachineCode && machineCode && shouldAskUsername) {
+          try {
+            await fetch('/api/machine-code', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ machineCode, deviceInfo }),
+            });
+          } catch (bindError) {
+            console.error('绑定机器码失败:', bindError);
+          }
+        }
+        
         try {
           await fetch('/api/user/my-stats', {
             method: 'PUT',
@@ -166,14 +202,17 @@ function LoginPageClient() {
           });
         } catch (error) {
           console.log('记录登入时间失败:', error);
-          // 登入时间记录失败不影响正常登录流程
         }
 
         const redirect = searchParams.get('redirect') || '/';
         router.replace(redirect);
       } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? '登录失败，请重试');
+        if (res.status === 403 && data.requireMachineCode) {
+          setRequireMachineCode(true);
+          setError('该账户已绑定设备，请验证设备码');
+        } else {
+          setError(data.error ?? '登录失败，请重试');
+        }
       }
     } catch (error) {
       setError('网络错误，请稍后重试');
@@ -292,6 +331,41 @@ function LoginPageClient() {
               />
             </div>
           </div>
+
+          {/* 机器码信息显示与绑定选项 */}
+          {deviceCodeEnabled && machineCodeGenerated && shouldAskUsername && (
+            <div className='space-y-4 pt-2'>
+              <div className='bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-xl p-4 transition-all animate-fade-in'>
+                <div className='flex items-center space-x-2 mb-2'>
+                  <Shield className='w-4 h-4 text-blue-600 dark:text-blue-400' />
+                  <span className='text-sm font-medium text-blue-800 dark:text-blue-300'>设备识别码</span>
+                </div>
+                <div className='space-y-2'>
+                  <div className='text-xs font-mono text-gray-700 dark:text-gray-300 break-all p-2 bg-white/50 dark:bg-black/20 rounded-md'>
+                    {MachineCode.formatMachineCode(machineCode)}
+                  </div>
+                  <div className='text-xs text-gray-600 dark:text-gray-400'>
+                    {deviceInfo}
+                  </div>
+                </div>
+              </div>
+
+              {!requireMachineCode && (
+                <div className='flex items-center space-x-3 pl-2'>
+                  <input
+                    id='bindMachineCode'
+                    type='checkbox'
+                    checked={bindMachineCode}
+                    onChange={(e) => setBindMachineCode(e.target.checked)}
+                    className='w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 dark:focus:ring-green-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer'
+                  />
+                  <label htmlFor='bindMachineCode' className='text-sm text-gray-700 dark:text-gray-300 cursor-pointer'>
+                    登录并绑定此设备
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
 
           {successMessage && (
             <div className='flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 animate-slide-down'>
