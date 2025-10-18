@@ -2,7 +2,7 @@
 'use client';
 
 import { MessageCircle, Search, Users, X, UserPlus } from 'lucide-react';
-import { Conversation, Friend, FriendRequest, User } from '../../lib/types';
+import { Conversation, Friend, FriendRequest } from '../../lib/types';
 
 // 定义 Props 类型
 interface SidePanelProps {
