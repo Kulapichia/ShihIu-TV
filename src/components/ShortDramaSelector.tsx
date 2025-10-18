@@ -29,15 +29,13 @@ const ShortDramaSelector = ({
       try {
         setLoading(true);
         const response = await getShortDramaCategories();
-        setCategories([
-          { type_id: 0, type_name: '全部' },
-          ...response.categories
-        ]);
+        // 移除硬编码的“全部”分类，以匹配 page.tsx 的数据源和初始状态
+        // 这样可以确保与父组件的数据期望完全一致
+        setCategories(response);
       } catch (error) {
         console.error('获取短剧分类失败:', error);
         // 设置默认分类
         setCategories([
-          { type_id: 0, type_name: '全部' },
           { type_id: 1, type_name: '古装' },
           { type_id: 2, type_name: '现代' },
           { type_id: 3, type_name: '都市' },
@@ -91,15 +89,16 @@ const ShortDramaSelector = ({
     }
   }, [loading, categories, selectedCategory]);
 
-  // 渲染胶囊式选择器
-  const renderCapsuleSelector = () => {
+  // 渲染胶囊式选择器 (样式已主题化)
+  const renderThemedCapsuleSelector = () => {
     if (loading) {
+      // 加载骨架屏也应用主题色
       return (
         <div className='flex flex-wrap gap-2'>
           {Array.from({ length: 8 }).map((_, index) => (
             <div
               key={index}
-              className='h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse'
+              className='h-9 w-20 bg-purple-500/10 dark:bg-gray-800 rounded-full animate-pulse'
             />
           ))}
         </div>
@@ -109,12 +108,14 @@ const ShortDramaSelector = ({
     return (
       <div
         ref={containerRef}
-        className='relative inline-flex bg-gray-200/60 rounded-full p-0.5 sm:p-1 dark:bg-gray-700/60 backdrop-blur-sm'
+        // 容器应用了与页面主题一致的、更精致的背景色和内阴影
+        className='relative inline-flex bg-purple-500/10 rounded-full p-1 dark:bg-gray-800 backdrop-blur-sm shadow-inner'
       >
-        {/* 滑动的白色背景指示器 */}
+        {/* 滑动的渐变背景指示器 */}
         {indicatorStyle.width > 0 && (
           <div
-            className='absolute top-0.5 bottom-0.5 sm:top-1 sm:bottom-1 bg-white dark:bg-gray-500 rounded-full shadow-sm transition-all duration-300 ease-out'
+            // 滑动指示器现在是醒目的紫粉色渐变，完美融入主题
+            className='absolute top-1 bottom-1 bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 rounded-full shadow-lg transition-all duration-300 ease-out'
             style={{
               left: `${indicatorStyle.left}px`,
               width: `${indicatorStyle.width}px`,
@@ -131,9 +132,10 @@ const ShortDramaSelector = ({
                 buttonRefs.current[index] = el;
               }}
               onClick={() => onCategoryChange(category.type_id.toString())}
-              className={`relative z-10 px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap ${isActive
-                ? 'text-gray-900 dark:text-gray-100 cursor-default'
-                : 'text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer'
+              // 文本颜色和交互效果也已主题化
+              className={`relative z-10 px-4 py-1.5 text-sm font-medium rounded-full transition-colors duration-300 whitespace-nowrap ${isActive
+                ? 'text-white' // 激活状态文本为白色，以在渐变背景上清晰显示
+                : 'text-gray-700 hover:text-purple-600 dark:text-gray-300 dark:hover:text-purple-400'
                 }`}
             >
               {category.type_name}
@@ -144,19 +146,13 @@ const ShortDramaSelector = ({
     );
   };
 
+  // 移除外层 wrapper 和多余的标题，使其成为一个纯粹的选择器组件
   return (
-    <div className='space-y-4 sm:space-y-6'>
-      {/* 分类选择 */}
-      <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-        <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
-          分类
-        </span>
-        <div className='overflow-x-auto'>
-          {renderCapsuleSelector()}
-        </div>
-      </div>
+    <div className='overflow-x-auto pb-2 -mb-2'>
+      {renderThemedCapsuleSelector()}
     </div>
   );
 };
 
 export default ShortDramaSelector;
+
