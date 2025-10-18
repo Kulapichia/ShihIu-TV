@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db';
-import { getAuthInfoFromCookie } from '../../../../lib/auth';
+import { db } from '@/lib/db';
+import { getAuthInfoFromCookie } from '@/lib/auth';
+
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
