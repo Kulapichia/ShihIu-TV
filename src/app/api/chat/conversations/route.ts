@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db';
-import { Conversation } from '../../../../lib/types';
-import { getAuthInfoFromCookie } from '../../../../lib/auth';
+import { db } from '@/lib/db';
+import { Conversation } from '@/lib/types';
+import { getAuthInfoFromCookie } from '@/lib/auth';
+
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     const conversation: Conversation = {
       id: `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      name: name || participants.filter(p => p !== authInfo.username).join(', '),
+      name: name || participants.filter((p: string) => p !== authInfo.username).join(', '),
       participants,
       type: conversationType,
       created_at: Date.now(),
