@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: themeConfig,
     });
-  } catch (error)> {
+  } catch (error) {
     console.error('获取主题配置失败:', error);
     return NextResponse.json(
       { error: '获取主题配置失败' },
