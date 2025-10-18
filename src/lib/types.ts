@@ -162,6 +162,43 @@ export interface IStorage {
     loginTime: number,
     isFirstLogin?: boolean
   ): Promise<void>;
+
+  // --- 项目B功能接口 ---
+  // 用户头像
+  getUserAvatar(userName: string): Promise<string | null>;
+  setUserAvatar(userName: string, avatarBase64: string): Promise<void>;
+  deleteUserAvatar(userName: string): Promise<void>;
+
+  // 弹幕管理
+  getDanmu(videoId: string): Promise<any[]>;
+  saveDanmu(videoId: string, userName: string, danmu: any): Promise<void>;
+  deleteDanmu(videoId: string, danmuId: string): Promise<void>;
+
+  // 机器码管理
+  getUserMachineCode(userName: string): Promise<string | null>;
+  setUserMachineCode(userName: string, machineCode: string, deviceInfo?: string): Promise<void>;
+  deleteUserMachineCode(userName: string): Promise<void>;
+  getMachineCodeUsers(): Promise<Record<string, { machineCode: string; deviceInfo?: string; bindTime: number }>>;
+  isMachineCodeBound(machineCode: string): Promise<string | null>;
+
+  // 聊天功能
+  saveMessage(message: ChatMessage): Promise<void>;
+  getMessages(conversationId: string, limit?: number, offset?: number): Promise<ChatMessage[]>;
+  markMessageAsRead(messageId: string): Promise<void>;
+  getConversations(userName: string): Promise<Conversation[]>;
+  getConversation(conversationId: string): Promise<Conversation | null>;
+  createConversation(conversation: Conversation): Promise<void>;
+  updateConversation(conversationId: string, updates: Partial<Conversation>): Promise<void>;
+  deleteConversation(conversationId: string): Promise<void>;
+  getFriends(userName: string): Promise<Friend[]>;
+  addFriend(userName: string, friend: Friend): Promise<void>;
+  removeFriend(userName: string, friendId: string): Promise<void>;
+  updateFriendStatus(friendId: string, status: Friend['status']): Promise<void>;
+  getFriendRequests(userName: string): Promise<FriendRequest[]>;
+  createFriendRequest(request: FriendRequest): Promise<void>;
+  updateFriendRequest(requestId: string, status: FriendRequest['status']): Promise<void>;
+  deleteFriendRequest(requestId: string): Promise<void>;
+  searchUsers(query: string): Promise<Friend[]>;
 }
 
 // 搜索结果数据结构
@@ -174,6 +211,7 @@ export interface SearchResult {
   source: string;
   source_name: string;
   class?: string;
+  tag?: string; // 添加标签字段
   year: string;
   desc?: string;
   type_name?: string;
@@ -360,4 +398,56 @@ export interface PersonalizedReleaseRecommendation {
     matchedPreferences: string[]; // 匹配的用户偏好
   }>;
   generatedAt: number; // 生成时间戳
+}
+
+// --- 项目B类型定义 ---
+// 聊天消息数据结构
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  sender_name: string;
+  content: string;
+  message_type: 'text' | 'image' | 'file';
+  timestamp: number;
+  is_read: boolean;
+}
+
+// 对话数据结构
+export interface Conversation {
+  id: string;
+  name: string;
+  participants: string[];
+  type: 'private' | 'group';
+  created_at: number;
+  updated_at: number;
+  last_message?: ChatMessage;
+  is_group?: boolean;
+}
+
+// 好友数据结构
+export interface Friend {
+  id: string;
+  username: string;
+  nickname?: string;
+  status: 'online' | 'offline';
+  added_at: number;
+}
+
+// 好友申请数据结构
+export interface FriendRequest {
+  id: string;
+  from_user: string;
+  to_user: string;
+  message?: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: number;
+  updated_at: number;
+}
+
+// WebSocket 消息类型
+export interface WebSocketMessage {
+  type: 'message' | 'friend_request' | 'friend_accepted' | 'user_status' | 'online_users' | 'connection_confirmed' | 'user_connect' | 'ping' | 'pong';
+  data?: any;
+  timestamp: number;
 }
