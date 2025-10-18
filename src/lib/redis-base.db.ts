@@ -11,6 +11,10 @@ import {
   PlayRecord,
   PlayStatsResult,
   UserPlayStat,
+  ChatMessage,
+  Conversation,
+  Friend,
+  FriendRequest,
 } from './types';
 
 // 搜索历史最大条数
@@ -323,12 +327,19 @@ export abstract class BaseRedisStorage implements IStorage {
     keysToDelete.push(this.shKey(userName));
     // 删除用户登入统计
     keysToDelete.push(this.userStatsKey(userName));
-
+    // 删除头像和机器码
+    keysToDelete.push(this.avatarKey(userName));
+    keysToDelete.push(this.machineCodeKey(userName));
+    
     const patterns = [
       `u:${userName}:pr:*`,
       `u:${userName}:fav:*`,
       `u:${userName}:skip:*`,
       `u:${userName}:episodeskip:*`,
+      // 聊天相关数据
+      `u:${userName}:conversations`,
+      `u:${userName}:friends`,
+      `u:${userName}:friend_requests`,
     ];
 
     for (const pattern of patterns) {
@@ -1285,5 +1296,278 @@ export abstract class BaseRedisStorage implements IStorage {
       console.error(`更新用户 ${userName} 登入统计失败:`, error);
       throw error;
     }
+  }
+  // ---------- 用户头像 ----------
+  private avatarKey(userName: string) {
+    return `u:${userName}:avatar`;
+  }
+
+  async getUserAvatar(userName: string): Promise<string | null> {
+    const val = await this.withRetry(() => this.client.get(this.avatarKey(userName)));
+    return val ? ensureString(val) : null;
+  }
+
+  async setUserAvatar(userName: string, avatarBase64: string): Promise<void> {
+    await this.withRetry(() =>
+      this.client.set(this.avatarKey(userName), avatarBase64)
+    );
+  }
+
+  async deleteUserAvatar(userName: string): Promise<void> {
+    await this.withRetry(() =>
+      this.client.del(this.avatarKey(userName))
+    );
+  }
+
+  // ---------- 弹幕管理 ----------
+  private danmuKey(videoId: string) {
+    return `video:${videoId}:danmu`;
+  }
+
+  async getDanmu(videoId: string): Promise<any[]> {
+    const val = await this.withRetry(() => this.client.lRange(this.danmuKey(videoId), 0, -1));
+    return val ? val.map(item => JSON.parse(ensureString(item))) : [];
+  }
+
+  async saveDanmu(videoId: string, userName: string, danmu: {
+    text: string;
+    color: string;
+    mode: number;
+    time: number;
+    timestamp: number;
+  }): Promise<void> {
+    const danmuData = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      userName,
+      ...danmu
+    };
+    await this.withRetry(() =>
+      this.client.rPush(this.danmuKey(videoId), JSON.stringify(danmuData))
+    );
+  }
+
+  async deleteDanmu(videoId: string, danmuId: string): Promise<void> {
+    const danmuList = await this.getDanmu(videoId);
+    const filteredList = danmuList.filter(item => item.id !== danmuId);
+    await this.withRetry(() => this.client.del(this.danmuKey(videoId)));
+    if (filteredList.length > 0) {
+      const danmuStrings = filteredList.map(item => JSON.stringify(item));
+      await this.withRetry(() =>
+        this.client.rPush(this.danmuKey(videoId), danmuStrings)
+      );
+    }
+  }
+
+  // ---------- 机器码管理 ----------
+  private machineCodeKey(userName: string) {
+    return `u:${userName}:machine_code`;
+  }
+
+  private machineCodeListKey() {
+    return 'system:machine_codes';
+  }
+
+  async getUserMachineCode(userName: string): Promise<string | null> {
+    const val = await this.withRetry(() => this.client.get(this.machineCodeKey(userName)));
+    if (!val) return null;
+    try {
+      const data = JSON.parse(ensureString(val));
+      return data.machineCode || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async setUserMachineCode(userName: string, machineCode: string, deviceInfo?: string): Promise<void> {
+    const data = {
+      machineCode,
+      deviceInfo: deviceInfo || '',
+      bindTime: Date.now()
+    };
+    await this.withRetry(() =>
+      this.client.set(this.machineCodeKey(userName), JSON.stringify(data))
+    );
+    await this.withRetry(() =>
+      this.client.hSet(this.machineCodeListKey(), machineCode, userName)
+    );
+  }
+
+  async deleteUserMachineCode(userName: string): Promise<void> {
+    const userMachineCode = await this.getUserMachineCode(userName);
+    await this.withRetry(() =>
+      this.client.del(this.machineCodeKey(userName))
+    );
+    if (userMachineCode) {
+      await this.withRetry(() =>
+        this.client.hDel(this.machineCodeListKey(), userMachineCode)
+      );
+    }
+  }
+
+  async getMachineCodeUsers(): Promise<Record<string, { machineCode: string; deviceInfo?: string; bindTime: number }>> {
+    const result: Record<string, { machineCode: string; deviceInfo?: string; bindTime: number }> = {};
+    const pattern = 'u:*:machine_code';
+    for await (const key of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      const userName = key.replace('u:', '').replace(':machine_code', '');
+      const val = await this.withRetry(() => this.client.get(key));
+      if (val) {
+        try {
+          result[userName] = JSON.parse(ensureString(val));
+        } catch { /* 忽略解析错误 */ }
+      }
+    }
+    return result;
+  }
+
+  async isMachineCodeBound(machineCode: string): Promise<string | null> {
+    const val = await this.withRetry(() => this.client.hGet(this.machineCodeListKey(), machineCode));
+    return val ? ensureString(val) : null;
+  }
+
+  // ---------- 聊天功能 ----------
+  private messageKey(messageId: string) { return `msg:${messageId}`; }
+  private conversationKey(conversationId: string) { return `conv:${conversationId}`; }
+  private conversationMessagesKey(conversationId: string) { return `conv:${conversationId}:messages`; }
+  private userConversationsKey(userName: string) { return `u:${userName}:conversations`; }
+  private userFriendsKey(userName: string) { return `u:${userName}:friends`; }
+  private userFriendRequestsKey(userName: string) { return `u:${userName}:friend_requests`; }
+  private friendKey(friendId: string) { return `friend:${friendId}`; }
+  private friendRequestKey(requestId: string) { return `friend_req:${requestId}`; }
+
+  async saveMessage(message: ChatMessage): Promise<void> {
+    await this.withRetry(() => this.client.set(this.messageKey(message.id), JSON.stringify(message)));
+    await this.withRetry(() => this.client.zAdd(this.conversationMessagesKey(message.conversation_id), { score: message.timestamp, value: message.id }));
+  }
+
+  async getMessages(conversationId: string, limit = 50, offset = 0): Promise<ChatMessage[]> {
+    const messageIds = await this.withRetry(() => this.client.zRange(this.conversationMessagesKey(conversationId), offset, offset + limit - 1, { REV: true }));
+    if (messageIds.length === 0) return [];
+    const messagesData = await this.withRetry(() => this.client.mGet(messageIds.map(id => this.messageKey(id))));
+    const messages: ChatMessage[] = [];
+    messagesData.forEach(data => {
+      if(data) {
+        try {
+          messages.push(JSON.parse(ensureString(data)));
+        } catch (error) {
+          console.error('Error parsing message:', error);
+        }
+      }
+    });
+    return messages.reverse();
+  }
+
+  async markMessageAsRead(messageId: string): Promise<void> {
+    const messageData = await this.withRetry(() => this.client.get(this.messageKey(messageId)));
+    if (messageData) {
+      const message = JSON.parse(ensureString(messageData));
+      message.is_read = true;
+      await this.withRetry(() => this.client.set(this.messageKey(messageId), JSON.stringify(message)));
+    }
+  }
+
+  async getConversations(userName: string): Promise<Conversation[]> {
+    const conversationIds = await this.withRetry(() => this.client.sMembers(this.userConversationsKey(userName)));
+    if (conversationIds.length === 0) return [];
+    const conversationsData = await this.withRetry(() => this.client.mGet(conversationIds.map(id => this.conversationKey(id))));
+    const conversations = conversationsData.filter(Boolean).map(d => JSON.parse(ensureString(d)) as Conversation);
+    return conversations.sort((a, b) => b.updated_at - a.updated_at);
+  }
+
+  async getConversation(conversationId: string): Promise<Conversation | null> {
+    const data = await this.withRetry(() => this.client.get(this.conversationKey(conversationId)));
+    return data ? JSON.parse(ensureString(data)) as Conversation : null;
+  }
+
+  async createConversation(conversation: Conversation): Promise<void> {
+    await this.withRetry(() => this.client.set(this.conversationKey(conversation.id), JSON.stringify(conversation)));
+    for (const participant of conversation.participants) {
+      await this.withRetry(() => this.client.sAdd(this.userConversationsKey(participant), conversation.id));
+    }
+  }
+
+  async updateConversation(conversationId: string, updates: Partial<Conversation>): Promise<void> {
+    const conversation = await this.getConversation(conversationId);
+    if (conversation) {
+      Object.assign(conversation, updates);
+      await this.withRetry(() => this.client.set(this.conversationKey(conversationId), JSON.stringify(conversation)));
+    }
+  }
+
+  async deleteConversation(conversationId: string): Promise<void> {
+    const conversation = await this.getConversation(conversationId);
+    if (conversation) {
+      for (const participant of conversation.participants) {
+        await this.withRetry(() => this.client.sRem(this.userConversationsKey(participant), conversationId));
+      }
+      await this.withRetry(() => this.client.del(this.conversationKey(conversationId)));
+      await this.withRetry(() => this.client.del(this.conversationMessagesKey(conversationId)));
+    }
+  }
+
+  async getFriends(userName: string): Promise<Friend[]> {
+    const friendIds = await this.withRetry(() => this.client.sMembers(this.userFriendsKey(userName)));
+    if (friendIds.length === 0) return [];
+    const friendsData = await this.withRetry(() => this.client.mGet(friendIds.map(id => this.friendKey(id))));
+    const friends = friendsData.filter(Boolean).map(d => JSON.parse(ensureString(d)) as Friend);
+    return friends.sort((a, b) => b.added_at - a.added_at);
+  }
+
+  async addFriend(userName: string, friend: Friend): Promise<void> {
+    await this.withRetry(() => this.client.set(this.friendKey(friend.id), JSON.stringify(friend)));
+    await this.withRetry(() => this.client.sAdd(this.userFriendsKey(userName), friend.id));
+  }
+
+  async removeFriend(userName: string, friendId: string): Promise<void> {
+    await this.withRetry(() => this.client.sRem(this.userFriendsKey(userName), friendId));
+    await this.withRetry(() => this.client.del(this.friendKey(friendId)));
+  }
+
+  async updateFriendStatus(friendId: string, status: Friend['status']): Promise<void> {
+    const friendData = await this.withRetry(() => this.client.get(this.friendKey(friendId)));
+    if (friendData) {
+      const friend = JSON.parse(ensureString(friendData));
+      friend.status = status;
+      await this.withRetry(() => this.client.set(this.friendKey(friendId), JSON.stringify(friend)));
+    }
+  }
+
+  async getFriendRequests(userName: string): Promise<FriendRequest[]> {
+    const requestIds = await this.withRetry(() => this.client.sMembers(this.userFriendRequestsKey(userName)));
+    if (requestIds.length === 0) return [];
+    const requestsData = await this.withRetry(() => this.client.mGet(requestIds.map(id => this.friendRequestKey(id))));
+    const requests = requestsData.filter(Boolean).map(d => JSON.parse(ensureString(d)) as FriendRequest);
+    return requests.filter(req => req.to_user === userName || req.from_user === userName).sort((a, b) => b.created_at - a.created_at);
+  }
+
+  async createFriendRequest(request: FriendRequest): Promise<void> {
+    await this.withRetry(() => this.client.set(this.friendRequestKey(request.id), JSON.stringify(request)));
+    await this.withRetry(() => this.client.sAdd(this.userFriendRequestsKey(request.from_user), request.id));
+    await this.withRetry(() => this.client.sAdd(this.userFriendRequestsKey(request.to_user), request.id));
+  }
+
+  async updateFriendRequest(requestId: string, status: FriendRequest['status']): Promise<void> {
+    const requestData = await this.withRetry(() => this.client.get(this.friendRequestKey(requestId)));
+    if (requestData) {
+      const request = JSON.parse(ensureString(requestData));
+      request.status = status;
+      request.updated_at = Date.now();
+      await this.withRetry(() => this.client.set(this.friendRequestKey(requestId), JSON.stringify(request)));
+    }
+  }
+
+  async deleteFriendRequest(requestId: string): Promise<void> {
+    const requestData = await this.withRetry(() => this.client.get(this.friendRequestKey(requestId)));
+    if (requestData) {
+      const request = JSON.parse(ensureString(requestData));
+      await this.withRetry(() => this.client.sRem(this.userFriendRequestsKey(request.from_user), requestId));
+      await this.withRetry(() => this.client.sRem(this.userFriendRequestsKey(request.to_user), requestId));
+    }
+    await this.withRetry(() => this.client.del(this.friendRequestKey(requestId)));
+  }
+
+  async searchUsers(query: string): Promise<Friend[]> {
+    const allUsers = await this.getAllUsers();
+    const matchedUsers = allUsers.filter(username => username.toLowerCase().includes(query.toLowerCase()));
+    return matchedUsers.map(username => ({ id: username, username, status: 'offline' as const, added_at: 0, }));
   }
 }
