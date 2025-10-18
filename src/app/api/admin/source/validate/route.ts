@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const searchKeyword = searchParams.get('q');
+  const sourceKey = searchParams.get('source'); // 新增: 支持单个源验证
+  const tempApi = searchParams.get('tempApi'); // 新增: 临时 API 地址
+  const tempName = searchParams.get('tempName'); // 新增: 临时源名称
 
   if (!searchKeyword) {
     return new Response(
@@ -30,7 +33,34 @@ export async function GET(request: NextRequest) {
   }
 
   const config = await getConfig();
-  const apiSites = config.SourceConfig;
+  let apiSites = config.SourceConfig;
+
+  // 新增：如果提供了临时 API 地址，创建临时源进行验证
+  if (tempApi && tempName) {
+    apiSites = [{
+      key: 'temp',
+      name: tempName,
+      api: tempApi,
+      detail: '',
+      disabled: false,
+      from: 'custom' as const
+    }];
+  } else if (sourceKey) {
+    // 新增：如果指定了特定源，只验证该源
+    const targetSite = apiSites.find(site => site.key === sourceKey);
+    if (!targetSite) {
+      return new Response(
+        JSON.stringify({ error: '指定的视频源不存在' }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+    apiSites = [targetSite];
+  }
 
   // 共享状态
   let streamClosed = false;
@@ -97,6 +127,7 @@ export async function GET(request: NextRequest) {
 
             // 检查结果是否有效
             let status: 'valid' | 'no_results' | 'invalid';
+            let resultCount = 0;
             if (
               data &&
               data.list &&
@@ -111,6 +142,7 @@ export async function GET(request: NextRequest) {
 
               if (validResults.length > 0) {
                 status = 'valid';
+                resultCount = validResults.length;
               } else {
                 status = 'no_results';
               }
@@ -127,6 +159,7 @@ export async function GET(request: NextRequest) {
                 source: site.key,
                 status,
                 latency,
+                resultCount, // 合并结果数量
               })}\n\n`;
 
               if (!safeEnqueue(encoder.encode(sourceEvent))) {
@@ -151,6 +184,7 @@ export async function GET(request: NextRequest) {
               source: site.key,
               status: 'invalid',
               latency: -1,
+              resultCount: 0, // 错误时结果为0
             })}\n\n`;
 
             if (!safeEnqueue(encoder.encode(errorEvent))) {
