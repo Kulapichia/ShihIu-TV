@@ -30,7 +30,8 @@ function SearchPageClient() {
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   // 返回顶部按钮显示状态
   const [showBackToTop, setShowBackToTop] = useState(false);
-
+  // 滚动进度状态
+  const [scrollProgress, setScrollProgress] = useState(0);
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentQueryRef = useRef<string>('');
@@ -576,11 +577,44 @@ function SearchPageClient() {
     // 检查URL参数并处理初始搜索
     const initialQuery = searchParams.get('q');
     if (initialQuery) {
-      setSearchQuery(initialQuery);
-      setShowResults(true);
-      // 如果当前是网盘搜索模式，触发网盘搜索
-      if (searchType === 'netdisk') {
-        handleNetDiskSearch(initialQuery);
+      // 检查是否从播放页返回，如果是则尝试使用缓存
+      const fromPlayPage = sessionStorage.getItem('fromPlayPage');
+      const cachedQuery = sessionStorage.getItem('cachedSearchQuery');
+      const cachedResults = sessionStorage.getItem('cachedSearchResults');
+      const cachedState = sessionStorage.getItem('cachedSearchState');
+      const cachedFilters = sessionStorage.getItem('cachedSearchFilters');
+      const cachedViewMode = sessionStorage.getItem('cachedViewMode');
+
+      if (fromPlayPage === 'true' && cachedQuery === initialQuery.trim() && cachedResults && cachedState) {
+        console.log('使用缓存的搜索结果');
+        try {
+          const results = JSON.parse(cachedResults);
+          const state = JSON.parse(cachedState);
+          if (cachedFilters) {
+            const filters = JSON.parse(cachedFilters);
+            if (filters.filterAll) setFilterAll(filters.filterAll);
+            if (filters.filterAgg) setFilterAgg(filters.filterAgg);
+          }
+          if (cachedViewMode && ['agg', 'all'].includes(cachedViewMode)) {
+            setViewMode(cachedViewMode as 'agg' | 'all');
+          }
+          setSearchResults(results);
+          setTotalSources(state.totalSources || 0);
+          setCompletedSources(state.completedSources || 0);
+          setIsLoading(false);
+          setShowResults(true);
+          sessionStorage.removeItem('fromPlayPage');
+        } catch (error) {
+          console.error('恢复缓存的搜索结果失败:', error);
+          sessionStorage.clear(); // 清理损坏的缓存
+        }
+      } else {
+        setSearchQuery(initialQuery);
+        setShowResults(true);
+        // 如果当前是网盘搜索模式，触发网盘搜索
+        if (searchType === 'netdisk') {
+          handleNetDiskSearch(initialQuery);
+        }
       }
     }
 
@@ -632,6 +666,10 @@ function SearchPageClient() {
     const handleScroll = () => {
       const scrollTop = getScrollTop();
       setShowBackToTop(scrollTop > 300);
+      // 计算滚动进度
+      const documentHeight = document.body.scrollHeight - document.body.clientHeight;
+      const progress = documentHeight > 0 ? Math.min((scrollTop / documentHeight) * 100, 100) : 0;
+      setScrollProgress(progress);
     };
 
     document.body.addEventListener('scroll', handleScroll, { passive: true });
@@ -756,8 +794,41 @@ function SearchPageClient() {
                     flushTimerRef.current = null;
                   }
                   startTransition(() => {
-                    setSearchResults((prev) => prev.concat(toAppend));
+                    setSearchResults((prev) => {
+                      const newResults = prev.concat(toAppend);
+                      try {
+                        sessionStorage.setItem('cachedSearchQuery', trimmed);
+                        sessionStorage.setItem('cachedSearchResults', JSON.stringify(newResults));
+                        sessionStorage.setItem('cachedSearchState', JSON.stringify({
+                          totalSources: payload.completedSources || totalSources,
+                          completedSources: payload.completedSources || totalSources,
+                        }));
+                        sessionStorage.setItem('cachedSearchFilters', JSON.stringify({ filterAll, filterAgg }));
+                        sessionStorage.setItem('cachedViewMode', viewMode);
+                      } catch (error) {
+                        console.error('缓存搜索结果失败:', error);
+                      }
+                      return newResults;
+                    });
                   });
+                } else {
+                  setTimeout(() => {
+                    setSearchResults((prev) => {
+                      try {
+                        sessionStorage.setItem('cachedSearchQuery', trimmed);
+                        sessionStorage.setItem('cachedSearchResults', JSON.stringify(prev));
+                        sessionStorage.setItem('cachedSearchState', JSON.stringify({
+                          totalSources: payload.completedSources || totalSources,
+                          completedSources: payload.completedSources || totalSources,
+                        }));
+                        sessionStorage.setItem('cachedSearchFilters', JSON.stringify({ filterAll, filterAgg }));
+                        sessionStorage.setItem('cachedViewMode', viewMode);
+                      } catch (error) {
+                        console.error('缓存搜索结果失败:', error);
+                      }
+                      return prev;
+                    });
+                  }, 100);
                 }
                 setIsLoading(false);
                 try { es.close(); } catch { }
@@ -812,6 +883,18 @@ function SearchPageClient() {
               setSearchResults(results);
               setTotalSources(1);
               setCompletedSources(1);
+              try {
+                sessionStorage.setItem('cachedSearchQuery', trimmed);
+                sessionStorage.setItem('cachedSearchResults', JSON.stringify(results));
+                sessionStorage.setItem('cachedSearchState', JSON.stringify({
+                  totalSources: 1,
+                  completedSources: 1,
+                }));
+                sessionStorage.setItem('cachedSearchFilters', JSON.stringify({ filterAll, filterAgg }));
+                sessionStorage.setItem('cachedViewMode', viewMode);
+              } catch (error) {
+                console.error('缓存搜索结果失败:', error);
+              }
             }
           })
           .catch((err) => {
