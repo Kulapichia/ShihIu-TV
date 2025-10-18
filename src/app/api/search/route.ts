@@ -9,6 +9,7 @@ import { searchFromAll, searchFromApi } from '@/lib/downstream';
 import { decisionThresholds, moderateContent } from '@/lib/yellow';
 import { checkImageWithSightengine } from '@/lib/sightengine-client';
 import { checkImageWithBaidu } from '@/lib/baidu-client';
+import { API_CONFIG } from '@/lib/config';
 import { SearchResult } from '@/lib/types';
 
 // 短剧搜索函数
@@ -18,12 +19,9 @@ async function searchShortDrama(query: string, page = 1, limit = 20): Promise<an
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const response = await fetch(`https://api.r2afosne.dpdns.org/vod/search?name=${encodeURIComponent(query)}&page=${page}&limit=${limit}`, {
+    const response = await fetch(`${API_CONFIG.shortdrama.baseUrl}/vod/search?name=${encodeURIComponent(query)}&page=${page}&limit=${limit}`, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'SiffCITY/1.0',
-      },
+      headers: API_CONFIG.shortdrama.headers,
       signal: controller.signal,
     });
 
