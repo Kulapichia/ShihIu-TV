@@ -453,3 +453,62 @@ export async function parseShortDramaAll(
     };
   }
 }
+
+// 获取最新发布的短剧列表
+export async function getShortDramaLatest(
+  page = 1,
+  size = 20
+): Promise<{ list: ShortDramaItem[]; hasMore: boolean }> {
+  const cacheKey = getCacheKey('latest', { page, size });
+
+  try {
+    if (!isMobile()) {
+      const cached = await getCache(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+    
+    const apiUrl = isMobile()
+      ? `/api/shortdrama/latest?page=${page}&size=${size}`
+      : `${SHORTDRAMA_API_BASE}/vod/latest?page=${page}&size=${size}`;
+      
+    const fetchOptions: RequestInit = isMobile() ? {} : {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
+      mode: 'cors',
+    };
+
+    const response = await fetch(apiUrl, fetchOptions);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    let result: { list: ShortDramaItem[]; hasMore: boolean };
+    if (isMobile()) {
+      result = data;
+    } else {
+      const items = data.list || [];
+      const list = items.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        cover: item.cover,
+        update_time: item.update_time || new Date().toISOString(),
+        score: item.score || 0,
+        episode_count: 1,
+        description: item.description || '',
+      }));
+      result = { list, hasMore: data.currentPage < data.totalPages };
+    }
+
+    await setCache(cacheKey, result, SHORTDRAMA_CACHE_EXPIRE.lists);
+    return result;
+  } catch (error) {
+    console.error('获取最新短剧失败:', error);
+    return { list: [], hasMore: false };
+  }
+}
