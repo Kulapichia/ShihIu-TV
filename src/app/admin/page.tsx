@@ -2496,6 +2496,22 @@ const VideoSourceConfig = ({
     from: 'config',
   });
 
+  const [editingSource, setEditingSource] = useState<DataSource | null>(null);
+  const [isSingleValidating, setIsSingleValidating] = useState(false);
+  const [singleValidationResult, setSingleValidationResult] = useState<{
+    status: string | null;
+    message: string;
+    details?: any;
+  }>({ status: null, message: '' });
+
+  // 新增视频源的有效性检测状态
+  const [isNewSourceValidating, setIsNewSourceValidating] = useState(false);
+  const [newSourceValidationResult, setNewSourceValidationResult] = useState<{
+    status: string | null;
+    message: string;
+    details?: any;
+  }>({ status: null, message: '' });
+  
   // 批量操作相关状态
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
    
@@ -2667,6 +2683,49 @@ const VideoSourceConfig = ({
     }).catch(() => {
       console.error('操作失败', 'add', newSource);
     });
+  };
+
+  // 验证单个视频源的通用函数
+  const handleValidateSingleSource = async (
+    sourceToValidate: Pick<DataSource, 'api' | 'detail'>,
+    setValidating: (isValidating: boolean) => void,
+    setResult: (result: any) => void
+  ) => {
+    if (!sourceToValidate.api) {
+      showAlert({ type: 'warning', title: '请输入API地址' });
+      return;
+    }
+
+    setValidating(true);
+    setResult({ status: 'validating', message: '检测中...' });
+
+    try {
+      const response = await fetch('/api/admin/source/validate-single', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api: sourceToValidate.api,
+          detail: sourceToValidate.detail,
+          q: searchKeyword,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || '检测失败');
+      }
+      setResult(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '未知错误';
+      setResult({ status: 'invalid', message });
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  // 验证新视频源
+  const handleValidateNewSource = () => {
+    handleValidateSingleSource(newSource, setIsNewSourceValidating, setNewSourceValidationResult);
   };
   
   const handleEditSource = () => {
@@ -7465,6 +7524,8 @@ function AdminPageClient() {
                 config={config}
                 role={role}
                 refreshConfig={fetchConfig}
+                machineCodeUsers={machineCodeUsers}
+                fetchMachineCodeUsers={fetchMachineCodeUsers}
               />
             </CollapsibleTab>
 
