@@ -46,15 +46,15 @@ export const MessageBubble = React.memo(function MessageBubble({
           )}
 
           {/* 消息气泡 */}
-          <div className={`relative px-5 py-3 rounded-2xl shadow-lg ... ${isOwnMessage ? '...' : '...'}`}>
+          <div className={`relative px-5 py-3 rounded-2xl shadow-lg ${isOwnMessage ? '' : ''}`}>
             {message.message_type === 'image' ? (
                 // ... Image Message JSX ...
-                <img src={message.content} ... />
+                <img src={message.content} alt="image content" className="max-w-full h-auto rounded-lg" />
             ) : (
-                <div className="text-sm ...">{message.content}</div>
+                <div className="text-sm">{message.content}</div>
             )}
             {/* 消息气泡装饰尾巴 */}
-            <div className={`absolute bottom-2 w-3 h-3 ...`}></div>
+            <div className={`absolute bottom-2 w-3 h-3`}></div>
           </div>
 
           {/* 时间戳 */}
