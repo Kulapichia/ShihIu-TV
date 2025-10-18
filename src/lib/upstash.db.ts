@@ -1000,7 +1000,6 @@ export class UpstashRedisStorage implements IStorage {
       throw error;
     }
   }
-}
 
   // ---------- 用户头像 ----------
   private avatarKey(userName: string) {
