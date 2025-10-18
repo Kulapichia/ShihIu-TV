@@ -2,11 +2,72 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getCacheTime } from '@/lib/config';
-import { parseShortDramaEpisode } from '@/lib/shortdrama.client';
+// 1. 修改导入：移除客户端函数，引入 API_CONFIG
+import { getCacheTime, API_CONFIG } from '@/lib/config';
 
 // 标记为动态路由
 export const dynamic = 'force-dynamic';
+
+/**
+ * [服务端专用] 直接请求外部API获取短剧单集详情
+ * 这个函数取代了之前对客户端 `parseShortDramaEpisode` 的不当调用。
+ * 它返回与原函数相同的数据结构，以确保无缝替换。
+ */
+async function getShortDramaDetailInternal(videoId: number, episodeNum: number, useProxy: boolean): Promise<any> {
+  const controller = new AbortController();
+  // 设置一个合理的超时时间，例如 8 秒
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const apiUrl = new URL(`${API_CONFIG.shortdrama.baseUrl}/vod/parse/single`);
+    apiUrl.searchParams.set('id', videoId.toString());
+    apiUrl.searchParams.set('episode', episodeNum.toString());
+    if (useProxy) {
+      apiUrl.searchParams.set('proxy', 'true');
+    }
+
+    const response = await fetch(apiUrl.toString(), {
+      method: 'GET',
+      headers: API_CONFIG.shortdrama.headers,
+      signal: controller.signal, // 应用超时控制
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      // 模拟网络或HTTP错误时的返回结构
+      return { code: -1, msg: `HTTP error! status: ${response.status}` };
+    }
+
+    const data = await response.json();
+
+    // 外部API本身可能返回错误码
+    if (data.code === 1) {
+      return { code: data.code, msg: data.msg || 'API解析失败' };
+    }
+
+    // 成功时，包装成与原 `parseShortDramaEpisode` 一致的 { code: 0, data: {...} } 结构
+    return {
+      code: 0,
+      data: {
+        videoId: data.videoId || videoId,
+        videoName: data.videoName || '',
+        currentEpisode: data.episode?.index || episodeNum,
+        totalEpisodes: data.totalEpisodes || 1,
+        parsedUrl: data.episode?.parsedUrl || data.parsedUrl || '',
+        proxyUrl: data.episode?.proxyUrl || '',
+        cover: data.cover || '',
+        description: data.description || '',
+        episode: data.episode || null,
+      },
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error(`[Internal Fetch Error] ID: ${videoId}, Episode: ${episodeNum}`, error);
+    // 捕获fetch本身的异常（如超时）
+    return { code: -1, msg: '服务器请求外部API失败' };
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,17 +92,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // 2. 将原来的 `parseShortDramaEpisode` 调用替换为新的内部函数
     // 先尝试指定集数
-    let result = await parseShortDramaEpisode(videoId, episodeNum, true);
+    let result = await getShortDramaDetailInternal(videoId, episodeNum, true);
 
     // 如果失败，尝试其他集数
     if (result.code !== 0 || !result.data || !result.data.totalEpisodes) {
-      result = await parseShortDramaEpisode(videoId, episodeNum === 1 ? 2 : 1, true);
+      result = await getShortDramaDetailInternal(videoId, episodeNum === 1 ? 2 : 1, true);
     }
 
     // 如果还是失败，尝试第0集
     if (result.code !== 0 || !result.data || !result.data.totalEpisodes) {
-      result = await parseShortDramaEpisode(videoId, 0, true);
+      result = await getShortDramaDetailInternal(videoId, 0, true);
     }
 
     if (result.code !== 0 || !result.data) {
