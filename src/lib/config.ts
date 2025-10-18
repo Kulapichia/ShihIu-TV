@@ -80,16 +80,29 @@ export function refineConfig(adminConfig: AdminConfig): AdminConfig {
   const currentApiSites = new Map(
     (adminConfig.SourceConfig || []).map((s) => [s.key, s])
   );
+  
+  // 用于跟踪已存在的API地址，避免重复
+  const existingApiUrls = new Set(
+    Array.from(currentApiSites.values()).map(s => s.api.toLowerCase().trim())
+  );
 
   apiSitesFromFile.forEach(([key, site]) => {
     const existingSource = currentApiSites.get(key);
+    const normalizedApiUrl = site.api.toLowerCase().trim();
     if (existingSource) {
       // 如果已存在，只覆盖 name、api、detail 和 from
       existingSource.name = site.name;
       existingSource.api = site.api;
       existingSource.detail = site.detail;
       existingSource.from = 'config';
+      // 更新API地址记录
+      existingApiUrls.add(normalizedApiUrl);
     } else {
+      // 检查API地址是否已存在
+      if (existingApiUrls.has(normalizedApiUrl)) {
+        console.warn(`跳过重复的API地址: ${site.api} (key: ${key})`);
+        return; // 跳过重复的API地址
+      }
       // 如果不存在，创建新条目
       currentApiSites.set(key, {
         key,
@@ -99,6 +112,7 @@ export function refineConfig(adminConfig: AdminConfig): AdminConfig {
         from: 'config',
         disabled: false,
       });
+      existingApiUrls.add(normalizedApiUrl);
     }
   });
 
@@ -228,6 +242,8 @@ async function getInitConfig(configFile: string, subConfig: {
         process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true',
       FluidSearch:
         process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false',
+      RequireDeviceCode:
+        process.env.NEXT_PUBLIC_REQUIRE_DEVICE_CODE !== 'false',
       // TMDB配置默认值
       TMDBApiKey: process.env.TMDB_API_KEY || '',
       TMDBLanguage: 'zh-CN',
@@ -422,6 +438,12 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   if (adminConfig.SiteConfig.EnableVirtualScroll === undefined) {
     adminConfig.SiteConfig.EnableVirtualScroll = true;
   }
+
+  // 确保 RequireDeviceCode 属性存在
+  if (adminConfig.SiteConfig.RequireDeviceCode === undefined) {
+    adminConfig.SiteConfig.RequireDeviceCode = process.env.NEXT_PUBLIC_REQUIRE_DEVICE_CODE !== 'false';
+  }
+
   // 确保 OAuth 配置存在
   if (!adminConfig.SiteConfig.LinuxDoOAuth) {
     adminConfig.SiteConfig.LinuxDoOAuth = {
