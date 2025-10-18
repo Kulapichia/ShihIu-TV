@@ -40,12 +40,14 @@ import {
   Sheet,
   Tv,
   Upload,
+  User,
   UserCheck,
   Users,
   Video,
 } from 'lucide-react';
-import { GripVertical } from 'lucide-react';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { GripVertical, Palette } from 'lucide-react';
+import Image from 'next/image';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { buttonStyles, AlertModal, useAlertModal, useLoadingState, showError, showSuccess } from '@/hooks/useAdminComponents';
 import {
@@ -66,7 +68,7 @@ import TVBoxSecurityConfig from '@/components/TVBoxSecurityConfig';
 import { TVBoxTokenCell, TVBoxTokenModal } from '@/components/TVBoxTokenManager';
 import YouTubeConfig from '@/components/YouTubeConfig';
 import PageLayout from '@/components/PageLayout';
-
+import ThemeManager from '@/components/ThemeManager';
 
 // 视频源数据类型
 interface DataSource {
@@ -138,14 +140,243 @@ const CollapsibleTab = ({
   );
 };
 
+// 获取用户头像的函数
+const getUserAvatar = async (username: string): Promise<string | null> => {
+  try {
+    const response = await fetch(`/api/avatar?user=${encodeURIComponent(username)}`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.avatar || null;
+    }
+  } catch (error) {
+    console.error('获取头像失败:', error);
+  }
+  return null;
+};
+
+// 用户头像组件
+interface UserAvatarProps {
+  username: string;
+  size?: 'sm' | 'md' | 'lg';
+}
+
+const UserAvatar = ({ username, size = 'sm' }: UserAvatarProps) => {
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAvatar = async () => {
+      setLoading(true);
+      const avatar = await getUserAvatar(username);
+      setAvatarUrl(avatar);
+      setLoading(false);
+    };
+
+    fetchAvatar();
+  }, [username]);
+
+  const sizeClasses = {
+    sm: 'w-8 h-8',
+    md: 'w-10 h-10',
+    lg: 'w-12 h-12'
+  };
+
+  const iconSizeClasses = {
+    sm: 'w-4 h-4',
+    md: 'w-5 h-5',
+    lg: 'w-6 h-6'
+  };
+
+  return (
+    <div className={`${sizeClasses[size]} rounded-full overflow-hidden relative flex-shrink-0`}>
+      {loading ? (
+        <div className='w-full h-full bg-gray-100 dark:bg-gray-800 animate-pulse' />
+      ) : avatarUrl ? (
+        <Image
+          src={avatarUrl}
+          alt={`${username} 的头像`}
+          fill
+          sizes={size === 'sm' ? '32px' : size === 'md' ? '40px' : '48px'}
+          className='object-cover'
+        />
+      ) : (
+        <div className='w-full h-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center'>
+          <User className={`${iconSizeClasses[size]} text-blue-500 dark:text-blue-400`} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 机器码单元格组件
+interface MachineCodeCellProps {
+  username: string;
+  canManage: boolean;
+  machineCodeData: Record<string, { machineCode: string; deviceInfo?: string; bindTime: number }>;
+  onRefresh: () => void;
+  showAlert: (config: any) => void;
+}
+
+const MachineCodeCell = ({ username, canManage, machineCodeData, onRefresh, showAlert }: MachineCodeCellProps) => {
+  const [unbinding, setUnbinding] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<'top' | 'bottom'>('bottom');
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const codeRef = useRef<HTMLElement>(null);
+
+  const machineCodeInfo = machineCodeData[username] || null;
+
+  // 智能定位逻辑
+  const handleMouseEnter = useCallback(() => {
+    if (!codeRef.current) return;
+
+    const element = codeRef.current;
+    const rect = element.getBoundingClientRect();
+    const tableContainer = element.closest('[data-table="user-list"]');
+
+    if (tableContainer) {
+      const containerRect = tableContainer.getBoundingClientRect();
+      const elementCenterY = rect.top + rect.height / 2;
+      const containerCenterY = containerRect.top + containerRect.height / 2;
+
+      // 如果元素在容器上半部分，悬浮框向下显示；否则向上显示
+      if (elementCenterY < containerCenterY) {
+        setTooltipPosition('bottom');
+      } else {
+        setTooltipPosition('top');
+      }
+    } else {
+      // 后备方案：根据视口位置决定
+      const viewportHeight = window.innerHeight;
+      if (rect.top < viewportHeight / 2) {
+        setTooltipPosition('bottom');
+      } else {
+        setTooltipPosition('top');
+      }
+    }
+  }, []);
+
+  // 解绑机器码
+  const handleUnbind = async () => {
+    if (!machineCodeInfo || !canManage) return;
+
+    try {
+      setUnbinding(true);
+      const response = await fetch('/api/machine-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'unbind',
+          targetUser: username,
+        }),
+      });
+
+      if (response.ok) {
+        showSuccess('机器码解绑成功', showAlert);
+        onRefresh(); // 刷新数据
+      } else {
+        const error = await response.json();
+        showError(`解绑失败: ${error.error || '未知错误'}`, showAlert);
+      }
+    } catch (error) {
+      console.error('解绑机器码失败:', error);
+      showError('解绑失败，请重试', showAlert);
+    } finally {
+      setUnbinding(false);
+    }
+  };
+
+  const formatMachineCode = (code: string) => {
+    if (code.length !== 32) return code;
+    return code.match(/.{1,4}/g)?.join('-') || code;
+  };
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+
+  if (!machineCodeInfo) {
+    return (
+      <div className="flex items-center space-x-2">
+        <span className="text-sm text-gray-500 dark:text-gray-400">未绑定</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col space-y-1">
+      <div className="flex items-center space-x-2">
+        <div className="group relative" onMouseEnter={handleMouseEnter}>
+          <code
+            ref={codeRef}
+            className="text-xs font-mono text-gray-700 dark:text-gray-300 cursor-help"
+          >
+            {formatMachineCode(machineCodeInfo.machineCode).substring(0, 12)}...
+          </code>
+          {/* 悬停显示完整机器码 - 智能定位 */}
+          <div
+            ref={tooltipRef}
+            className={`absolute left-0 px-3 py-2 bg-gray-800 text-white text-xs rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap pointer-events-none z-50 ${tooltipPosition === 'bottom'
+              ? 'top-full mt-2'
+              : 'bottom-full mb-2'
+              }`}
+          >
+            <div className="font-mono">
+              {formatMachineCode(machineCodeInfo.machineCode)}
+            </div>
+            {machineCodeInfo.deviceInfo && (
+              <div className="mt-1 text-gray-300">
+                {machineCodeInfo.deviceInfo}
+              </div>
+            )}
+            <div className="mt-1 text-gray-400">
+              绑定时间: {formatDate(machineCodeInfo.bindTime)}
+            </div>
+            {/* 箭头 - 根据位置动态调整 */}
+            <div className={`absolute left-4 w-0 h-0 border-l-4 border-r-4 border-transparent ${tooltipPosition === 'bottom'
+              ? 'bottom-full border-b-4 border-b-gray-800'
+              : 'top-full border-t-4 border-t-gray-800'
+              }`}></div>
+          </div>
+        </div>
+        {canManage && (
+          <button
+            onClick={handleUnbind}
+            disabled={unbinding}
+            className={`${buttonStyles.roundedDanger} ${unbinding ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title="解绑机器码"
+          >
+            {unbinding ? '解绑中...' : '解绑'}
+          </button>
+        )}
+      </div>
+      <div className="flex items-center space-x-1">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300">
+          已绑定
+        </span>
+      </div>
+    </div>
+  );
+};
+
 // 用户配置组件
 interface UserConfigProps {
   config: AdminConfig | null;
   role: 'owner' | 'admin' | null;
   refreshConfig: () => Promise<void>;
+  machineCodeUsers: Record<string, { machineCode: string; deviceInfo?: string; bindTime: number }>;
+  fetchMachineCodeUsers: () => Promise<void>;
 }
 
-const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
+const UserConfig = ({ config, role, refreshConfig, machineCodeUsers, fetchMachineCodeUsers }: UserConfigProps) => {
   const { alertModal, showAlert, hideAlert } = useAlertModal();
   const { isLoading, withLoading } = useLoadingState();
   const [showAddUserForm, setShowAddUserForm] = useState(false);
@@ -1103,6 +1334,12 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                 </th>
                 <th
                   scope='col'
+                  className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'
+                >
+                  机器码
+                </th>
+                <th
+                  scope='col'
                   className='px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'
                 >
                   操作
@@ -1165,7 +1402,10 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                           )}
                         </td>
                         <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100'>
-                          {user.username}
+                          <div className='flex items-center gap-3'>
+                            <UserAvatar username={user.username} size="sm" />
+                            <span>{user.username}</span>
+                          </div>
                         </td>
                         <td className='px-6 py-4 whitespace-nowrap'>
                           <span
@@ -1260,6 +1500,15 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                 </button>
                               )}
                           </div>
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap'>
+                          <MachineCodeCell
+                            username={user.username}
+                            canManage={canOperate}
+                            machineCodeData={machineCodeUsers}
+                            onRefresh={fetchMachineCodeUsers}
+                            showAlert={showAlert}
+                          />
                         </td>
                         <td className='px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2'>
                           {/* 修改密码按钮 */}
@@ -2413,11 +2662,42 @@ const VideoSourceConfig = ({
         from: 'custom',
       });
       setShowAddForm(false);
+      // 清除检测结果
+      clearNewSourceValidation();
     }).catch(() => {
       console.error('操作失败', 'add', newSource);
     });
   };
+  
+  const handleEditSource = () => {
+    if (!editingSource || !editingSource.name || !editingSource.api) return;
+    withLoading('editSource', async () => {
+      await callSourceApi({
+        action: 'edit',
+        key: editingSource.key,
+        name: editingSource.name,
+        api: editingSource.api,
+        detail: editingSource.detail,
+      });
+      setEditingSource(null);
+    }).catch(() => {
+      console.error('操作失败', 'edit', editingSource);
+    });
+  };
 
+  const handleCancelEdit = () => {
+    setEditingSource(null);
+    // 清除单个源的检测结果
+    setSingleValidationResult({ status: null, message: '' });
+    setIsSingleValidating(false);
+  };
+
+  // 清除新增视频源检测结果
+  const clearNewSourceValidation = () => {
+    setNewSourceValidationResult({ status: null, message: '' });
+    setIsNewSourceValidating(false);
+  };
+  
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -2721,6 +3001,19 @@ const VideoSourceConfig = ({
               } transition-colors ${isLoading(`toggleSource_${source.key}`) ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {!source.disabled ? '禁用' : '启用'}
+          </button>
+          <button
+            onClick={() => {
+              setEditingSource(source);
+              // 清除之前的检测结果
+              setSingleValidationResult({ status: null, message: '' });
+              setIsSingleValidating(false);
+            }}
+            disabled={isLoading(`editSource_${source.key}`)}
+            className={`${buttonStyles.roundedPrimary} ${isLoading(`editSource_${source.key}`) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title='编辑此视频源'
+          >
+            编辑
           </button>
           {source.from !== 'config' && (
             <button
@@ -3134,7 +3427,58 @@ const VideoSourceConfig = ({
               className='px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
             />
           </div>
-          <div className='flex justify-end'>
+          
+          {/* 新增视频源有效性检测结果显示 */}
+          {newSourceValidationResult.status && (
+            <div className='p-3 rounded-lg border'>
+              <div className='space-y-2'>
+                <div className='flex items-center space-x-2'>
+                  <span className='text-sm font-medium text-gray-700 dark:text-gray-300'>检测结果:</span>
+                  <span
+                    className={`px-2 py-1 text-xs rounded-full ${newSourceValidationResult.status === 'valid'
+                      ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300'
+                      : newSourceValidationResult.status === 'validating'
+                        ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300'
+                        : newSourceValidationResult.status === 'no_results'
+                          ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
+                          : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'
+                      }`}
+                  >
+                    {newSourceValidationResult.status === 'valid' && '✓ '}
+                    {newSourceValidationResult.status === 'validating' && '⏳ '}
+                    {newSourceValidationResult.status === 'no_results' && '⚠️ '}
+                    {newSourceValidationResult.status === 'invalid' && '✗ '}
+                    {newSourceValidationResult.message}
+                  </span>
+                </div>
+                {newSourceValidationResult.details && (
+                  <div className='text-xs text-gray-600 dark:text-gray-400 space-y-1'>
+                    {newSourceValidationResult.details.searchKeyword && (
+                      <div>测试关键词: {newSourceValidationResult.details.searchKeyword}</div>
+                    )}
+                    {newSourceValidationResult.details.responseTime && (
+                      <div>响应时间: {newSourceValidationResult.details.responseTime}ms</div>
+                    )}
+                    {newSourceValidationResult.details.resultCount !== undefined && (
+                      <div>搜索结果数: {newSourceValidationResult.details.resultCount}</div>
+                    )}
+                    {newSourceValidationResult.details.error && (
+                      <div className='text-red-600 dark:text-red-400'>错误信息: {newSourceValidationResult.details.error}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className='flex justify-end space-x-2'>
+            <button
+              onClick={handleValidateNewSource}
+              disabled={!newSource.api || isNewSourceValidating || isLoading('validateNewSource')}
+              className={`px-4 py-2 ${!newSource.api || isNewSourceValidating || isLoading('validateNewSource') ? buttonStyles.disabled : buttonStyles.primary}`}
+            >
+              {isNewSourceValidating || isLoading('validateNewSource') ? '检测中...' : '有效性检测'}
+            </button>
             <button
               onClick={handleAddSource}
               disabled={!newSource.name || !newSource.key || !newSource.api || isLoading('addSource')}
@@ -3954,6 +4298,7 @@ const SiteConfigComponent = ({
     DoubanImageProxy: '',
     DisableYellowFilter: false,
     FluidSearch: true,
+    RequireDeviceCode: true,
     // TMDB配置默认值
     TMDBApiKey: '',
     TMDBLanguage: 'zh-CN',
@@ -4699,6 +5044,40 @@ const SiteConfigComponent = ({
           在搜索结果页面显示“全部/常规/探索内容”的筛选切换按钮。
         </p>
       </div>
+
+       {/* 启用设备码验证 */}
+      <div>
+        <div className='flex items-center justify-between'>
+          <label
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            启用设备码验证
+          </label>
+          <button
+            type='button'
+            onClick={() =>
+              setSiteSettings((prev: SiteConfig) => ({
+                ...prev,
+                RequireDeviceCode: !prev.RequireDeviceCode,
+              }))
+            }
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${siteSettings.RequireDeviceCode
+              ? buttonStyles.toggleOn
+              : buttonStyles.toggleOff
+              }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full ${buttonStyles.toggleThumb} transition-transform ${siteSettings.RequireDeviceCode
+                ? buttonStyles.toggleThumbOn
+                : buttonStyles.toggleThumbOff
+                }`}
+            />
+          </button>
+        </div>
+        <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+          启用后用户登录时需要绑定设备码，提升账户安全性。禁用后用户可以直接登录而无需绑定设备码。
+        </p>
+      </div>     
 
       {/* 新增：智能内容审核配置 */}
       <div className='border-t border-gray-200 dark:border-gray-700 pt-6 mt-6'>
@@ -6860,8 +7239,25 @@ function AdminPageClient() {
     registrationConfig: false,
     oauthConfig: false,
     telegramConfig: false,
+    themeManager: false,
   });
+  
+  // 机器码管理状态
+  const [machineCodeUsers, setMachineCodeUsers] = useState<Record<string, { machineCode: string; deviceInfo?: string; bindTime: number }>>({});
 
+  // 获取机器码用户列表
+  const fetchMachineCodeUsers = useCallback(async () => {
+    try {
+      const response = await fetch('/api/machine-code?action=list');
+      if (response.ok) {
+        const data = await response.json();
+        setMachineCodeUsers(data.users || {});
+      }
+    } catch (error) {
+      console.error('获取机器码用户列表失败:', error);
+    }
+  }, []);
+  
   // 获取管理员配置
   // showLoading 用于控制是否在请求期间显示整体加载骨架。
   const fetchConfig = useCallback(async (showLoading = false) => {
@@ -7224,6 +7620,20 @@ function AdminPageClient() {
                 <DataMigration onRefreshConfig={fetchConfig} />
               </CollapsibleTab>
             )}
+          {/* 主题定制标签 */}
+          <CollapsibleTab
+            title='主题定制'
+            icon={
+              <Palette
+                size={20}
+                className='text-gray-600 dark:text-gray-400'
+              />
+            }
+            isExpanded={expandedTabs.themeManager}
+            onToggle={() => toggleTab('themeManager')}
+          >
+            <ThemeManager showAlert={showAlert} role={role} />
+          </CollapsibleTab>
           </div>
         </div>
       </div>
