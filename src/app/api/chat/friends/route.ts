@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db';
-import { Friend } from '../../../../lib/types';
-import { getAuthInfoFromCookie } from '../../../../lib/auth';
+import { db } from '@/lib/db';
+import { Friend } from '@/lib/types';
+import { getAuthInfoFromCookie } from '@/lib/auth';
+
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // 检查是否已经是好友
     const friends = await db.getFriends(authInfo.username);
-    const isAlreadyFriend = friends.some(friend => friend.username === username);
+    const isAlreadyFriend = friends.some((friend: Friend) => friend.username === username);
     if (isAlreadyFriend) {
       return NextResponse.json({ error: '已经是好友' }, { status: 400 });
     }
