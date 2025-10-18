@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 数据库 / redis 模式——校验用户名并尝试连接数据库
-    const { username, password } = await req.json();
+    const { username, password, machineCode } = await req.json();
 
     if (!username || typeof username !== 'string') {
       return NextResponse.json({ error: '用户名不能为空' }, { status: 400 });
@@ -207,9 +207,42 @@ export async function POST(req: NextRequest) {
           { status: 401 }
         );
       }
+      
+      // 检查机器码绑定
+      const boundMachineCode = await db.getUserMachineCode(username);
 
+      if (boundMachineCode) {
+        // 用户已绑定机器码，需要验证
+        if (!machineCode) {
+          return NextResponse.json({
+            error: '该账户已绑定设备，请提供机器码',
+            requireMachineCode: true
+          }, { status: 403 });
+        }
+
+        if (machineCode.toUpperCase() !== boundMachineCode.toUpperCase()) {
+          return NextResponse.json({
+            error: '机器码不匹配，此账户只能在绑定的设备上使用',
+            machineCodeMismatch: true
+          }, { status: 403 });
+        }
+      } else if (machineCode) {
+        // 用户未绑定机器码，但提供了机器码，检查是否被其他用户绑定
+        const codeOwner = await db.isMachineCodeBound(machineCode);
+        if (codeOwner && codeOwner !== username) {
+          return NextResponse.json({
+            error: `该机器码已被用户 ${codeOwner} 绑定`,
+            machineCodeTaken: true
+          }, { status: 409 });
+        }
+      }
+      
       // 验证成功，设置认证cookie
-      const response = NextResponse.json({ ok: true });
+      const response = NextResponse.json({
+        ok: true,
+        machineCodeBound: !!boundMachineCode,
+        username: username
+      });
       const cookieValue = await generateAuthCookie(
         username,
         password,
