@@ -192,16 +192,12 @@ export async function GET(request: NextRequest) {
   
         // --- 全新的健壮并发控制器 ---
         let completedSources = 0;
-        const totalSources = apiSites.length;
+        const totalSources = apiSites.length + 1; 
         const allResults: any[] = [];
         const concurrency = 8;
         
         // 创建一个任务队列的副本，以便安全地从中取任务
         const taskQueue = [...apiSites];
-         let completedSources = 0;
-        const totalSources = apiSites.length + 1;
-        const allResults: any[] = [];
-        const concurrency = 8; 
         const runWorker = async (workerId: number) => {
           // 每个 "工人" 持续从队列中取任务，直到队列为空
           while (taskQueue.length > 0) {
