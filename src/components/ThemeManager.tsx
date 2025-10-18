@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, Lg, useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Palette, Eye, Check } from 'lucide-react';
+// 统一按钮风格
+import { buttonStyles } from '@/hooks/useAdminComponents';
 
 // CSS模板配置
 const cssTemplates = [
@@ -133,9 +135,9 @@ body::before {
     preview: '.glass-effect {\n  backdrop-filter: blur(20px);\n  background: rgba(255, 255, 255, 0.1);\n}',
     css: `/* 毛玻璃主题 */
 body {
-  background: linear-gradient(45deg, 
-    rgba(59, 130, 246, 0.1) 0%, 
-    rgba(147, 51, 234, 0.1) 50%, 
+  background: linear-gradient(45deg,
+    rgba(59, 130, 246, 0.1) 0%,
+    rgba(147, 51, 234, 0.1) 50%,
     rgba(236, 72, 153, 0.1) 100%);
 }
 
@@ -259,21 +261,26 @@ const themes = [
   }
 ];
 
+// 统一使用Props定义
 interface ThemeManagerProps {
   showAlert: (config: any) => void;
   role?: 'user' | 'admin' | 'owner' | null;
 }
+
+// 扩展全局配置类型，加入项目A的 allowUserCustomization 字段
+type GlobalThemeConfig = {
+  defaultTheme: string;
+  customCSS: string;
+  allowUserCustomization: boolean;
+};
 
 const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
   const [currentTheme, setCurrentTheme] = useState('default');
   const [customCSS, setCustomCSS] = useState('');
   const [previewMode, setPreviewMode] = useState(false);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
-  const [globalThemeConfig, setGlobalThemeConfig] = useState<{
-    defaultTheme: string;
-    customCSS: string;
-    allowUserCustomization: boolean;
-  } | null>(null);
+  const [globalThemeConfig, setGlobalThemeConfig] = useState<GlobalThemeConfig | null>(null);
+  const [isSaving, setIsSaving] = useState(false); // 新增状态，用于处理保存时的UI反馈
 
   const isAdmin = role === 'admin' || role === 'owner';
 
@@ -292,24 +299,32 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
   };
 
   // 从API加载主题配置（唯一数据源）
+
   const loadGlobalThemeConfig = async () => {
     try {
       console.log('从API获取主题配置...');
-      const response = await fetch('/api/admin/config');
+      const response = await fetch('/api/admin/config'); 
       const result = await response.json();
 
       if (result?.Config?.ThemeConfig) {
         const themeConfig = result.Config.ThemeConfig;
         console.log('API返回的主题配置:', themeConfig);
-        setGlobalThemeConfig(themeConfig);
+        
+        // 确保 allowUserCustomization 字段存在，默认为 true
+        const fullConfig: GlobalThemeConfig = {
+            ...themeConfig,
+            allowUserCustomization: themeConfig.allowUserCustomization !== false,
+        };
+        
+        setGlobalThemeConfig(fullConfig);
 
         // 更新运行时配置，保持同步
         const runtimeConfig = (window as any).RUNTIME_CONFIG;
         if (runtimeConfig) {
-          runtimeConfig.THEME_CONFIG = themeConfig;
+          runtimeConfig.THEME_CONFIG = fullConfig;
         }
 
-        return themeConfig;
+        return fullConfig;
       } else {
         console.log('无法获取主题配置，可能未登录或权限不足:', result);
       }
@@ -320,11 +335,9 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
   };
 
   // 保存全局主题配置
-  const saveGlobalThemeConfig = async (config: {
-    defaultTheme: string;
-    customCSS: string;
-    allowUserCustomization: boolean;
-  }) => {
+  const saveGlobalThemeConfig = async (config: GlobalThemeConfig) => {
+    if (!isAdmin) return false;
+    setIsSaving(true);
     try {
       const response = await fetch('/api/admin/theme', {
         method: 'POST',
@@ -333,22 +346,23 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
       });
       const result = await response.json();
       if (result.success) {
-        setGlobalThemeConfig(result.data);
+        const newConfig = result.data as GlobalThemeConfig;
+        setGlobalThemeConfig(newConfig);
 
         // 更新运行时配置，确保同步
         const runtimeConfig = (window as any).RUNTIME_CONFIG;
         if (runtimeConfig) {
-          runtimeConfig.THEME_CONFIG = result.data;
-          console.log('已更新运行时主题配置:', result.data);
+          runtimeConfig.THEME_CONFIG = newConfig;
+          console.log('已更新运行时主题配置:', newConfig);
         }
 
         // 立即应用新的主题配置，确保当前页面也能看到更改
-        applyTheme(result.data.defaultTheme, result.data.customCSS);
+        applyTheme(newConfig.defaultTheme, newConfig.customCSS);
 
         // 更新本地缓存
-        updateThemeCache(result.data.defaultTheme, result.data.customCSS);
+        updateThemeCache(newConfig.defaultTheme, newConfig.customCSS);
 
-        console.log('已立即应用新主题配置:', result.data.defaultTheme);
+        console.log('已立即应用新主题配置:', newConfig.defaultTheme);
 
         showAlert({
           type: 'success',
@@ -368,10 +382,12 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
         timer: 3000
       });
       return false;
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // 从localStorage加载当前主题
+  // 从localStorage加载当前主题 (初始化逻辑)
   useEffect(() => {
     // 确保在客户端环境中执行
     if (typeof window === 'undefined') return;
@@ -398,7 +414,7 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
     initTheme();
   }, []);
 
-  // 应用主题
+  // 应用主题 (实现实时切换)
   const applyTheme = (themeId: string, css: string = '') => {
     const html = document.documentElement;
 
@@ -420,39 +436,29 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
     customStyleEl.textContent = css;
   };
 
-  // 切换主题
+  // 切换主题 (整合保存逻辑)
   const handleThemeChange = async (themeId: string) => {
     setCurrentTheme(themeId);
     applyTheme(themeId, customCSS);
 
     if (isAdmin) {
-      // 保存到全局配置
-      const success = await saveGlobalThemeConfig({
+      await saveGlobalThemeConfig({
         defaultTheme: themeId,
         customCSS: customCSS,
         allowUserCustomization: globalThemeConfig?.allowUserCustomization ?? true,
       });
-
-      // 如果保存成功，立即更新本地全局配置状态
-      if (success) {
-        setGlobalThemeConfig({
-          defaultTheme: themeId,
-          customCSS: customCSS,
-          allowUserCustomization: globalThemeConfig?.allowUserCustomization ?? true,
-        });
-      }
     }
 
     const theme = themes.find(t => t.id === themeId);
     showAlert({
-      type: 'success',
-      title: '全站主题已设置',
-      message: `已切换到${theme?.name}`,
+      type: 'info', // 改为info，因为保存成功的提示在saveGlobalThemeConfig中
+      title: '主题已切换',
+      message: `已切换到 ${theme?.name}`,
       timer: 2000
     });
   };
 
-  // 预览主题
+  // 预览主题 (优秀UX功能)
   const handleThemePreview = (themeId: string) => {
     if (!previewMode) {
       setPreviewMode(true);
@@ -466,86 +472,32 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
     }
   };
 
-  // 应用自定义CSS
+  // 应用自定义CSS (整合保存逻辑)
   const handleCustomCSSApply = async () => {
-    try {
-      applyTheme(currentTheme, customCSS);
-
-      if (isAdmin) {
-        // 保存到全局配置
-        const success = await saveGlobalThemeConfig({
-          defaultTheme: currentTheme,
-          customCSS: customCSS,
-          allowUserCustomization: globalThemeConfig?.allowUserCustomization ?? true,
-        });
-
-        // 如果保存成功，立即更新本地全局配置状态
-        if (success) {
-          setGlobalThemeConfig({
-            defaultTheme: currentTheme,
-            customCSS: customCSS,
-            allowUserCustomization: globalThemeConfig?.allowUserCustomization ?? true,
-          });
-        }
-      } else {
-        showAlert({
-          type: 'warning',
-          title: '权限不足',
-          message: '仅管理员可以设置全站主题',
-          timer: 2000
-        });
-      }
-    } catch (error) {
-      showAlert({
-        type: 'error',
-        title: '样式应用失败',
-        message: 'CSS语法可能有误，请检查后重试',
-        timer: 3000
+    applyTheme(currentTheme, customCSS);
+    if (isAdmin) {
+      await saveGlobalThemeConfig({
+        defaultTheme: currentTheme,
+        customCSS: customCSS,
+        allowUserCustomization: globalThemeConfig?.allowUserCustomization ?? true,
       });
     }
   };
 
-  // 重置自定义CSS
+  // 重置自定义CSS (并整合保存逻辑)
   const handleCustomCSSReset = async () => {
     setCustomCSS('');
     applyTheme(currentTheme, '');
-
     if (isAdmin) {
-      // 保存到全局配置
       await saveGlobalThemeConfig({
         defaultTheme: currentTheme,
         customCSS: '',
         allowUserCustomization: globalThemeConfig?.allowUserCustomization ?? true,
       });
-
-      setGlobalThemeConfig({
-        defaultTheme: currentTheme,
-        customCSS: '',
-        allowUserCustomization: globalThemeConfig?.allowUserCustomization ?? true,
-      });
-
-      // 更新运行时配置
-      const runtimeConfig = (window as any).RUNTIME_CONFIG;
-      if (runtimeConfig) {
-        runtimeConfig.THEME_CONFIG = {
-          defaultTheme: currentTheme,
-          customCSS: '',
-          allowUserCustomization: globalThemeConfig?.allowUserCustomization ?? true,
-        };
-      }
-
-      // 更新本地缓存
-      updateThemeCache(currentTheme, '');
     }
-
-    showAlert({
-      type: 'success',
-      title: '全站自定义样式已重置',
-      timer: 2000
-    });
   };
 
-  // 应用模板CSS
+  // 应用模板CSS (优秀UX功能)
   const handleApplyTemplate = (templateCSS: string, templateName: string) => {
     setCustomCSS(templateCSS);
     showAlert({
@@ -555,37 +507,65 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
       timer: 2000
     });
   };
+  
+  // 处理“允许用户自定义”开关变化的函数
+  const handleAllowCustomizationChange = async (allow: boolean) => {
+    if (isAdmin && globalThemeConfig) {
+      const newConfig: GlobalThemeConfig = { ...globalThemeConfig, allowUserCustomization: allow };
+      setGlobalThemeConfig(newConfig); // 立即更新UI状态
+      await saveGlobalThemeConfig(newConfig);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* 管理员控制面板 */}
+      {/* 管理员控制面板  */}
       {isAdmin && globalThemeConfig && (
-        <div className="bg-theme-surface border border-theme-border rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-theme-text mb-4 flex items-center gap-2">
+        <div className="bg-theme-surface border border-theme-border rounded-lg p-4 space-y-4">
+          <h3 className="text-lg font-semibold text-theme-text flex items-center gap-2">
             <Palette className="h-5 w-5" />
             全站主题设置
           </h3>
 
-          <div className="space-y-4">
-            <div className="p-3 bg-theme-accent/5 border border-theme-accent/20 rounded-lg">
-              <div className="text-sm text-theme-text">
-                <strong>当前全站配置：</strong>
-              </div>
-              <div className="text-xs text-theme-text-secondary mt-1">
-                默认主题: {themes.find(t => t.id === globalThemeConfig.defaultTheme)?.name || globalThemeConfig.defaultTheme}
-                {globalThemeConfig.customCSS && ' | 包含自定义CSS'}
-                {!globalThemeConfig.allowUserCustomization && ' | 禁止用户自定义'}
-              </div>
+          <div className="p-3 bg-theme-accent/5 border border-theme-accent/20 rounded-lg">
+            <div className="text-sm text-theme-text">
+              <strong>当前全站配置：</strong>
             </div>
-
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/20 dark:border-blue-700">
-              <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200">
-                <span className="text-sm font-medium">ℹ️ 全站主题</span>
-              </div>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                在此设置的主题配置将应用到整个网站，影响所有用户的默认体验
+            <div className="text-xs text-theme-text-secondary mt-1">
+              默认主题: {themes.find(t => t.id === globalThemeConfig.defaultTheme)?.name || globalThemeConfig.defaultTheme}
+              {globalThemeConfig.customCSS && ' | 包含自定义CSS'}
+              {globalThemeConfig.allowUserCustomization ? ' | 允许用户自定义' : ' | 禁止用户自定义'}
+            </div>
+          </div>
+          
+          {/* 整合“允许用户自定义”开关 */}
+          <div className="flex items-center justify-between p-3 bg-theme-bg rounded-lg">
+            <div>
+              <label className="text-sm font-medium text-theme-text">
+                允许用户自定义主题
+              </label>
+              <p className="text-xs text-theme-text-secondary mt-1">
+                关闭后，所有用户将强制使用全站默认主题。
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => handleAllowCustomizationChange(!globalThemeConfig.allowUserCustomization)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${globalThemeConfig.allowUserCustomization ? buttonStyles.toggleOn : buttonStyles.toggleOff}`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full ${buttonStyles.toggleThumb} transition-transform ${globalThemeConfig.allowUserCustomization ? buttonStyles.toggleThumbOn : buttonStyles.toggleThumbOff}`}
+              />
+            </button>
+          </div>
+
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/20 dark:border-blue-700">
+            <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200">
+              <span className="text-sm font-medium">ℹ️ 全站主题</span>
+            </div>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+              在此设置的主题配置将应用到整个网站，影响所有用户的默认体验。
+            </p>
           </div>
         </div>
       )}
@@ -605,7 +585,7 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
                 ? 'border-theme-accent bg-theme-accent/5'
                 : 'border-theme-border bg-theme-surface'
                 } ${isAdmin ? 'cursor-pointer hover:border-theme-accent/50' : 'cursor-not-allowed opacity-60'}`}
-              onClick={() => isAdmin && handleThemeChange(theme.id)}
+              onClick={() => isAdmin && !isSaving && handleThemeChange(theme.id)}
             >
               {/* 主题预览 */}
               <div className="flex items-center justify-between mb-3">
@@ -713,15 +693,18 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
             </div>
 
             <div className="flex gap-3">
+              {/* 应用项目A的buttonStyles */}
               <button
                 onClick={handleCustomCSSApply}
-                className="px-4 py-2 bg-theme-accent text-white rounded-lg hover:opacity-90 transition-opacity"
+                disabled={isSaving}
+                className={isSaving ? buttonStyles.disabled : buttonStyles.success}
               >
-                应用样式
+                {isSaving ? '应用中...' : '应用并保存样式'}
               </button>
               <button
                 onClick={handleCustomCSSReset}
-                className="px-4 py-2 bg-theme-surface border border-theme-border text-theme-text rounded-lg hover:bg-theme-accent/5 transition-colors"
+                disabled={isSaving}
+                className="px-4 py-2 bg-theme-surface border border-theme-border text-theme-text rounded-lg hover:bg-theme-accent/5 transition-colors disabled:opacity-50"
               >
                 重置样式
               </button>
@@ -761,7 +744,7 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
 
           <div className="mt-4 p-3 bg-theme-accent/5 border border-theme-accent/20 rounded-lg">
             <p className="text-xs text-theme-text-secondary">
-              <strong>💡 使用提示：</strong> 点击模板的"应用"按钮将代码复制到自定义CSS编辑器，然后可以在此基础上进行修改。记得点击"应用样式"按钮生效。
+              <strong>💡 使用提示：</strong> 点击模板的"应用"按钮将代码复制到自定义CSS编辑器，然后可以在此基础上进行修改。记得点击"应用并保存样式"按钮生效。
             </p>
           </div>
         </div>
@@ -799,3 +782,4 @@ const ThemeManager = ({ showAlert, role }: ThemeManagerProps) => {
 };
 
 export default ThemeManager;
+
