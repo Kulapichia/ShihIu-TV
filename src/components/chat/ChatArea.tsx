@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 import { ChevronLeft, Paperclip, Send, Smile, Users, Image as ImageIcon, X } from 'lucide-react';
-import { ChatMessage, Conversation, User } from '../../lib/types';
+import { ChatMessage, Conversation } from '../../lib/types';
 import { MessageBubble } from './MessageBubble';
 
 // 定义 Props 类型
