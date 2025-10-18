@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, no-console */
 
+import { API_CONFIG } from '@/lib/config'; // MODIFIED: Import centralized API config
 import {
   ShortDramaCategory,
   ShortDramaItem,
@@ -12,7 +13,7 @@ import {
   setCache,
 } from './shortdrama-cache';
 
-const SHORTDRAMA_API_BASE = 'https://api.r2afosne.dpdns.org';
+// REMOVED: const SHORTDRAMA_API_BASE = 'https://api.r2afosne.dpdns.org';
 
 // 检测是否为移动端环境
 const isMobile = () => {
@@ -26,7 +27,8 @@ const getApiBase = (endpoint: string) => {
     return `/api/shortdrama${endpoint}`;
   }
   // 桌面端使用外部API的完整路径
-  return `${SHORTDRAMA_API_BASE}/vod${endpoint}`;
+  // MODIFIED: Use baseUrl from API_CONFIG
+  return `${API_CONFIG.shortdrama.baseUrl}/vod${endpoint}`;
 };
 
 // 获取短剧分类列表
@@ -50,10 +52,8 @@ export async function getShortDramaCategories(): Promise<ShortDramaCategory[]> {
     const fetchOptions: RequestInit = isMobile() ? {
       // 移动端：让浏览器使用HTTP缓存，不添加破坏缓存的headers
     } : {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
+      // MODIFIED: Use headers from API_CONFIG
+      headers: API_CONFIG.shortdrama.headers,
       mode: 'cors',
     };
 
@@ -104,15 +104,14 @@ export async function getRecommendedShortDramas(
 
     const apiUrl = isMobile()
       ? `/api/shortdrama/recommend?${category ? `category=${category}&` : ''}size=${size}`
-      : `${SHORTDRAMA_API_BASE}/vod/recommend?${category ? `category=${category}&` : ''}size=${size}`;
+      // MODIFIED: Use baseUrl from API_CONFIG
+      : `${API_CONFIG.shortdrama.baseUrl}/vod/recommend?${category ? `category=${category}&` : ''}size=${size}`;
 
     const fetchOptions: RequestInit = isMobile() ? {
       // 移动端：让浏览器使用HTTP缓存，不添加破坏缓存的headers
     } : {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
+      // MODIFIED: Use headers from API_CONFIG
+      headers: API_CONFIG.shortdrama.headers,
       mode: 'cors',
     };
 
@@ -169,15 +168,14 @@ export async function getShortDramaList(
 
     const apiUrl = isMobile()
       ? `/api/shortdrama/list?categoryId=${category}&page=${page}&size=${size}`
-      : `${SHORTDRAMA_API_BASE}/vod/list?categoryId=${category}&page=${page}&size=${size}`;
+      // MODIFIED: Use baseUrl from API_CONFIG
+      : `${API_CONFIG.shortdrama.baseUrl}/vod/list?categoryId=${category}&page=${page}&size=${size}`;
 
     const fetchOptions: RequestInit = isMobile() ? {
       // 移动端：让浏览器使用HTTP缓存，不添加破坏缓存的headers
     } : {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
+      // MODIFIED: Use headers from API_CONFIG
+      headers: API_CONFIG.shortdrama.headers,
       mode: 'cors',
     };
 
@@ -230,15 +228,14 @@ export async function searchShortDramas(
   try {
     const apiUrl = isMobile()
       ? `/api/shortdrama/search?name=${encodeURIComponent(query)}&page=${page}&size=${size}`
-      : `${SHORTDRAMA_API_BASE}/vod/search?name=${encodeURIComponent(query)}&page=${page}&size=${size}`;
+      // MODIFIED: Use baseUrl from API_CONFIG
+      : `${API_CONFIG.shortdrama.baseUrl}/vod/search?name=${encodeURIComponent(query)}&page=${page}&size=${size}`;
 
     const fetchOptions: RequestInit = isMobile() ? {
       // 移动端：让浏览器使用HTTP缓存，不添加破坏缓存的headers
     } : {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
+      // MODIFIED: Use headers from API_CONFIG
+      headers: API_CONFIG.shortdrama.headers,
       mode: 'cors',
     };
 
@@ -298,7 +295,8 @@ export async function parseShortDramaEpisode(
     const timestamp = Date.now();
     const apiUrl = isMobile()
       ? `/api/shortdrama/parse?${params.toString()}&_t=${timestamp}`
-      : `${SHORTDRAMA_API_BASE}/vod/parse/single?${params.toString()}`;
+      // MODIFIED: Use baseUrl from API_CONFIG
+      : `${API_CONFIG.shortdrama.baseUrl}/vod/parse/single?${params.toString()}`;
 
     const fetchOptions: RequestInit = isMobile() ? {
       cache: 'no-store',
@@ -308,10 +306,8 @@ export async function parseShortDramaEpisode(
         'Expires': '0'
       }
     } : {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
+      // MODIFIED: Use headers from API_CONFIG
+      headers: API_CONFIG.shortdrama.headers,
       mode: 'cors',
     };
 
@@ -374,7 +370,8 @@ export async function parseShortDramaBatch(
     const timestamp = Date.now();
     const apiUrl = isMobile()
       ? `/api/shortdrama/parse?${params.toString()}&_t=${timestamp}`
-      : `${SHORTDRAMA_API_BASE}/vod/parse/batch?${params.toString()}`;
+      // MODIFIED: Use baseUrl from API_CONFIG
+      : `${API_CONFIG.shortdrama.baseUrl}/vod/parse/batch?${params.toString()}`;
 
     const fetchOptions: RequestInit = isMobile() ? {
       cache: 'no-store',
@@ -384,10 +381,8 @@ export async function parseShortDramaBatch(
         'Expires': '0'
       }
     } : {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
+      // MODIFIED: Use headers from API_CONFIG
+      headers: API_CONFIG.shortdrama.headers,
       mode: 'cors',
     };
 
@@ -409,7 +404,7 @@ export async function parseShortDramaBatch(
 export async function parseShortDramaAll(
   id: number,
   useProxy = true
-): Promise<ShortDramaParseResult[]> {
+): Promise<any> { // MODIFIED: Return type changed to `any` to match detailed logic in other file
   try {
     const params = new URLSearchParams({
       id: id.toString(),
@@ -421,8 +416,10 @@ export async function parseShortDramaAll(
 
     const timestamp = Date.now();
     const apiUrl = isMobile()
-      ? `/api/shortdrama/parse?${params.toString()}&_t=${timestamp}`
-      : `${SHORTDRAMA_API_BASE}/vod/parse/all?${params.toString()}`;
+      // MODIFIED: The mobile route for 'all' should point to the specific 'all' endpoint
+      ? `/api/shortdrama/parse/all?${params.toString()}&_t=${timestamp}`
+      // MODIFIED: Use baseUrl from API_CONFIG
+      : `${API_CONFIG.shortdrama.baseUrl}/vod/parse/all?${params.toString()}`;
 
     const fetchOptions: RequestInit = isMobile() ? {
       cache: 'no-store',
@@ -432,10 +429,8 @@ export async function parseShortDramaAll(
         'Expires': '0'
       }
     } : {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
+      // MODIFIED: Use headers from API_CONFIG
+      headers: API_CONFIG.shortdrama.headers,
       mode: 'cors',
     };
 
@@ -446,9 +441,15 @@ export async function parseShortDramaAll(
     }
 
     const data = await response.json();
-    return data.results || [];
+    // MODIFIED: Directly return the full data object, which contains `results` and other metadata
+    return data;
   } catch (error) {
     console.error('解析完整短剧失败:', error);
-    return [];
+    // MODIFIED: Return a more structured error object
+    return {
+      results: [],
+      error: 'Failed to fetch all episodes',
+      videoId: id,
+    };
   }
 }
