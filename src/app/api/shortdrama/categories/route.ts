@@ -9,13 +9,18 @@ export const fetchCache = 'force-no-store';
 
 // 服务端专用函数，直接调用外部API
 async function getShortDramaCategoriesInternal() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
   const response = await fetch('https://api.r2afosne.dpdns.org/vod/categories', {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       'Accept': 'application/json',
     },
+    signal: controller.signal,
   });
 
+  clearTimeout(timeoutId);
+  
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
@@ -53,10 +58,23 @@ export async function GET() {
 
     return response;
   } catch (error) {
-    console.error('获取短剧分类失败:', error);
-    return NextResponse.json(
-      { error: '服务器内部错误' },
-      { status: 500 }
-    );
+    console.error('获取短剧分类失败，返回备用数据:', error);
+    
+    // 如果外部API失败，返回默认分类数据作为备用
+    const fallbackCategories = [
+      { type_id: 1, type_name: '古装' },
+      { type_id: 2, type_name: '现代' },
+      { type_id: 3, type_name: '都市' },
+      { type_id: 4, type_name: '言情' },
+      { type_id: 5, type_name: '悬疑' },
+      { type_id: 6, type_name: '喜剧' },
+      { type_id: 7, type_name: '其他' },
+    ];
+    
+    const response = NextResponse.json(fallbackCategories);
+    // 对备用数据也设置缓存，避免短时间内对失效接口的频繁请求
+    const cacheTime = 300; // 备用数据缓存5分钟
+    response.headers.set('Cache-Control', `public, max-age=${cacheTime}, s-maxage=${cacheTime}`);
+    return response;
   }
 }
