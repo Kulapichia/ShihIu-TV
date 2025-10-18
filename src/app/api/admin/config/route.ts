@@ -20,50 +20,80 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const authInfo = getAuthInfoFromCookie(request);
-  if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const username = authInfo.username;
-
   try {
-    const config = await getConfig();
-    // 创建一个深拷贝用于前端展示，避免污染内存缓存
-    const configForFrontend = JSON.parse(JSON.stringify(config));
+    const authInfo = getAuthInfoFromCookie(request);
+    // 修正：只声明一次 username，并处理 authInfo 可能不存在的情况
+    const username = authInfo?.username;
 
-    // 在返回给前端前，用占位符屏蔽敏感信息
-    if (configForFrontend.SiteConfig.IntelligentFilter?.options?.sightengine?.apiSecret) {
-      configForFrontend.SiteConfig.IntelligentFilter.options.sightengine.apiSecret = "********";
-    }
-    if (configForFrontend.SiteConfig.IntelligentFilter?.options?.custom?.apiKeyValue) {
-      configForFrontend.SiteConfig.IntelligentFilter.options.custom.apiKeyValue = "********";
-    }
-    if (configForFrontend.SiteConfig.IntelligentFilter?.options?.baidu?.secretKey) {
-      configForFrontend.SiteConfig.IntelligentFilter.options.baidu.secretKey = "********";
-    }
-    const result: AdminConfigResult = {
-      Role: 'owner',
-      Config: configForFrontend,
-    };
+    const config = await getConfig();
+    // 检查用户权限
+    let userRole: 'owner' | 'admin' | 'user' | 'guest' | 'banned' | 'unknown' = 'guest';
+    let isAdmin = false;
+
     if (username === process.env.USERNAME) {
-      result.Role = 'owner';
-    } else {
+      userRole = 'owner';
+      isAdmin = true;
+    } else if (username) {
       const user = config.UserConfig.Users.find((u) => u.username === username);
       if (user && user.role === 'admin' && !user.banned) {
-        result.Role = 'admin';
+        userRole = 'admin';
+        isAdmin = true;
+      } else if (user && !user.banned) {
+        userRole = 'user';
+      } else if (user && user.banned) {
+        userRole = 'banned';
       } else {
-        return NextResponse.json(
-          { error: '你是管理员吗你就访问？' },
-          { status: 401 }
-        );
+        userRole = 'unknown';
       }
     }
 
-    return NextResponse.json(result, {
-      headers: {
-        'Cache-Control': 'no-store', // 管理员配置不缓存
-      },
-    });
+    if (isAdmin) {
+      // 管理员返回完整配置，但屏蔽敏感信息
+      const configForFrontend = JSON.parse(JSON.stringify(config));
+
+      // 在返回给前端前，用占位符屏蔽敏感信息
+      if (configForFrontend.SiteConfig.IntelligentFilter?.options?.sightengine?.apiSecret) {
+        configForFrontend.SiteConfig.IntelligentFilter.options.sightengine.apiSecret = "********";
+      }
+      if (configForFrontend.SiteConfig.IntelligentFilter?.options?.custom?.apiKeyValue) {
+        configForFrontend.SiteConfig.IntelligentFilter.options.custom.apiKeyValue = "********";
+      }
+      if (configForFrontend.SiteConfig.IntelligentFilter?.options?.baidu?.secretKey) {
+        configForFrontend.SiteConfig.IntelligentFilter.options.baidu.secretKey = "********";
+      }
+      // 可以继续添加其他需要屏蔽的密钥
+
+      const result: AdminConfigResult = {
+        Role: userRole as 'admin' | 'owner',
+        Config: configForFrontend,
+      };
+
+      return NextResponse.json(result, {
+        headers: {
+          'Cache-Control': 'no-store', // 管理员配置不缓存
+        },
+      });
+    } else {
+      // 普通用户或未登录用户只返回公开配置
+      const publicConfig = {
+        ThemeConfig: config.ThemeConfig,
+        SiteConfig: {
+          SiteName: config.SiteConfig.SiteName,
+          Announcement: config.SiteConfig.Announcement,
+        }
+      };
+
+      const result = {
+        Role: userRole,
+        Config: publicConfig,
+      };
+
+      return NextResponse.json(result, {
+        headers: {
+          'Cache-Control': 'public, max-age=60', // 公开配置可以缓存1分钟
+        },
+      });
+    }
   } catch (error) {
     console.error('获取管理员配置失败:', error);
     return NextResponse.json(
@@ -87,21 +117,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const authInfo = getAuthInfoFromCookie(request);
-  if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const username = authInfo.username;
-
-  // 只有站长可以修改配置
-  if (username !== process.env.USERNAME) {
-    return NextResponse.json(
-      { error: '只有站长可以修改配置' },
-      { status: 403 }
-    );
-  }
-
   try {
+    const authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo || !authInfo.username) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const username = authInfo.username;
+
+    // 只有站长可以修改配置
+    if (username !== process.env.USERNAME) {
+      return NextResponse.json(
+        { error: '只有站长可以修改配置' },
+        { status: 403 }
+      );
+    }
+
     const newConfig: AdminConfig = await request.json();
     
     // 保存新配置
