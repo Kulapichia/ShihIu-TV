@@ -3,7 +3,7 @@
 
 import { MessageCircle, Search, Users, X, UserPlus } from 'lucide-react';
 import { Conversation, Friend, FriendRequest } from '../../lib/types';
-
+import { User } from '@/lib/admin.types';
 // 定义 Props 类型
 interface SidePanelProps {
   isMobile: boolean;
