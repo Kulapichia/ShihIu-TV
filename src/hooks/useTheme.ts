@@ -1,58 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+// src/hooks/useTheme.ts
 
-interface ThemeConfig {
-  defaultTheme: string;
-  customCSS: string;
-  allowUserCustomization: boolean;
-}
+// 全局主题Hook - 已弃用，主题现在由 GlobalThemeLoader 统一管理
+// 保留此文件是为了向后兼容性，但不再使用
+
+export const useThemeInit = () => {
+  // 不再执行任何操作，主题由 GlobalThemeLoader 处理
+  console.warn('useThemeInit is deprecated. Theme is now managed by GlobalThemeLoader.');
+};
 
 export const useTheme = () => {
-  const [theme, setTheme] = useState('default');
-  const [themeConfig, setThemeConfig] = useState<ThemeConfig | null>(null);
+  // 已弃用：主题现在由 GlobalThemeLoader 和 ThemeManager 统一管理
+  console.warn('useTheme is deprecated. Use ThemeManager component for theme management.');
 
-  const applyTheme = useCallback((themeName: string, config: ThemeConfig | null) => {
-    if (typeof window !== 'undefined') {
-      document.documentElement.setAttribute('data-theme', themeName);
-      
-      let styleElement = document.getElementById('custom-theme-style');
-      if (!styleElement) {
-        styleElement = document.createElement('style');
-        styleElement.id = 'custom-theme-style';
-        document.head.appendChild(styleElement);
-      }
-      styleElement.innerHTML = config?.customCSS || '';
-    }
-  }, []);
-
-  useEffect(() => {
-    fetch('/api/admin/theme')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.data) {
-          const config = data.data as ThemeConfig;
-          setThemeConfig(config);
-          
-          let currentTheme = config.defaultTheme;
-          if (config.allowUserCustomization) {
-            const userTheme = localStorage.getItem('theme');
-            if (userTheme) {
-              currentTheme = userTheme;
-            }
-          }
-          
-          setTheme(currentTheme);
-          applyTheme(currentTheme, config);
-        }
-      });
-  }, [applyTheme]);
-
-  const changeTheme = (newTheme: string) => {
-    if (themeConfig?.allowUserCustomization) {
-      setTheme(newTheme);
-      localStorage.setItem('theme', newTheme);
-      applyTheme(newTheme, themeConfig);
-    }
+  return {
+    applyTheme: () => console.warn('applyTheme is deprecated'),
+    getCurrentTheme: () => 'default',
+    getCurrentCustomCSS: () => ''
   };
-
-  return { theme, changeTheme, isCustomizationAllowed: themeConfig?.allowUserCustomization ?? true };
 };
