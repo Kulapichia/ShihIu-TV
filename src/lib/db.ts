@@ -263,6 +263,82 @@ class MemoryStorage implements IStorage {
   async removeFriend(): Promise<void> { }
   async updateFriend(): Promise<void> { }
   async updateFriendStatus(): Promise<void> { }
+  // --- 缓存方法存根 ---
+  async getCache(key: string): Promise<any | null> {
+    return this.data[key] || null;
+  }
+  async setCache(key: string, value: any, _expireSeconds?: number): Promise<void> {
+    this.data[key] = value;
+  }
+  async deleteCache(key: string): Promise<void> {
+    delete this.data[key];
+  }
+  async clearExpiredCache(_prefix?: string): Promise<void> {
+    // MemoryStorage 不支持过期，所以此方法为空
+  }
+
+  // --- 注册管理存根 ---
+  async createPendingUser(username: string, passwordHash: string): Promise<void> {
+    if (!this.data['pending_users']) this.data['pending_users'] = [];
+    this.data['pending_users'].push({ username, passwordHash, registeredAt: Date.now() });
+  }
+  async getPendingUsers(): Promise<PendingUser[]> {
+    return this.data['pending_users'] || [];
+  }
+  async approvePendingUser(_username: string): Promise<void> {
+    // 简化实现：直接移除
+    if (this.data['pending_users']) {
+      this.data['pending_users'] = this.data['pending_users'].filter((u: PendingUser) => u.username !== _username);
+    }
+  }
+  async rejectPendingUser(_username: string): Promise<void> {
+    // 简化实现：直接移除
+    if (this.data['pending_users']) {
+      this.data['pending_users'] = this.data['pending_users'].filter((u: PendingUser) => u.username !== _username);
+    }
+  }
+  async getRegistrationStats(): Promise<RegistrationStats> {
+    return { totalUsers: 0, pendingUsers: (this.data['pending_users'] || []).length, todayRegistrations: 0 };
+  }
+
+  // --- 统计功能存根 ---
+  async getPlayStats(): Promise<PlayStatsResult> {
+    return {
+      totalUsers: 0, totalWatchTime: 0, totalPlays: 0, avgWatchTimePerUser: 0, avgPlaysPerUser: 0,
+      userStats: [], topSources: [], dailyStats: [],
+      registrationStats: { todayNewUsers: 0, totalRegisteredUsers: 0, registrationTrend: [] },
+      activeUsers: { daily: 0, weekly: 0, monthly: 0 },
+    };
+  }
+  async getUserPlayStat(userName: string): Promise<UserPlayStat> {
+    return { username: userName, totalWatchTime: 0, totalPlays: 0, lastPlayTime: 0, recentRecords: [], avgWatchTime: 0, mostWatchedSource: '' };
+  }
+  async getContentStats(_limit?: number): Promise<ContentStat[]> { return []; }
+  async updatePlayStatistics(_userName: string, _source: string, _id: string, _watchTime: number): Promise<void> { }
+  async updateUserLoginStats(_userName: string, _loginTime: number, _isFirstLogin?: boolean): Promise<void> { }
+
+  // --- 用户头像存根 ---
+  async getUserAvatar(userName: string): Promise<string | null> { return this.data[`avatar:${userName}`] || null; }
+  async setUserAvatar(userName: string, avatarBase64: string): Promise<void> { this.data[`avatar:${userName}`] = avatarBase64; }
+  async deleteUserAvatar(userName: string): Promise<void> { delete this.data[`avatar:${userName}`]; }
+
+  // --- 弹幕管理存根 ---
+  async getDanmu(_videoId: string): Promise<any[]> { return []; }
+  async saveDanmu(_videoId: string, _userName: string, _danmu: any): Promise<void> { }
+  async deleteDanmu(_videoId: string, _danmuId: string): Promise<void> { }
+
+  // --- 机器码管理存根 ---
+  async getUserMachineCode(userName: string): Promise<string | null> { return this.data[`machine_code:${userName}`] || null; }
+  async setUserMachineCode(userName: string, machineCode: string, _deviceInfo?: string): Promise<void> { this.data[`machine_code:${userName}`] = machineCode; }
+  async deleteUserMachineCode(userName: string): Promise<void> { delete this.data[`machine_code:${userName}`]; }
+  async getMachineCodeUsers(): Promise<Record<string, any>> { return {}; }
+  async isMachineCodeBound(_machineCode: string): Promise<string | null> { return null; }
+
+  // --- 新版剧集跳过配置存根 ---
+  async getEpisodeSkipConfig(_userName: string, _source: string, _id: string): Promise<EpisodeSkipConfig | null> { return null; }
+  async saveEpisodeSkipConfig(_userName: string, _source: string, _id: string, _config: EpisodeSkipConfig): Promise<void> { }
+  async deleteEpisodeSkipConfig(_userName: string, _source: string, _id: string): Promise<void> { }
+  async getAllEpisodeSkipConfigs(_userName: string): Promise<{ [key: string]: EpisodeSkipConfig }> { return {}; }
 }
 
 // 创建存储实例
