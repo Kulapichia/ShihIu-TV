@@ -38,7 +38,7 @@ export interface VideoCardProps {
   source_names?: string[];
   progress?: number;
   year?: string;
-  from: 'playrecord' | 'favorite' | 'search' | 'douban';
+  from: 'playrecord' | 'favorite' | 'search' | 'douban' | 'shortdrama';
   currentEpisode?: number;
   douban_id?: number;
   onDelete?: () => void;
@@ -48,6 +48,9 @@ export interface VideoCardProps {
   isAggregate?: boolean;
   origin?: 'vod' | 'live';
   remarks?: string; // 备注信息（如"已完结"、"更新至20集"等）
+  // 短剧相关字段
+  vod_class?: string;
+  vod_tag?: string;
 }
 
 export type VideoCardHandle = {
@@ -55,7 +58,15 @@ export type VideoCardHandle = {
   setSourceNames: (names?: string[]) => void;
   setDoubanId: (id?: number) => void;
 };
-
+    isAggregate = false,
+    origin = 'vod',
+    remarks,
+    vod_class,
+    vod_tag,
+  }: VideoCardProps,
+  ref
+) {
+  
 const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard(
   {
     id,
@@ -78,6 +89,9 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     isAggregate = false,
     origin = 'vod',
     remarks,
+    // 新增短剧相关字段
+    vod_class,
+    vod_tag,
   }: VideoCardProps,
   ref
 ) {
@@ -129,9 +143,9 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     ? (actualEpisodes && actualEpisodes === 1 ? 'movie' : 'tv')
     : type;
 
-  // 获取收藏状态（搜索结果页面不检查）
+  // 获取收藏状态（搜索结果、豆瓣和短剧页面不检查）
   useEffect(() => {
-    if (from === 'douban' || from === 'search' || !actualSource || !actualId) return;
+    if (from === 'douban' || from === 'search' || from === 'shortdrama' || !actualSource || !actualId) return;
 
     const fetchFavoriteStatus = async () => {
       try {
@@ -162,7 +176,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     async (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      if (from === 'douban' || !actualSource || !actualId) return;
+      if (from === 'douban' || from === 'shortdrama' || !actualSource || !actualId) return;
 
       try {
         // 确定当前收藏状态
@@ -226,12 +240,27 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
   );
 
   const handleClick = useCallback(() => {
+    // 如果从搜索页面点击，设置标记以便返回时使用缓存
+    if (from === 'search' && typeof window !== 'undefined') {
+      sessionStorage.setItem('fromPlayPage', 'true');
+    }
     // 构建豆瓣ID参数
     const doubanIdParam = actualDoubanId && actualDoubanId > 0 ? `&douban_id=${actualDoubanId}` : '';
     
     if (origin === 'live' && actualSource && actualId) {
       // 直播内容跳转到直播页面
       const url = `/live?source=${actualSource.replace('live_', '')}&id=${actualId.replace('live_', '')}`;
+      router.push(url);
+    } else if (from === 'shortdrama' && actualId) {
+      // 短剧内容跳转到播放页面，传递剧集ID用于调用获取全集地址的接口
+      const urlParams = new URLSearchParams();
+      urlParams.set('shortdrama_id', actualId);
+      urlParams.set('title', actualTitle.trim());
+      if (actualYear) urlParams.set('year', actualYear);
+      if (vod_class) urlParams.set('vod_class', vod_class);
+      if (vod_tag) urlParams.set('vod_tag', vod_tag);
+
+      const url = `/play?${urlParams.toString()}`;
       router.push(url);
     } else if (from === 'douban' || (isAggregate && !actualSource && !actualId)) {
       const url = `/play?title=${encodeURIComponent(actualTitle.trim())}${actualYear ? `&year=${actualYear}` : ''
@@ -257,6 +286,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     actualQuery,
     actualSearchType,
     actualDoubanId,
+    vod_class,
+    vod_tag,
   ]);
 
   // 新标签页播放处理函数
@@ -409,6 +440,16 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
         showRating: !!rate,
         showYear: false,
       },
+      shortdrama: {
+        showSourceName: true,
+        showProgress: false,
+        showPlayButton: true,
+        showHeart: false, // 短剧不显示收藏功能
+        showCheckCircle: false,
+        showDoubanLink: false,
+        showRating: !!rate,
+        showYear: true,
+      },
     };
     return configs[from] || configs.search;
   }, [from, isAggregate, douban_id, rate]);
@@ -440,7 +481,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     // 聚合源信息 - 直接在菜单中展示，不需要单独的操作项
 
     // 收藏/取消收藏操作
-    if (config.showHeart && from !== 'douban' && actualSource && actualId) {
+    if (config.showHeart && from !== 'douban' && from !== 'shortdrama' && actualSource && actualId) {
       const currentFavorited = from === 'search' ? searchFavorited : favorited;
 
       if (from === 'search') {
