@@ -455,30 +455,25 @@ function SearchPageClient() {
 
     // 内容类型筛选
     if (showContentFilterUI) {
+      // 场景1：后台禁用过滤器 (开关打开) -> 前端显示所有内容，并提供筛选
       if (isYellowFilterDisabled) {
-        // 管理后台禁用过滤器(打开状态)，前端按标签正常筛选
-        switch (contentFilter) {
-          case 'normal':
-            filtered = filtered.filter((item) => item.isYellow !== true);
-            break;
-          case 'yellow':
-            filtered = filtered.filter((item) => item.isYellow === true);
-            break;
-          default: // 'all'
-            break;
+        if (contentFilter === 'normal') {
+          // 常规：显示正常内容
+          filtered = filtered.filter((item) => !item.isYellow);
+        } else if (contentFilter === 'yellow') {
+          // 探索：显示被标记的风险内容
+          filtered = filtered.filter((item) => item.isYellow === true);
         }
-      } else {
-        // 管理后台启用过滤器(关闭状态)
-        switch (contentFilter) {
-          case 'yellow':
-            filtered = []; // 探索内容为空
-            break;
-          case 'all':
-          case 'normal':
-          default:
-            // 全部和常规都显示过滤后的内容
-            filtered = filtered.filter((item) => item.isYellow !== true);
-            break;
+        // 当 contentFilter 为 'all' 时，不进行任何操作，显示全部内容
+      }
+      // 场景2：后台启用过滤器 (开关关闭) -> 前端强制过滤
+      else {
+        if (contentFilter === 'yellow') {
+          // 探索：不显示任何内容
+          filtered = [];
+        } else {
+          // 全部 和 常规：都只显示过滤后的正常内容
+          filtered = filtered.filter((item) => !item.isYellow);
         }
       }
     }
@@ -515,36 +510,31 @@ function SearchPageClient() {
     
     // 内容类型筛选
     if (showContentFilterUI) {
+      // 场景1：后台禁用过滤器 (开关打开) -> 前端显示所有内容，并提供筛选
       if (isYellowFilterDisabled) {
-        // 管理后台禁用过滤器(打开状态)，前端按标签正常筛选
-        switch (contentFilter) {
-          case 'normal':
-            filtered = filtered.filter(
-              ([, group]) => !group.some((item) => item.isYellow === true)
-            );
-            break;
-          case 'yellow':
-            filtered = filtered.filter(([, group]) =>
-              group.some((item) => item.isYellow === true)
-            );
-            break;
-          default: // 'all'
-            break;
+        if (contentFilter === 'normal') {
+          // 常规：显示不包含任何风险内容的聚合组
+          filtered = filtered.filter(
+            ([, group]) => !group.some((item) => item.isYellow === true)
+          );
+        } else if (contentFilter === 'yellow') {
+          // 探索：显示包含至少一个风险内容的聚合组
+          filtered = filtered.filter(
+            ([, group]) => group.some((item) => item.isYellow === true)
+          );
         }
-      } else {
-        // 管理后台启用过滤器(关闭状态)
-        switch (contentFilter) {
-          case 'yellow':
-            filtered = []; // 探索内容为空
-            break;
-          case 'all':
-          case 'normal':
-          default:
-            // 全部和常规都显示过滤后的内容
-            filtered = filtered.filter(
-              ([, group]) => !group.some((item) => item.isYellow === true)
-            );
-            break;
+        // 当 contentFilter 为 'all' 时，不进行任何操作，显示全部聚合组
+      }
+      // 场景2：后台启用过滤器 (开关关闭) -> 前端强制过滤
+      else {
+        if (contentFilter === 'yellow') {
+          // 探索：不显示任何内容
+          filtered = [];
+        } else {
+          // 全部 和 常规：都只显示不包含任何风险内容的聚合组
+          filtered = filtered.filter(
+            ([, group]) => !group.some((item) => item.isYellow === true)
+          );
         }
       }
     }
