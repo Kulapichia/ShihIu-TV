@@ -288,7 +288,7 @@ export function ChatModal({
       default:
         break;
     }
-  }, [selectedConversation, preloadUserAvatars]);
+  }, [selectedConversation, preloadUserAvatars, isOpen]);
 
   // WebSocket 连接 - 始终保持连接以接收实时消息
   const { isConnected, sendMessage: sendWebSocketMessage } = useWebSocket({
