@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getCacheTime } from '@/lib/config';
+import { getCacheTime, API_CONFIG } from '@/lib/config';
 
 // 强制动态路由，禁用所有缓存
 export const dynamic = 'force-dynamic';
@@ -11,11 +11,8 @@ export const fetchCache = 'force-no-store';
 async function getShortDramaCategoriesInternal() {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
-  const response = await fetch('https://api.r2afosne.dpdns.org/vod/categories', {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Accept': 'application/json',
-    },
+  const response = await fetch(`${API_CONFIG.shortdrama.baseUrl}/vod/categories`, {
+    headers: API_CONFIG.shortdrama.headers,
     signal: controller.signal,
   });
 
