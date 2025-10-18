@@ -68,6 +68,20 @@ const nextConfig = {
     // Modify the file loader rule to ignore *.svg, since we have it handled now. 
     fileLoaderRule.exclude = /\.svg$/i;
 
+    // --- Webpack路径别名和模块解析 ---
+    const path = require('path');
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname, 'src'),
+      '~': path.resolve(__dirname, 'public'),
+    };
+    config.resolve.extensions = ['.ts', '.tsx', '.js', '.jsx', '.json', ...config.resolve.extensions];
+    config.resolve.modules = [
+      path.resolve(__dirname, 'src'),
+      'node_modules',
+      ...config.resolve.modules,
+    ];
+
     config.resolve.fallback = {
       ...config.resolve.fallback,
       net: false,
