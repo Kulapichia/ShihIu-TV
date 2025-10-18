@@ -4,6 +4,7 @@
 import { useEffect, useRef } from 'react';
 import { ChevronLeft, Paperclip, Send, Smile, Users, Image as ImageIcon, X } from 'lucide-react';
 import { ChatMessage, Conversation } from '../../lib/types';
+import { User } from '@/lib/admin.types';
 import { MessageBubble } from './MessageBubble';
 
 // 定义 Props 类型
