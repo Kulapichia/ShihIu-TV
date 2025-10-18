@@ -58,15 +58,7 @@ export type VideoCardHandle = {
   setSourceNames: (names?: string[]) => void;
   setDoubanId: (id?: number) => void;
 };
-    isAggregate = false,
-    origin = 'vod',
-    remarks,
-    vod_class,
-    vod_tag,
-  }: VideoCardProps,
-  ref
-) {
-  
+
 const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard(
   {
     id,
