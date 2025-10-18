@@ -732,7 +732,39 @@ export class DbManager {
     }
   }
 
+  // ---------- 机器码管理 ----------
+  async getUserMachineCode(userName: string): Promise<string | null> {
+    if (typeof (this.storage as any).getUserMachineCode === 'function') {
+      return (this.storage as any).getUserMachineCode(userName);
+    }
+    return null;
+  }
 
+  async setUserMachineCode(userName: string, machineCode: string, deviceInfo?: string): Promise<void> {
+    if (typeof (this.storage as any).setUserMachineCode === 'function') {
+      await (this.storage as any).setUserMachineCode(userName, machineCode, deviceInfo);
+    }
+  }
+
+  async deleteUserMachineCode(userName: string): Promise<void> {
+    if (typeof (this.storage as any).deleteUserMachineCode === 'function') {
+      await (this.storage as any).deleteUserMachineCode(userName);
+    }
+  }
+
+  async getMachineCodeUsers(): Promise<Record<string, { machineCode: string; deviceInfo?: string; bindTime: number }>> {
+    if (typeof (this.storage as any).getMachineCodeUsers === 'function') {
+      return (this.storage as any).getMachineCodeUsers();
+    }
+    return {};
+  }
+
+  async isMachineCodeBound(machineCode: string): Promise<string | null> {
+    if (typeof (this.storage as any).isMachineCodeBound === 'function') {
+      return (this.storage as any).isMachineCodeBound(machineCode);
+    }
+    return null;
+  }
 
   // ---------- 聊天功能 ----------
   // 消息管理
@@ -845,48 +877,6 @@ export class DbManager {
     if (typeof (this.storage as any).searchUsers === 'function') {
       return (this.storage as any).searchUsers(query);
     }
-    return [];
-  }
-
-  // ---------- 机器码绑定相关方法 ----------
-  
-  async getUserMachineCode(userName: string): Promise<string | null> {
-    if (typeof (this.storage as any).getUserMachineCode === 'function') {
-      return (this.storage as any).getUserMachineCode(userName);
-    }
-    console.warn('存储类型不支持 getUserMachineCode 方法');
-    return null;
-  }
-
-  async setUserMachineCode(userName: string, machineCode: string, deviceInfo?: any): Promise<void> {
-    if (typeof (this.storage as any).setUserMachineCode === 'function') {
-      await (this.storage as any).setUserMachineCode(userName, machineCode, deviceInfo);
-    } else {
-      console.warn('存储类型不支持 setUserMachineCode 方法');
-    }
-  }
-
-  async unbindMachineCode(userName: string): Promise<void> {
-    if (typeof (this.storage as any).unbindMachineCode === 'function') {
-      await (this.storage as any).unbindMachineCode(userName);
-    } else {
-      console.warn('存储类型不支持 unbindMachineCode 方法');
-    }
-  }
-
-  async isMachineCodeBound(machineCode: string): Promise<string | null> {
-    if (typeof (this.storage as any).isMachineCodeBound === 'function') {
-      return (this.storage as any).isMachineCodeBound(machineCode);
-    }
-    console.warn('存储类型不支持 isMachineCodeBound 方法');
-    return null;
-  }
-
-  async getAllMachineCodes(): Promise<{ username: string; machine_code: string; device_info?: any; bind_time: number }[]> {
-    if (typeof (this.storage as any).getAllMachineCodes === 'function') {
-      return (this.storage as any).getAllMachineCodes();
-    }
-    console.warn('存储类型不支持 getAllMachineCodes 方法');
     return [];
   }
 }
