@@ -9,6 +9,46 @@ import { moderateContent, decisionThresholds } from '@/lib/yellow';
 import { checkImageWithSightengine } from '@/lib/sightengine-client';
 import { checkImageWithBaidu } from '@/lib/baidu-client';
 
+// 短剧搜索函数
+async function searchShortDrama(query: string, page = 1, limit = 20): Promise<any[]> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const response = await fetch(`https://api.r2afosne.dpdns.org/vod/search?name=${encodeURIComponent(query)}&page=${page}&limit=${limit}`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json', 'User-Agent': 'SiffCITY/1.0' },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) throw new Error(`Short drama API returned ${response.status}`);
+    const data = await response.json();
+    if (!data.list || !Array.isArray(data.list)) return [];
+
+    const limitedResults = data.list.slice(0, limit);
+    return limitedResults.map((item: any) => ({
+      id: item.id?.toString() || '',
+      title: item.name || '',
+      poster: item.cover || '',
+      year: item.update_time ? new Date(item.update_time).getFullYear().toString() : 'unknown',
+      episodes: [{ id: '1', name: '第1集' }],
+      source: 'shortdrama',
+      source_name: '短剧',
+      douban_id: 0,
+      type_name: '短剧',
+      score: item.score || 0,
+      update_time: item.update_time || '',
+      vod_class: '',
+      vod_tag: '',
+    }));
+  } catch (error) {
+    console.warn('短剧搜索失败:', error);
+    return [];
+  }
+}
+
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
@@ -140,7 +180,7 @@ export async function GET(request: NextRequest) {
         const startEvent = `data: ${JSON.stringify({
           type: 'start',
           query,
-          totalSources: apiSites.length,
+          totalSources: apiSites.length + 1,
           timestamp: Date.now(),
         })}\n\n`;
   
@@ -158,7 +198,10 @@ export async function GET(request: NextRequest) {
         
         // 创建一个任务队列的副本，以便安全地从中取任务
         const taskQueue = [...apiSites];
-  
+         let completedSources = 0;
+        const totalSources = apiSites.length + 1;
+        const allResults: any[] = [];
+        const concurrency = 8; 
         const runWorker = async (workerId: number) => {
           // 每个 "工人" 持续从队列中取任务，直到队列为空
           while (taskQueue.length > 0) {
@@ -459,10 +502,59 @@ export async function GET(request: NextRequest) {
         };
         
         // 启动并发的 "工人"
-        const workers = Array(Math.min(concurrency, totalSources)).fill(null).map((_, i) => runWorker(i + 1));
+        const workers = Array(Math.min(concurrency, apiSites.length)).fill(null).map((_, i) => runWorker(i + 1));
         
-        // 等待所有 "工人" 完成他们的工作（即任务队列为空）
-        await Promise.all(workers);
+        // 并行处理短剧搜索
+        const shortDramaPromise = (async () => {
+          try {
+            const results = await searchShortDrama(query, 1, 20);
+            // 短剧搜索结果不需要复杂的审核和排序，直接发送
+            if (!streamClosed && results.length > 0) {
+              const sourceEvent = `data: ${JSON.stringify({
+                type: 'source_result',
+                source: 'shortdrama',
+                sourceName: '短剧',
+                results: results,
+                timestamp: Date.now(),
+              })}\n\n`;
+              safeEnqueue(encoder.encode(sourceEvent));
+              allResults.push(...results);
+            }
+          } catch (error) {
+             const errorMessage = error instanceof Error ? error.message : String(error);
+             if (!streamClosed) {
+                const errorEvent = `data: ${JSON.stringify({
+                  type: 'source_error',
+                  source: 'shortdrama',
+                  sourceName: '短剧',
+                  error: errorMessage,
+                  timestamp: Date.now(),
+                })}\n\n`;
+                safeEnqueue(encoder.encode(errorEvent));
+             }
+          } finally {
+            completedSources++;
+          }
+        })();
+
+        // 等待所有 "工人" 和短剧搜索完成
+        await Promise.all([...workers, shortDramaPromise]);
+
+        // 确保在所有任务完成后（包括短剧）再发送完成事件
+        if (completedSources >= totalSources && !streamClosed) {
+          console.log('[WS Search API] All sources completed (including short drama). Sending complete event.');
+          const completeEvent = `data: ${JSON.stringify({
+            type: 'complete',
+            totalResults: allResults.length,
+            completedSources,
+            timestamp: Date.now(),
+          })}\n\n`;
+          if (safeEnqueue(encoder.encode(completeEvent))) {
+            try {
+              controller.close();
+            } catch (e) { console.warn('Failed to close controller:', e); }
+          }
+        }
       },
   
       cancel() {
