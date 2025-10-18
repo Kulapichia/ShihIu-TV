@@ -732,39 +732,7 @@ export class DbManager {
     }
   }
 
-  // ---------- 机器码管理 ----------
-  async getUserMachineCode(userName: string): Promise<string | null> {
-    if (typeof (this.storage as any).getUserMachineCode === 'function') {
-      return (this.storage as any).getUserMachineCode(userName);
-    }
-    return null;
-  }
 
-  async setUserMachineCode(userName: string, machineCode: string, deviceInfo?: string): Promise<void> {
-    if (typeof (this.storage as any).setUserMachineCode === 'function') {
-      await (this.storage as any).setUserMachineCode(userName, machineCode, deviceInfo);
-    }
-  }
-
-  async deleteUserMachineCode(userName: string): Promise<void> {
-    if (typeof (this.storage as any).deleteUserMachineCode === 'function') {
-      await (this.storage as any).deleteUserMachineCode(userName);
-    }
-  }
-
-  async getMachineCodeUsers(): Promise<Record<string, { machineCode: string; deviceInfo?: string; bindTime: number }>> {
-    if (typeof (this.storage as any).getMachineCodeUsers === 'function') {
-      return (this.storage as any).getMachineCodeUsers();
-    }
-    return {};
-  }
-
-  async isMachineCodeBound(machineCode: string): Promise<string | null> {
-    if (typeof (this.storage as any).isMachineCodeBound === 'function') {
-      return (this.storage as any).isMachineCodeBound(machineCode);
-    }
-    return null;
-  }
 
   // ---------- 聊天功能 ----------
   // 消息管理
