@@ -46,6 +46,8 @@ export async function POST(request: NextRequest) {
       TMDBApiKey,
       TMDBLanguage,
       EnableTMDBActorSearch,
+      RequireDeviceCode,
+      CustomTheme,
     } = body as {
       SiteName: string;
       Announcement: string;
@@ -64,6 +66,11 @@ export async function POST(request: NextRequest) {
       TMDBApiKey?: string;
       TMDBLanguage?: string;
       EnableTMDBActorSearch?: boolean;
+      RequireDeviceCode: boolean;
+      CustomTheme?: {
+        selectedTheme: string;
+        customCSS: string;
+      };
     };
 
     // 参数校验
@@ -81,7 +88,12 @@ export async function POST(request: NextRequest) {
       typeof EnableVirtualScroll !== 'boolean' ||
       typeof EnableRegistration !== 'boolean' ||
       typeof RegistrationApproval !== 'boolean' ||
-      typeof IntelligentFilter !== 'object' // 新增：校验 IntelligentFilter 是一个对象
+      typeof IntelligentFilter !== 'object' ||
+      typeof RequireDeviceCode !== 'boolean' ||
+      (CustomTheme && (
+        typeof CustomTheme.selectedTheme !== 'string' ||
+        typeof CustomTheme.customCSS !== 'string'
+      ))
     ) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
@@ -162,6 +174,8 @@ export async function POST(request: NextRequest) {
       TMDBApiKey: TMDBApiKey || '',
       TMDBLanguage: TMDBLanguage || 'zh-CN',
       EnableTMDBActorSearch: EnableTMDBActorSearch || false,
+      RequireDeviceCode,
+      CustomTheme,
     };
 
 
