@@ -1021,37 +1021,41 @@ function PlayPageClient() {
       return;
     }
 
-    const episodeData = detailData.episodes[episodeIndex];
-
-    // 检查是否为短剧格式
-    if (episodeData && episodeData.startsWith('shortdrama:')) {
+    let newUrl = detailData.episodes[episodeIndex] || '';
+  
+    // 如果是短剧且URL还没有经过代理处理，再次处理
+    if (detailData.source === 'shortdrama' && newUrl && !newUrl.includes('/api/proxy/video')) {
+      // 检查是否需要使用代理
+      const needsProxy = [
+        'quark.cn', 'drive.quark.cn', 'dl-c-zb-', 'dl-c-',
+        'ffzy-online', 'bfikuncdn.com', 'vip.', 'm3u8'
+      ].some(keyword => newUrl.includes(keyword)) ||
+        !!newUrl.match(/https?:\/\/[^/]*\.drive\./) &&
+        !newUrl.includes('localhost') && !newUrl.includes('127.0.0.1');
+  
+      if (needsProxy) {
+        newUrl = `/api/proxy/video?url=${encodeURIComponent(newUrl)}`;
+      }
+    } else if (newUrl && newUrl.startsWith('shortdrama:')) { // 兼容旧的短剧格式
       try {
-        const [, videoId, episode] = episodeData.split(':');
-        const response = await fetch(
-          `/api/shortdrama/parse?id=${videoId}&episode=${episode}`
-        );
-
+        const [, videoId, episode] = newUrl.split(':');
+        const response = await fetch(`/api/shortdrama/parse?id=${videoId}&episode=${episode}`);
         if (response.ok) {
           const result = await response.json();
-          const newUrl = result.url || '';
-          if (newUrl !== videoUrl) {
-            setVideoUrl(newUrl);
-          }
+          newUrl = result.url || '';
         } else {
           setError('短剧解析失败');
-          setVideoUrl('');
+          newUrl = '';
         }
       } catch (err) {
         console.error('短剧URL解析失败:', err);
         setError('短剧解析失败');
-        setVideoUrl('');
+        newUrl = '';
       }
-    } else {
+    }
       // 普通视频格式
-      const newUrl = episodeData || '';
-      if (newUrl !== videoUrl) {
-        setVideoUrl(newUrl);
-      }
+    if (newUrl !== videoUrl) {
+      setVideoUrl(newUrl);
     }
   };
 
@@ -2928,26 +2932,6 @@ function PlayPageClient() {
               handleNextEpisode();
             },
           },
-          // 🚀 简单弹幕发送按钮（仅Web端显示）
-          ...(isMobile ? [] : [{
-            position: 'right',
-            html: '弹',
-            tooltip: '发送弹幕',
-            click: function () {
-              if (artPlayerRef.current?.plugins?.artplayerPluginDanmuku) {
-                // 手动弹出输入框发送弹幕
-                const text = prompt('请输入弹幕内容', '');
-                if (text && text.trim()) {
-                  artPlayerRef.current.plugins.artplayerPluginDanmuku.emit({
-                    text: text.trim(),
-                    time: artPlayerRef.current.currentTime,
-                    color: '#FFFFFF',
-                    mode: 0,
-                  });
-                }
-              }
-            },
-          }]),
         ],
         // 🚀 性能优化的弹幕插件配置 - 保持弹幕数量，优化渲染性能
         plugins: [
@@ -2983,11 +2967,50 @@ function PlayPageClient() {
                 modes: JSON.parse(localStorage.getItem('danmaku_modes') || '[0, 1, 2]') as Array<0 | 1 | 2>,
                 margin: JSON.parse(localStorage.getItem('danmaku_margin') || '[10, "75%"]') as [number | `${number}%`, number | `${number}%`],
                 visible: localStorage.getItem('danmaku_visible') !== 'false',
-                emitter: false,
+                emitter: true, // 启用弹幕发送
                 maxLength: 50,
                 lockTime: 1, // 🎯 进一步减少锁定时间，提升进度跳转响应
                 theme: 'dark' as const,
                 width: 300,
+                placeholder: '发个弹幕呗~', // 发送框提示文字
+                beforeEmit: async (danmu: any) => {
+                  try {
+                    // 生成当前视频唯一的ID用于弹幕存储
+                    const videoId = `${currentSourceRef.current}_${currentIdRef.current}_${currentEpisodeIndexRef.current}`;
+                    const response = await fetch('/api/danmu', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        videoId,
+                        text: danmu.text,
+                        color: danmu.color || '#FFFFFF',
+                        mode: danmu.mode || 0,
+                        time: artPlayerRef.current?.currentTime || 0
+                      }),
+                    });
+
+                    if (!response.ok) {
+                      const errorData = await response.json();
+                      throw new Error(errorData.error || '发送弹幕失败');
+                    }
+                    
+                    if (artPlayerRef.current?.notice) {
+                      artPlayerRef.current.notice.show = '✅ 弹幕发送成功！';
+                    }
+
+                    // 返回弹幕对象让插件自动处理，并稍微延迟一点时间避免重叠
+                    return {
+                      ...danmu,
+                      time: (artPlayerRef.current?.currentTime || 0) + 0.5,
+                    };
+                  } catch (error) {
+                    console.error('发送弹幕失败:', error);
+                    if (artPlayerRef.current?.notice) {
+                      artPlayerRef.current.notice.show = '❌ 发送弹幕失败：' + (error as any).message;
+                    }
+                    throw error; // 抛出错误以阻止弹幕在本地显示
+                  }
+                },
 
                 // 🎯 激进优化配置 - 保持功能完整性
                 antiOverlap: devicePerformance === 'high', // 只有高性能设备开启防重叠，避免重叠计算
@@ -3171,11 +3194,12 @@ function PlayPageClient() {
           const style = document.createElement('style');
           style.id = 'danmuku-controls-optimize';
           style.textContent = `
-            /* 隐藏弹幕开关按钮和发射器 */
+            /* 隐藏弹幕开关按钮 */
             .artplayer-plugin-danmuku .apd-toggle {
               display: none !important;
             }
 
+            /* 隐藏弹幕发射器，因为我们将使用外部弹幕设置来控制 */
             .artplayer-plugin-danmuku .apd-emitter {
               display: none !important;
             }
