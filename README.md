@@ -332,6 +332,64 @@ networks:
     driver: bridge
 ```
 
+### ☁️ nginx配置
+
+适合无法自托管数据库的场景，完全托管的 Redis 服务。使用以下配置：
+
+```yml
+    # tv.xxxx.com -> 代理到本机的 SiffCITY 项目
+    server {
+        listen 443 ssl;
+        listen [::]:443 ssl;
+        http2 on;
+        server_name tv.xxxx.com;
+
+        # --- 通用设置 (保持不变) ---
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, HEAD, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization, X-Requested-With' always;
+        
+        # --- 【关键修改】为WebSocket聊天功能添加专用路由 ---
+        # 所有 /ws-api 开头的请求都转发到 3001 端口
+        location /ws-api {
+            proxy_pass http://127.0.0.1:3001; # <--- WebSocket服务的端口
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # WebSocket需要长连接和低延迟
+            proxy_buffering off;
+            proxy_read_timeout 7d; # 延长超时时间以保持连接
+        }
+
+        # --- 【关键修改】为普通网页和API请求配置路由 ---
+        # 其他所有请求都转发到 3133 端口
+        location / {
+            proxy_pass http://127.0.0.1:3133; # <--- 您指定的应用主服务端口
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade; # 兼容Next.js开发模式热更新
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # 保持您原有的超时和缓冲设置
+            proxy_buffering off;
+            proxy_cache off;
+            send_timeout 600;
+            proxy_connect_timeout 600;
+            proxy_send_timeout 600;
+            proxy_read_timeout 600;
+        }
+    }
+
+```
+
 ### ☁️ Upstash 云端存储（Docker）
 
 适合无法自托管数据库的场景，完全托管的 Redis 服务。
