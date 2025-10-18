@@ -4454,22 +4454,23 @@ const SiteConfigComponent = ({
         const newConfig = deepMerge(prevSettings, config.SiteConfig);
         
         // 步骤 2: 处理密钥占位符
-        const newOptions = newConfig.IntelligentFilter.options;
-        const prevOptions = prevSettings.IntelligentFilter.options;
+        // 增加对 IntelligentFilter 及其 options 属性的存在性检查，以兼容旧版配置文件
+        const newOptions = newConfig.IntelligentFilter?.options;
+        const prevOptions = prevSettings.IntelligentFilter?.options;
         
-        if (newOptions.sightengine?.apiSecret === '********' && prevOptions.sightengine?.apiSecret) {
+        if (newOptions?.sightengine?.apiSecret === '********' && prevOptions?.sightengine?.apiSecret) {
           newOptions.sightengine.apiSecret = prevOptions.sightengine.apiSecret;
         }
-        if (newOptions.custom?.apiKeyValue === '********' && prevOptions.custom?.apiKeyValue) {
+        if (newOptions?.custom?.apiKeyValue === '********' && prevOptions?.custom?.apiKeyValue) {
           newOptions.custom.apiKeyValue = prevOptions.custom.apiKeyValue;
         }
-        if (newOptions.baidu?.secretKey === '********' && prevOptions.baidu?.secretKey) {
+        if (newOptions?.baidu?.secretKey === '********' && prevOptions?.baidu?.secretKey) {
           newOptions.baidu.secretKey = prevOptions.baidu.secretKey;
         }
-        if (newOptions.aliyun?.accessKeySecret === '********' && prevOptions.aliyun?.accessKeySecret) {
+        if (newOptions?.aliyun?.accessKeySecret === '********' && prevOptions?.aliyun?.accessKeySecret) {
           newOptions.aliyun.accessKeySecret = prevOptions.aliyun.accessKeySecret;
         }
-        if (newOptions.tencent?.secretKey === '********' && prevOptions.tencent?.secretKey) {
+        if (newOptions?.tencent?.secretKey === '********' && prevOptions?.tencent?.secretKey) {
           newOptions.tencent.secretKey = prevOptions.tencent.secretKey;
         }
 
