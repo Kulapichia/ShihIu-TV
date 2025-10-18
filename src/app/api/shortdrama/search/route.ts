@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { API_CONFIG } from '@/lib/config';
 
 // 强制动态路由，禁用所有缓存
 export const dynamic = 'force-dynamic';
@@ -11,36 +12,59 @@ async function searchShortDramasInternal(
   page = 1,
   size = 20
 ) {
-  const response = await fetch(
-    `https://api.r2afosne.dpdns.org/vod/search?name=${encodeURIComponent(query)}&page=${page}&size=${size}`,
-    {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
+  // 为外部API请求设置5秒超时，防止长时间等待
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const params = new URLSearchParams({
+      name: query,
+      page: page.toString(),
+      size: size.toString(),
+    });
+
+    // 使用 API_CONFIG 构建请求URL，避免硬编码
+    const apiUrl = `${API_CONFIG.shortdrama.baseUrl}/vod/search?${params.toString()}`;
+
+    const response = await fetch(apiUrl, {
+      // 使用 API_CONFIG 中的通用请求头，并关联超时控制器
+      headers: API_CONFIG.shortdrama.headers,
+      signal: controller.signal,
+    });
+    
+    // 请求成功后，清除超时定时器
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-  );
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+    const items = data.list || [];
+    const list = items.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      cover: item.cover,
+      update_time: item.update_time || new Date().toISOString(),
+      score: item.score || 0,
+      episode_count: 1, // 搜索API没有集数信息，ShortDramaCard会自动获取
+      description: item.description || '',
+    }));
+
+    return {
+      list,
+      hasMore: data.currentPage < data.totalPages,
+    };
+  } catch (error) {
+    // 在捕获到任何错误时（包括超时），确保清除定时器
+    clearTimeout(timeoutId);
+    console.error('内部函数 searchShortDramasInternal 失败:', error);
+    // 返回一个空的、结构一致的对象，使上层调用可以优雅地处理失败情况
+    return {
+      list: [],
+      hasMore: false,
+    };
   }
-
-  const data = await response.json();
-  const items = data.list || [];
-  const list = items.map((item: any) => ({
-    id: item.id,
-    name: item.name,
-    cover: item.cover,
-    update_time: item.update_time || new Date().toISOString(),
-    score: item.score || 0,
-    episode_count: 1, // 搜索API没有集数信息，ShortDramaCard会自动获取
-    description: item.description || '',
-  }));
-
-  return {
-    list,
-    hasMore: data.currentPage < data.totalPages,
-  };
 }
 
 export async function GET(request: NextRequest) {
