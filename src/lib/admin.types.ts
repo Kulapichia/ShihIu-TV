@@ -101,6 +101,7 @@ export interface SiteConfig {
   MaxUsers?: number; // 最大用户数限制（可选）
   LinuxDoOAuth: OAuthConfig;
   TelegramAuth: TelegramConfig; // 新增 Telegram 配置
+  RequireDeviceCode: boolean;
 }
 
 export interface AdminConfig {
@@ -111,6 +112,11 @@ export interface AdminConfig {
   };
   ConfigFile: string;
   SiteConfig: SiteConfig;
+  ThemeConfig?: {
+    defaultTheme: 'default' | 'minimal' | 'warm' | 'fresh';
+    customCSS: string;
+    allowUserCustomization: boolean;
+  };
   UserConfig: {
     AllowRegister?: boolean; // 是否允许用户注册，默认 true
     AutoCleanupInactiveUsers?: boolean; // 是否自动清理非活跃用户，默认 false
