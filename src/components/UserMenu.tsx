@@ -6,6 +6,7 @@ import {
   BarChart3,
   Bell,
   Calendar,
+  Camera,
   Check,
   ChevronDown,
   ExternalLink,
@@ -17,13 +18,18 @@ import {
   Shield,
   Tv,
   User,
+  Upload,
   X,
 } from 'lucide-react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import ReactCrop, { Crop, PixelCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
+
 import { CURRENT_VERSION } from '@/lib/version';
 import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
 import {
@@ -42,17 +48,20 @@ import type { Favorite } from '@/lib/types';
 
 import { VersionPanel } from './VersionPanel';
 import VideoCard from './VideoCard';
-
+import { useToast } from './Toast';
 interface AuthInfo {
   username?: string;
   role?: 'owner' | 'admin' | 'user';
+  avatar?: string;
 }
 
 export const UserMenu: React.FC = () => {
   const router = useRouter();
+  const { showError, showSuccess } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isChangeAvatarOpen, setIsChangeAvatarOpen] = useState(false);
   const [isVersionPanelOpen, setIsVersionPanelOpen] = useState(false);
   const [isWatchingUpdatesOpen, setIsWatchingUpdatesOpen] = useState(false);
   const [isContinueWatchingOpen, setIsContinueWatchingOpen] = useState(false);
@@ -71,9 +80,28 @@ export const UserMenu: React.FC = () => {
   const [favorites, setFavorites] = useState<(Favorite & { key: string })[]>([]);
   const [hasUnreadUpdates, setHasUnreadUpdates] = useState(false);
 
+  // --- 以下为新增状态变量 ---
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 裁剪相关状态
+  const [selectedImage, setSelectedImage] = useState<string>('');
+  const [crop, setCrop] = useState<Crop>({
+    unit: '%',
+    width: 80,
+    height: 80,
+    x: 10,
+    y: 10,
+  });
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [showCropper, setShowCropper] = useState(false);
+
   // Body 滚动锁定 - 使用 overflow 方式避免布局问题
   useEffect(() => {
-    if (isSettingsOpen || isChangePasswordOpen || isWatchingUpdatesOpen || isContinueWatchingOpen || isFavoritesOpen) {
+    if (isSettingsOpen || isChangePasswordOpen || isWatchingUpdatesOpen || isContinueWatchingOpen || isFavoritesOpen || isChangeAvatarOpen) {
       const body = document.body;
       const html = document.documentElement;
 
@@ -92,8 +120,7 @@ export const UserMenu: React.FC = () => {
         html.style.overflow = originalHtmlOverflow;
       };
     }
-  }, [isSettingsOpen, isChangePasswordOpen, isWatchingUpdatesOpen, isContinueWatchingOpen, isFavoritesOpen]);
-
+  }, [isSettingsOpen, isChangePasswordOpen, isWatchingUpdatesOpen, isContinueWatchingOpen, isFavoritesOpen, isChangeAvatarOpen]);
   // 设置相关状态
   const [defaultAggregateSearch, setDefaultAggregateSearch] = useState(true);
   const [doubanProxyUrl, setDoubanProxyUrl] = useState('');
@@ -151,6 +178,17 @@ export const UserMenu: React.FC = () => {
   // 确保组件已挂载
   useEffect(() => {
     setMounted(true);
+    // 移动端检测逻辑
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
 
   // 获取认证信息
@@ -158,6 +196,10 @@ export const UserMenu: React.FC = () => {
     if (typeof window !== 'undefined') {
       const auth = getAuthInfoFromBrowserCookie();
       setAuthInfo(auth);
+      // 从API获取头像
+      if (auth?.username) {
+        fetchUserAvatar(auth.username);
+      }
     }
   }, []);
 
@@ -635,6 +677,132 @@ export const UserMenu: React.FC = () => {
     return matchedSeries ? (matchedSeries.newEpisodes || 0) : 0;
   };
 
+  // 头像相关处理函数
+  const fetchUserAvatar = async (username: string) => {
+    try {
+      const response = await fetch(`/api/avatar?user=${encodeURIComponent(username)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.avatar) {
+          setAvatarUrl(data.avatar);
+        }
+      }
+    } catch (error) {
+      console.error('获取头像失败:', error);
+    }
+  };
+
+  const handleChangeAvatar = () => {
+    setIsOpen(false);
+    setIsChangeAvatarOpen(true);
+    setSelectedImage('');
+    setShowCropper(false);
+  };
+
+  const handleCloseChangeAvatar = () => {
+    setIsChangeAvatarOpen(false);
+    setSelectedImage('');
+    setShowCropper(false);
+  };
+
+  const handleOpenFileSelector = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showError('请选择图片文件', '仅支持 JPG、PNG、GIF 等图片格式');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      showError('图片大小不能超过 2MB', '请选择较小的图片文件');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setSelectedImage(event.target.result.toString());
+        setShowCropper(true);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const getCroppedImage = async (
+    image: HTMLImageElement,
+    crop: PixelCrop
+  ): Promise<string> => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas context not available');
+
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+    const cropX = crop.x * scaleX;
+    const cropY = crop.y * scaleY;
+    const cropWidth = crop.width * scaleX;
+    const cropHeight = crop.height * scaleY;
+    const outputSize = 200;
+    canvas.width = outputSize;
+    canvas.height = outputSize;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(image, cropX, cropY, cropWidth, cropHeight, 0, 0, outputSize, outputSize);
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        }
+      }, 'image/jpeg', 0.9);
+    });
+  };
+
+  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget;
+    const minDimension = Math.min(width, height);
+    const cropSize = minDimension * 0.8;
+    const cropX = (width - cropSize) / 2;
+    const cropY = (height - cropSize) / 2;
+
+    setCrop({ unit: 'px', x: cropX, y: cropY, width: cropSize, height: cropSize });
+  };
+
+  const handleConfirmCrop = async () => {
+    if (!completedCrop || !imageRef.current || !authInfo?.username) return;
+
+    try {
+      setIsUploadingAvatar(true);
+      const croppedImageBase64 = await getCroppedImage(imageRef.current, completedCrop);
+      const response = await fetch('/api/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar: croppedImageBase64, targetUser: authInfo.username }),
+      });
+
+      if (response.ok) {
+        setAvatarUrl(croppedImageBase64);
+        showSuccess('头像上传成功', '您的头像已更新');
+        handleCloseChangeAvatar();
+      } else {
+        const errorData = await response.json();
+        showError('头像上传失败', errorData.error || '请稍后重试');
+      }
+    } catch (error) {
+      console.error('上传头像失败:', error);
+      showError('头像上传失败', '网络错误，请稍后重试');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
   const handleChangePassword = () => {
     setIsOpen(false);
     setIsChangePasswordOpen(true);
@@ -918,11 +1086,52 @@ export const UserMenu: React.FC = () => {
       <div className='fixed top-14 right-4 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl z-[1001] border border-gray-200/50 dark:border-gray-700/50 overflow-hidden select-none'>
         {/* 用户信息区域 */}
         <div className='px-3 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-800 dark:to-gray-800/50'>
-          <div className='space-y-1'>
-            <div className='flex items-center justify-between'>
-              <span className='text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
-                当前用户
-              </span>
+          <div className='flex items-center gap-3'>
+            {/* 用户头像 */}
+            <div className='w-10 h-10 rounded-full overflow-hidden relative flex-shrink-0'>
+              {avatarUrl ? (
+                <Image
+                  src={avatarUrl}
+                  alt="用户头像"
+                  fill
+                  sizes="40px"
+                  className='object-cover'
+                />
+              ) : (
+                <div className='w-full h-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center'>
+                  <User className='w-6 h-6 text-blue-500 dark:text-blue-400' />
+                </div>
+              )}
+            </div>
+            {/* 用户信息 */}
+            <div className='flex-1 min-w-0'>
+              <div className='flex items-center justify-between'>
+                <span className='text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                  当前用户
+                </span>
+                <span
+                  className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${(authInfo?.role || 'user') === 'owner'
+                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                    : (authInfo?.role || 'user') === 'admin'
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                      : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                    }`}
+                >
+                  {getRoleText(authInfo?.role || 'user')}
+                </span>
+              </div>
+              <div className='flex items-center justify-between'>
+                <div className='font-semibold text-gray-900 dark:text-gray-100 text-sm truncate'>
+                  {authInfo?.username || 'default'}
+                </div>
+                <div className='text-[10px] text-gray-400 dark:text-gray-500'>
+                  数据存储：
+                  {storageType === 'localstorage' ? '本地' : storageType}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
               <span
                 className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${(authInfo?.role || 'user') === 'owner'
                   ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
@@ -1045,6 +1254,15 @@ export const UserMenu: React.FC = () => {
             <span className='font-medium'>TVBox 配置</span>
           </button>
 
+          {/* 修改头像按钮 */}
+          <button
+            onClick={handleChangeAvatar}
+            className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
+          >
+            <Camera className='w-4 h-4 text-gray-500 dark:text-gray-400' />
+            <span className='font-medium'>修改头像</span>
+          </button>
+          
           {/* 修改密码按钮 */}
           {showChangePassword && (
             <button
@@ -2093,13 +2311,24 @@ export const UserMenu: React.FC = () => {
       <div className='relative'>
         <button
           onClick={handleMenuClick}
-          className='relative w-10 h-10 p-2 rounded-full flex items-center justify-center text-gray-600 hover:text-blue-500 dark:text-gray-300 dark:hover:text-blue-400 transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-blue-500/30 dark:hover:shadow-blue-400/30 group'
+          className={`relative ${isMobile ? 'w-8 h-8 p-0.5' : 'w-10 h-10 p-0.5'} rounded-full flex items-center justify-center text-gray-600 hover:scale-110 group transition-all duration-300 overflow-hidden hover:shadow-lg hover:shadow-blue-500/30 dark:hover:shadow-blue-400/30`}
           aria-label='User Menu'
         >
           {/* 微光背景效果 */}
           <div className='absolute inset-0 rounded-full bg-gradient-to-br from-blue-400/0 to-purple-600/0 group-hover:from-blue-400/20 group-hover:to-purple-600/20 dark:group-hover:from-blue-300/20 dark:group-hover:to-purple-500/20 transition-all duration-300'></div>
-
-          <User className='w-full h-full relative z-10 group-hover:scale-110 transition-transform duration-300' />
+          {avatarUrl ? (
+            <div className='w-full h-full rounded-full overflow-hidden relative z-10'>
+              <Image
+                src={avatarUrl}
+                alt="用户头像"
+                fill
+                sizes="40px"
+                className='object-cover'
+              />
+            </div>
+          ) : (
+            <User className='w-6 h-6 relative z-10 text-gray-600 dark:text-gray-300 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors' />
+          )}
         </button>
         {/* 统一更新提醒点：版本更新或剧集更新都显示橙色点 */}
         {((updateStatus === UpdateStatus.HAS_UPDATE) || (hasUnreadUpdates && totalUpdates > 0)) && (
@@ -2132,6 +2361,56 @@ export const UserMenu: React.FC = () => {
       {isFavoritesOpen &&
         mounted &&
         createPortal(favoritesPanel, document.body)}
+
+      {/* 使用 Portal 将修改头像面板渲染到 document.body */}
+      {isChangeAvatarOpen &&
+        mounted &&
+        createPortal(
+          <>
+            {/* 背景遮罩 */}
+            <div
+              className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[1000]'
+              onClick={handleCloseChangeAvatar}
+            />
+            {/* 修改头像面板 */}
+            <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'>
+              <div className='p-6'>
+                {/* 标题栏 */}
+                <div className='flex items-center justify-between mb-6'>
+                  <h3 className='text-xl font-bold text-gray-800 dark:text-gray-200'>修改头像</h3>
+                  <button onClick={handleCloseChangeAvatar} className='w-8 h-8 p-1 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors' aria-label='Close'>
+                    <X className='w-full h-full' />
+                  </button>
+                </div>
+                {!showCropper ? (
+                  <div className='flex flex-col items-center justify-center gap-6 my-6'>
+                    <div className='w-24 h-24 rounded-full overflow-hidden relative'>
+                      {avatarUrl ? <Image src={avatarUrl} alt="用户头像" fill sizes="96px" className='object-cover' /> : <div className='w-full h-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center'><User className='w-12 h-12 text-blue-500 dark:text-blue-400' /></div>}
+                    </div>
+                    <div>
+                      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarSelected} disabled={isUploadingAvatar} />
+                      <button onClick={handleOpenFileSelector} disabled={isUploadingAvatar} className='flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors'>
+                        <Upload className='w-4 h-4' />选择图片
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className='flex flex-col items-center justify-center gap-4 my-6'>
+                    <div className='w-full max-w-md'><ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(c) => setCompletedCrop(c)} aspect={1} circularCrop><img ref={imageRef} src={selectedImage} alt="Crop me" className="max-w-full max-h-64 object-contain" onLoad={onImageLoad} /></ReactCrop></div>
+                    <div className='flex gap-3'>
+                      <button onClick={() => { setShowCropper(false); setSelectedImage(''); setCompletedCrop(undefined); setCrop({ unit: '%', width: 80, height: 80, x: 10, y: 10 }); if (fileInputRef.current) { fileInputRef.current.value = ''; } }} className='px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors'>重新选择</button>
+                      <button onClick={handleConfirmCrop} disabled={isUploadingAvatar || !completedCrop} className='flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors'>
+                        <Check className='w-4 h-4' />{isUploadingAvatar ? '上传中...' : '确认上传'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <p className='text-xs text-gray-500 dark:text-gray-400 text-center mt-4 pt-4 border-t border-gray-200 dark:border-gray-700'>支持 JPG、PNG、GIF 等格式，文件大小不超过 2MB</p>
+              </div>
+            </div>
+          </>,
+          document.body
+        )}
 
       {/* 版本面板 */}
       <VersionPanel
