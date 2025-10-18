@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { getConfig } from '@/lib/config';
 
 export const runtime = 'nodejs';
 
@@ -16,10 +16,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const targetUser = searchParams.get('user') || authInfo.username;
 
-    // 在聊天系统中，用户应该能够查看其他用户的头像，这对聊天功能是必要的
-    // 只要是已认证用户，就可以查看任何用户的头像
-    // 这对于聊天、好友功能等社交功能是必要的
-
+    // 任何登录用户都可以查看其他用户的头像
     const avatar = await db.getUserAvatar(targetUser);
 
     if (!avatar) {
@@ -62,10 +59,13 @@ export async function POST(request: NextRequest) {
 
     const userToUpdate = targetUser || authInfo.username;
 
+    const config = await getConfig();
+    const operator = config.UserConfig.Users.find(u => u.username === authInfo.username);
+    const isOwner = authInfo.username === process.env.USERNAME;
+    const isAdmin = operator?.role === 'admin';
+
     // 只允许更新自己的头像，管理员和站长可以更新任何用户的头像
-    const canUpdate = userToUpdate === authInfo.username ||
-      authInfo.role === 'admin' ||
-      authInfo.role === 'owner';
+    const canUpdate = userToUpdate === authInfo.username || isAdmin || isOwner;
 
     if (!canUpdate) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
@@ -90,11 +90,14 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const targetUser = searchParams.get('user') || authInfo.username;
+    
+    const config = await getConfig();
+    const operator = config.UserConfig.Users.find(u => u.username === authInfo.username);
+    const isOwner = authInfo.username === process.env.USERNAME;
+    const isAdmin = operator?.role === 'admin';
 
     // 只允许删除自己的头像，管理员和站长可以删除任何用户的头像
-    const canDelete = targetUser === authInfo.username ||
-      authInfo.role === 'admin' ||
-      authInfo.role === 'owner';
+    const canDelete = targetUser === authInfo.username || isAdmin || isOwner;
 
     if (!canDelete) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
