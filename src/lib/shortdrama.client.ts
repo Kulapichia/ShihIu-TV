@@ -6,6 +6,8 @@ import {
   ShortDramaItem,
   ShortDramaParseResult,
 } from './types';
+
+export type { ShortDramaCategory };
 import {
   SHORTDRAMA_CACHE_EXPIRE,
   getCacheKey,
@@ -471,7 +473,7 @@ export async function getShortDramaLatest(
     
     const apiUrl = isMobile()
       ? `/api/shortdrama/latest?page=${page}&size=${size}`
-      : `${SHORTDRAMA_API_BASE}/vod/latest?page=${page}&size=${size}`;
+      : `${API_CONFIG.shortdrama.baseUrl}/vod/latest?page=${page}&size=${size}`;
       
     const fetchOptions: RequestInit = isMobile() ? {} : {
       headers: {
