@@ -176,7 +176,6 @@ export async function POST(request: NextRequest) {
       TMDBLanguage: TMDBLanguage || 'zh-CN',
       EnableTMDBActorSearch: EnableTMDBActorSearch || false,
       RequireDeviceCode,
-      CustomTheme,
     };
 
 
