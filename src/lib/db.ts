@@ -879,7 +879,6 @@ export class DbManager {
     }
     return [];
   }
-}
 
   // ---------- 机器码绑定相关方法 ----------
   
