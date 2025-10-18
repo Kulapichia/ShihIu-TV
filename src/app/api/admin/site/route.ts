@@ -170,7 +170,8 @@ export async function POST(request: NextRequest) {
       EnableVirtualScroll,
       EnableRegistration,
       RegistrationApproval,
-      IntelligentFilter, // 新增：将处理过的 IntelligentFilter 对象加入保存
+      // 仅当 IntelligentFilter 在请求体中存在时才更新，防止旧版前端请求将其覆盖为 undefined
+      ...(IntelligentFilter !== undefined && { IntelligentFilter }),
       TMDBApiKey: TMDBApiKey || '',
       TMDBLanguage: TMDBLanguage || 'zh-CN',
       EnableTMDBActorSearch: EnableTMDBActorSearch || false,
