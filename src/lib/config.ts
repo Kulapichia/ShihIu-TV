@@ -53,6 +53,13 @@ export const API_CONFIG = {
       Accept: 'application/json',
     },
   },
+  shortdrama: {
+    baseUrl: 'https://api.r2afosne.dpdns.org',
+    headers: {
+      'Accept': 'application/json',
+      'User-Agent': 'SiffCITY/1.0',
+    },
+  },
 };
 
 // 在模块加载时根据环境决定配置来源
