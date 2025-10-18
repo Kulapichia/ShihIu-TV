@@ -2,7 +2,7 @@ import { NextResponse, NextRequest } from 'next/server';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { AdminConfig } from '@/lib/admin.types';
-import { getConfig, setCachedConfig } from '@/lib/config';
+import { getConfig, setCachedConfig, clearConfigCache } from '@/lib/config';
 
 export const runtime = 'nodejs';
 
@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
-
     const config = await getConfig();
     const themeConfig = config.ThemeConfig;
 
@@ -21,7 +20,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: themeConfig,
     });
-  } catch (error) {
+  } catch (error)> {
     console.error('获取主题配置失败:', error);
     return NextResponse.json(
       { error: '获取主题配置失败' },
@@ -67,7 +66,9 @@ export async function POST(request: NextRequest) {
     };
 
     await db.saveAdminConfig(updatedConfig);
-    await setCachedConfig(updatedConfig);
+    
+    // 清除缓存以确保立即生效
+    clearConfigCache();
 
     return NextResponse.json({
       success: true,
