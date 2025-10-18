@@ -2023,16 +2023,69 @@ function SearchPageClient() {
       </div>
 
       {/* 返回顶部悬浮按钮 */}
-      <button
-        onClick={scrollToTop}
-        className={`fixed bottom-6 right-6 z-50 w-12 h-12 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center ${showBackToTop
-          ? 'opacity-100 translate-y-0'
+      <div
+        className={`fixed bottom-20 md:bottom-6 right-6 z-[500] transition-all duration-300 ease-in-out ${showBackToTop
+          ? 'opacity-100 translate-y-0 pointer-events-auto'
           : 'opacity-0 translate-y-4 pointer-events-none'
           }`}
-        aria-label='返回顶部'
       >
-        <ChevronUp className='w-6 h-6' />
-      </button>
+        <button
+          onClick={scrollToTop}
+          className='relative w-14 h-14 bg-gradient-to-br from-green-500/20 via-emerald-500/20 to-teal-500/20 backdrop-blur-xl rounded-full shadow-2xl transition-all duration-300 ease-out group hover:scale-110 hover:shadow-green-500/50 focus:outline-none focus:ring-2 focus:ring-green-400/50 border border-white/20'
+          aria-label={`返回顶部 (${Math.round(scrollProgress)}%)`}
+          style={{
+            background: `conic-gradient(from 0deg, #22c55e ${scrollProgress * 3.6}deg, rgba(34, 197, 94, 0.1) ${scrollProgress * 3.6}deg)`
+          }}
+        >
+          {/* 内部发光圆圈 */}
+          <div className='absolute inset-1 bg-gradient-to-br from-green-500/30 to-emerald-500/30 rounded-full backdrop-blur-sm flex items-center justify-center transition-all duration-300 group-hover:from-green-400/40 group-hover:to-emerald-400/40'>
+            <ChevronUp className='w-6 h-6 text-white/90 transition-all duration-300 group-hover:scale-110 group-hover:text-white drop-shadow-lg' />
+          </div>
+
+          {/* 进度环 */}
+          <svg className='absolute inset-0 w-full h-full -rotate-90' viewBox='0 0 56 56'>
+            <circle
+              cx='28'
+              cy='28'
+              r='25'
+              fill='none'
+              stroke='rgba(255, 255, 255, 0.1)'
+              strokeWidth='2'
+            />
+            <circle
+              cx='28'
+              cy='28'
+              r='25'
+              fill='none'
+              stroke='url(#progressGradient)'
+              strokeWidth='2'
+              strokeLinecap='round'
+              strokeDasharray={`${(scrollProgress / 100) * 157} 157`}
+              className='transition-all duration-300 ease-out'
+            />
+            <defs>
+              <linearGradient id='progressGradient' x1='0%' y1='0%' x2='100%' y2='100%'>
+                <stop offset='0%' stopColor='#22c55e' />
+                <stop offset='50%' stopColor='#10b981' />
+                <stop offset='100%' stopColor='#14b8a6' />
+              </linearGradient>
+            </defs>
+          </svg>
+
+          {/* 悬停时的进度提示 */}
+          <div className='absolute -top-12 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none'>
+            <div className='bg-gray-900/90 text-white text-xs px-3 py-1.5 rounded-lg backdrop-blur-sm border border-white/10 shadow-xl'>
+              <div className='text-center font-medium'>
+                {Math.round(scrollProgress)}%
+              </div>
+              <div className='w-2 h-2 bg-gray-900/90 rotate-45 absolute -bottom-1 left-1/2 transform -translate-x-1/2 border-r border-b border-white/10'></div>
+            </div>
+          </div>
+
+          {/* 脉冲动画 */}
+          <div className='absolute inset-0 rounded-full bg-gradient-to-br from-green-400/20 to-emerald-400/20 animate-pulse opacity-0 group-hover:opacity-100 transition-opacity duration-300'></div>
+        </button>
+      </div>
     </PageLayout>
   );
 }
