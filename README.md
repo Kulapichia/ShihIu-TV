@@ -264,6 +264,7 @@ services:
     restart: on-failure
     ports:
       - '3000:3000'
+      - '3001:3001' # 为WebSocket服务开放端口
     environment:
       - USERNAME=admin
       - PASSWORD=your_secure_password
