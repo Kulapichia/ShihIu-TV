@@ -20,7 +20,8 @@ type Action =
   | 'batch_delete'
   | 'update_check_results'
   | 'batch_delete_invalid'
-  | 'batch_import';
+  | 'batch_import'
+  | 'edit';
 
 interface BaseBody {
   action?: Action;
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
       'update_check_results',
       'batch_delete_invalid',
       'batch_import',
+      'edit',
     ];
     if (!username || !action || !ACTIONS.includes(action)) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
@@ -120,6 +122,26 @@ export async function POST(request: NextRequest) {
         if (!entry)
           return NextResponse.json({ error: '源不存在' }, { status: 404 });
         entry.disabled = false;
+        break;
+      }
+      case 'edit': {
+        const { key, name, api, detail } = body as {
+          key?: string;
+          name?: string;
+          api?: string;
+          detail?: string;
+        };
+        if (!key || !name || !api) {
+          return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
+        }
+        const entry = adminConfig.SourceConfig.find((s) => s.key === key);
+        if (!entry) {
+          return NextResponse.json({ error: '源不存在' }, { status: 404 });
+        }
+        // 更新字段（除了 key 和 from）
+        entry.name = name;
+        entry.api = api;
+        entry.detail = detail || '';
         break;
       }
       case 'delete': {
