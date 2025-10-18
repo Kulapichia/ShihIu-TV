@@ -1,6 +1,6 @@
 'use client';
 
-import React, Lg, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Palette, Eye, Check } from 'lucide-react';
 // 统一按钮风格
 import { buttonStyles } from '@/hooks/useAdminComponents';
