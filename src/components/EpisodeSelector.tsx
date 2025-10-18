@@ -130,10 +130,14 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       const info = await getVideoResolutionFromM3u8(episodeUrl);
       setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
     } catch (error) {
-      // 失败时保存错误状态
+      // 失败时保存错误状态，区分不同的错误类型
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isNetworkRestricted = errorMessage.includes('Network access restricted') ||
+        errorMessage.includes('CORS') ||
+        errorMessage.includes('Forbidden');
       setVideoInfoMap((prev) =>
         new Map(prev).set(sourceKey, {
-          quality: '错误',
+          quality: isNetworkRestricted ? '受限' : '错误',
           loadSpeed: '未知',
           pingTime: 0,
           hasError: true,
