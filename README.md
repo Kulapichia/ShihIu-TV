@@ -13,7 +13,7 @@
   <img src="public/logo.png" alt="ShihIüTV Logo" width="120">
 </div>
 
-> 🎬 **ShihIüTV Enhanced Edition** 是基于 MoonTV 深度二次开发的全功能影视聚合播放平台。在原版基础上新增了 **YouTube 集成**、**网盘搜索**、**AI 推荐**、**短剧功能**、**IPTV 直播**、**Bangumi 动漫**、**播放统计**、**弹幕系统**等 50+ 重大功能增强，打造极致的在线观影体验。
+> 🎬 **ShihIüTV Enhanced Edition** 是一个开箱即用的、跨平台的全功能影视聚合播放平台。它基于前沿技术栈深度开发，在基础功能之上新增了 **社交聊天**、**自定义主题**、**YouTube 集成**、**网盘搜索**、**AI 推荐**、**短剧功能**、**IPTV 直播**、**Bangumi 动漫**、**播放统计**、**弹幕系统**等 50+ 重大功能增强，打造极致的在线观影体验。
 
 <div align="center">
 
