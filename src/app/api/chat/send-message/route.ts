@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthInfoFromCookie } from '../../../../lib/auth';
-import { WebSocketMessage } from '../../../../lib/types';
+import { getAuthInfoFromCookie } from '@/lib/auth';
+import { WebSocketMessage } from '@/lib/types';
+
+export const runtime = 'nodejs';
 
 // 从全局对象获取WebSocket实例相关方法
 function sendMessageToUsers(userIds: string[], message: WebSocketMessage): boolean {
