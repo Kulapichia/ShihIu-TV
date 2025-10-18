@@ -1,6 +1,10 @@
+# 声明构建参数，用于多架构构建
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+
 # ---- 第 1 阶段：安装依赖 ----
 # 使用 slim 镜像以获得更好的原生模块兼容性
-FROM node:20-slim AS deps
+FROM --platform=$BUILDPLATFORM node:20-slim AS deps
 
 # 启用 corepack 并激活 pnpm（Node20 默认提供 corepack）
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -15,7 +19,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm store prune && pnpm install --frozen-lockfile --no-optional
 
 # ---- 第 2 阶段：构建项目 (增加详细日志) ----
-FROM node:20-slim AS builder
+FROM --platform=$BUILDPLATFORM node:20-slim AS builder
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
@@ -91,16 +95,24 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
+ENV WS_PORT=3001
 ENV DOCKER_ENV=true
 
 # 从构建器中复制 standalone 输出
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 # 从构建器中复制 scripts 目录
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
-# 从构建器中复制 start.js
+# 从构建器中复制启动脚本和WebSocket相关文件
 COPY --from=builder --chown=nextjs:nodejs /app/start.js ./start.js
+COPY --from=builder --chown=nextjs:nodejs /app/websocket.js ./websocket.js
+COPY --from=builder --chown=nextjs:nodejs /app/production.js ./production.js
+COPY --from=builder --chown=nextjs:nodejs /app/production-final.js ./production-final.js
+COPY --from=builder --chown=nextjs:nodejs /app/standalone-websocket.js ./standalone-websocket.js
 # 复制 package.json 以便 start.js 内的脚本可以读取版本等元数据
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/pnpm-lock.yaml ./pnpm-lock.yaml
+# 复制 tsconfig.json 以确保路径解析正确
+COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
 # 从构建器中复制 public 和 .next/static 目录，确保静态资源正确复制
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
@@ -109,22 +121,58 @@ RUN echo "=== Checking static assets ===" && \
     ls -la .next/static/ || echo "No static directory" && \
     ls -la public/ || echo "No public directory"
 
+# 安装必要的WebSocket生产依赖
+USER root
+RUN corepack enable && corepack prepare pnpm@latest --activate && \
+    pnpm install --prod --no-optional ws && \
+    pnpm store prune
 
-# 添加健康检查脚本
-RUN echo '#!/bin/sh' > /tmp/health-check.sh && \
-    echo 'curl -f http://localhost:3000/api/health || exit 1' >> /tmp/health-check.sh && \
-    chmod +x /tmp/health-check.sh
-
+# 创建更健壮的 Node.js 健康检查脚本
+RUN echo '#!/usr/bin/env node\n\
+const http = require("http");\n\
+const options = {\n\
+  hostname: "localhost",\n\
+  port: 3000,\n\
+  path: "/api/health",\n\
+  method: "GET",\n\
+  timeout: 5000\n\
+};\n\
+\n\
+const req = http.request(options, (res) => {\n\
+  if (res.statusCode === 200) {\n\
+    console.log("Health check passed");\n\
+    process.exit(0);\n\
+  } else {\n\
+    console.log(`Health check failed with status: ${res.statusCode}`);\n\
+    process.exit(1);\n\
+  }\n\
+});\n\
+\n\
+req.on("error", (err) => {\n\
+  console.log(`Health check error: ${err.message}`);\n\
+  process.exit(1);\n\
+});\n\
+\n\
+req.on("timeout", () => {\n\
+  console.log("Health check timeout");\n\
+  req.destroy();\n\
+  process.exit(1);\n\
+});\n\
+\n\
+req.setTimeout(5000);\n\
+req.end();' > /app/healthcheck.js && \
+    chmod +x /app/healthcheck.js && \
+    chown nextjs:nodejs /app/healthcheck.js
 
 # 切换到非特权用户
 USER nextjs
 
-EXPOSE 3000
+# 暴露HTTP和WebSocket端口
+EXPOSE 3000 3001
 
 # 为容器编排系统提供健康检查端点
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/tmp/health-check.sh"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node /app/healthcheck.js
     
-# 使用自定义启动脚本，先预加载配置再启动服务器
-CMD ["node", "start.js"]
-
+# 使用集成的启动脚本，同时启动Next.js和WebSocket服务
+CMD ["node", "production-final.js"]
