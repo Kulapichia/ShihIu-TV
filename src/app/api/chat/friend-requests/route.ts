@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../../lib/db';
-import { FriendRequest, Friend } from '../../../../lib/types';
-import { getAuthInfoFromCookie } from '../../../../lib/auth';
+import { db } from '@/lib/db';
+import { FriendRequest, Friend } from '@/lib/types';
+import { getAuthInfoFromCookie } from '@/lib/auth';
+
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // 检查是否已经是好友
     const friends = await db.getFriends(authInfo.username);
-    const isAlreadyFriend = friends.some(friend => friend.username === to_user);
+    const isAlreadyFriend = friends.some((friend: Friend) => friend.username === to_user);
     if (isAlreadyFriend) {
       return NextResponse.json({ error: '已经是好友' }, { status: 400 });
     }
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
     // 检查是否已经有pending的申请
     const existingRequests = await db.getFriendRequests(to_user);
     const hasPendingRequest = existingRequests.some(
-      req => req.from_user === authInfo.username && req.status === 'pending'
+      (req: FriendRequest) => req.from_user === authInfo.username && req.status === 'pending'
     );
     if (hasPendingRequest) {
       return NextResponse.json({ error: '已有待处理的好友申请' }, { status: 400 });
@@ -86,7 +88,7 @@ export async function PUT(request: NextRequest) {
 
     // 获取申请信息
     const allRequests = await db.getFriendRequests(authInfo.username);
-    const friendRequest = allRequests.find(req => req.id === requestId && req.to_user === authInfo.username);
+    const friendRequest = allRequests.find((req: FriendRequest) => req.id === requestId && req.to_user === authInfo.username);
 
     if (!friendRequest) {
       return NextResponse.json({ error: '好友申请不存在' }, { status: 404 });
