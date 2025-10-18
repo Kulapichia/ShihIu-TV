@@ -40,6 +40,7 @@ import {
   Sheet,
   Tv,
   Upload,
+  User as UserIcon,
   User,
   UserCheck,
   Users,
@@ -201,7 +202,7 @@ const UserAvatar = ({ username, size = 'sm' }: UserAvatarProps) => {
         />
       ) : (
         <div className='w-full h-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center'>
-          <User className={`${iconSizeClasses[size]} text-blue-500 dark:text-blue-400`} />
+          <UserIcon className={`${iconSizeClasses[size]} text-blue-500 dark:text-blue-400`} />
         </div>
       )}
     </div>
