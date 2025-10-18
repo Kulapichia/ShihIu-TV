@@ -75,12 +75,23 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
     const decodedActive = decodeURIComponent(currentActive);
     const decodedItemHref = decodeURIComponent(href);
 
-    return (
-      decodedActive === decodedItemHref ||
-      (decodedActive.startsWith('/douban') &&
-        decodedActive.includes(`type=${typeMatch}`)) ||
-      (href === '/shortdrama' && decodedActive.startsWith('/shortdrama'))
-    );
+    // 精确匹配路径
+    if (decodedActive === decodedItemHref) {
+      return true;
+    }
+
+    // 短剧页面的特殊处理
+    if (href === '/shortdrama' && decodedActive.startsWith('/shortdrama')) {
+      return true;
+    }
+
+    // 豆瓣页面的类型匹配
+    if (decodedActive.startsWith('/douban') && typeMatch &&
+      decodedActive.includes(`type=${typeMatch}`)) {
+      return true;
+    }
+
+    return false;
   };
 
   return (
