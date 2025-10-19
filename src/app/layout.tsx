@@ -15,7 +15,7 @@ import { ThemeProvider } from '../components/ThemeProvider';
 import { ToastProvider } from '../components/Toast';
 import { VirtualScrollProvider } from '../components/VirtualScrollProvider';
 import GlobalThemeLoader from '../components/GlobalThemeLoader';
-
+import GlobalToast from '@/components/GlobalToast';
 const inter = Inter({ subsets: ['latin'] });
 export const dynamic = 'force-dynamic';
 
@@ -227,6 +227,7 @@ export default async function RootLayout({
                   <SourceAvailabilityChecker />
                   {children}
                   <GlobalErrorIndicator />
+                  <GlobalToast /> {/* 新增 */}
                 </VirtualScrollProvider>
               </SiteProvider>
             </ToastProvider>
