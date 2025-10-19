@@ -121,21 +121,7 @@ export interface AdminConfig {
     AllowRegister?: boolean; // 是否允许用户注册，默认 true
     AutoCleanupInactiveUsers?: boolean; // 是否自动清理非活跃用户，默认 false
     InactiveUserDays?: number; // 非活跃用户保留天数，默认 7
-    Users: {
-      username: string;
-      role: 'user' | 'admin' | 'owner';
-      banned?: boolean;
-      status?: 'active' | 'pending' | 'rejected'; // 用户状态
-      enabledApis?: string[]; // 优先级高于tags限制（网站内搜索用）
-      tags?: string[]; // 多 tags 取并集限制
-      createdAt?: number; // 用户注册时间戳
-      tvboxToken?: string; // 用户专属的 TVBox Token
-      tvboxEnabledSources?: string[]; // TVBox 可访问的源（为空则返回所有源）
-      linuxdoId?: number; // LinuxDo 用户 ID
-      linuxdoUsername?: string; // LinuxDo 用户名
-      telegramId?: number; // 新增 Telegram 用户 ID
-      telegramUsername?: string; // 新增 Telegram 用户名
-    }[];
+    Users: User[];
     Tags?: {
       name: string;
       enabledApis: string[];
@@ -204,6 +190,23 @@ export interface AdminConfigResult {
   Role: 'owner' | 'admin';
   Config: AdminConfig;
 }
+
+// 定义并导出 User 类型，包含了所有原始字段
+export type User = {
+  username: string;
+  role: 'user' | 'admin' | 'owner';
+  banned?: boolean;
+  status?: 'active' | 'pending' | 'rejected'; // 用户状态
+  enabledApis?: string[]; // 优先级高于tags限制（网站内搜索用）
+  tags?: string[]; // 多 tags 取并集限制
+  createdAt?: number; // 用户注册时间戳
+  tvboxToken?: string; // 用户专属的 TVBox Token
+  tvboxEnabledSources?: string[]; // TVBox 可访问的源（为空则返回所有源）
+  linuxdoId?: number; // LinuxDo 用户 ID
+  linuxdoUsername?: string; // LinuxDo 用户名
+  telegramId?: number; // 新增 Telegram 用户 ID
+  telegramUsername?: string; // 新增 Telegram 用户名
+};
 
 export interface LinuxDoUserInfo {
   id: number;
