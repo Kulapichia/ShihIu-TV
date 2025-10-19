@@ -27,6 +27,8 @@ import {
   subscribeToDataUpdates,
   saveSkipConfig,
   deleteSkipConfig,
+  EpisodeSkipConfig,
+  SkipSegment,
 } from '@/lib/db.client';
 import { getDoubanDetails } from '@/lib/douban.client';
 import { SearchResult } from '@/lib/types';
@@ -66,7 +68,7 @@ function PlayPageClient() {
   const [favorited, setFavorited] = useState(false);
 
     // 跳过片头片尾配置
-  const [skipConfig, setSkipConfig] = useState<{
+  const [skipConfig, setSkipConfig] = useState<EpisodeSkipConfig | null>(null);
     enable: boolean;
     intro_time: number;
     outro_time: number;
@@ -1554,8 +1556,38 @@ function PlayPageClient() {
     if (!currentSourceRef.current || !currentIdRef.current) return;
 
     try {
-      setSkipConfig(newConfig);
-      if (!newConfig.enable && !newConfig.intro_time && !newConfig.outro_time) {
+      const newSegments: SkipSegment[] = [];
+      const duration = artPlayerRef.current?.duration;
+
+      if (newConfig.intro_time > 0) {
+        newSegments.push({
+          type: 'opening',
+          start: 0,
+          end: newConfig.intro_time,
+          autoSkip: newConfig.enable,
+        });
+      }
+      if (newConfig.outro_time < 0 && duration) {
+        newSegments.push({
+          type: 'ending',
+          start: duration + newConfig.outro_time,
+          end: duration,
+          autoSkip: newConfig.enable,
+          autoNextEpisode: true,
+        });
+      }
+
+      const fullConfig: EpisodeSkipConfig = {
+        source: currentSourceRef.current,
+        id: currentIdRef.current,
+        title: videoTitleRef.current,
+        segments: newSegments,
+        updated_time: Date.now(),
+      };
+
+      setSkipConfig(fullConfig);
+
+      if (newSegments.length === 0) {
         await deleteSkipConfig(currentSourceRef.current, currentIdRef.current);
         artPlayerRef.current.setting.update({
           name: '跳过片头片尾',
