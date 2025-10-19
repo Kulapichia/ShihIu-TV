@@ -2,9 +2,11 @@
   "name": "moontv",
   "version": "5.5.8",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "pnpm gen:manifest && node simple-dev.js",
     "dev:complex": "pnpm gen:manifest && node dev-server.js",
+    "dev:electron": "concurrently \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "pnpm gen:manifest && next build",
     "build:debug": "pnpm gen:manifest && DEBUG=next:* next build",
     "start": "NODE_ENV=production node production-final.js",
@@ -19,7 +21,12 @@
     "format:check": "prettier -c .",
     "gen:manifest": "node scripts/generate-manifest.js",
     "postbuild": "echo 'Build completed - sitemap generation disabled'",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "electron": "electron .",
+    "electron:build": "pnpm build && electron-builder",
+    "electron:build:win": "pnpm build && electron-builder --win --x64",
+    "electron:build:mac": "pnpm build && electron-builder --mac",
+    "electron:build:linux": "pnpm build && electron-builder --linux"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -77,6 +84,9 @@
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.30",
     "eslint-config-prettier": "^8.10.0",
@@ -91,6 +101,7 @@
     "prettier-plugin-tailwindcss": "^0.5.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^4.9.5",
+    "wait-on": "^8.0.1",
     "webpack-obfuscator": "^3.5.1"
   },
   "lint-staged": {
@@ -102,5 +113,78 @@
       "prettier -w"
     ]
   },
-  "packageManager": "pnpm@10.14.0"
+  "packageManager": "pnpm@10.14.0",
+  "build": {
+    "appId": "com.siffcity.app",
+    "productName": "SiffCITY",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      ".next/**/*",
+      "public/**/*",
+      "package.json",
+      "node_modules/**/*",
+      "!node_modules/@next/swc-darwin-*/**/*",
+      "!node_modules/@next/swc-linux-*/**/*",
+      "!node_modules/@next/swc-win32-arm64-*/**/*",
+      "!node_modules/@next/swc-win32-ia32-*/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/next/**/*",
+      ".next/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/favicon.ico",
+      "sign": null,
+      "signingHashAlgorithms": []
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "public/logo.png",
+      "category": "public.app-category.entertainment"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/logo.png",
+      "category": "AudioVideo",
+      "maintainer": "SiffCITY Team"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
 }
