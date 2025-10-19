@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react'; // 引入 React 用于 ErrorBoundary
 import Hls from 'hls.js';
 import { Heart, ChevronUp, Copy, AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
@@ -74,6 +74,20 @@ function PlayPageClient() {
     skipConfigRef.current = skipConfig;
 }, [skipConfig]);
 
+  // 从 segments 派生出UI所需的状态
+  const introSegment = useMemo(() => {
+    return skipConfig?.segments.find((s) => s.type === 'opening');
+  }, [skipConfig]);
+
+  const endingSegment = useMemo(() => {
+    return skipConfig?.segments.find((s) => s.type === 'ending');
+  }, [skipConfig]);
+
+  const isSkipEnabled = useMemo(() => {
+    return skipConfig?.segments?.some((s) => s.autoSkip) ?? false;
+  }, [skipConfig]);
+
+  
   // 跳过检查的时间间隔控制
   const lastSkipCheckRef = useRef(0);
 
@@ -1535,11 +1549,8 @@ function PlayPageClient() {
   };
 
   // 跳过片头片尾配置相关函数
-  const handleSkipConfigChange = async (newConfig: {
-    enable: boolean;
-    intro_time: number;
-    outro_time: number;
-  }) => {
+  const handleSkipConfigChange = async (newConfig: EpisodeSkipConfig) => {
+
     if (!currentSourceRef.current || !currentIdRef.current) return;
 
     try {
@@ -1572,9 +1583,9 @@ function PlayPageClient() {
         updated_time: Date.now(),
       };
 
-      setSkipConfig(fullConfig);
+      setSkipConfig(newConfig);
 
-      if (newSegments.length === 0) {
+      if (newConfig.segments.length === 0) {
         await deleteSkipConfig(currentSourceRef.current, currentIdRef.current);
         artPlayerRef.current.setting.update({
           name: '跳过片头片尾',
