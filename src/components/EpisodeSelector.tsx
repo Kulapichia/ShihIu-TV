@@ -135,6 +135,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       const isNetworkRestricted = errorMessage.includes('Network access restricted') ||
         errorMessage.includes('CORS') ||
         errorMessage.includes('Forbidden');
+      // 只在开发环境下打印详细错误
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Video info fetch failed for ${sourceKey}:`, errorMessage);
+      }
       setVideoInfoMap((prev) =>
         new Map(prev).set(sourceKey, {
           quality: isNetworkRestricted ? '受限' : '错误',
