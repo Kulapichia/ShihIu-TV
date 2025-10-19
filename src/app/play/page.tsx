@@ -75,8 +75,8 @@ function PlayPageClient() {
   const [favorited, setFavorited] = useState(false);
 
     // 跳过片头片尾配置
-  const [skipConfig, setSkipConfig] = useState<EpisodeSkipConfig | null>(null);
-  const skipConfigRef = useRef(skipConfig);
+  const [skipConfig, setSkipConfig] = useState<UiAndDbSkipConfig | null>(null);
+  const skipConfigRef = useRef<UiAndDbSkipConfig | null>(skipConfig);
   useEffect(() => {
     skipConfigRef.current = skipConfig;
 }, [skipConfig]);
@@ -1556,7 +1556,7 @@ function PlayPageClient() {
   };
 
   // 跳过片头片尾配置相关函数
-  const handleSkipConfigChange = async (newConfig: any) => {
+  const handleSkipConfigChange = async (newConfig: UiAndDbSkipConfig) => {
 
     if (!currentSourceRef.current || !currentIdRef.current) return;
 
@@ -1582,12 +1582,15 @@ function PlayPageClient() {
         });
       }
 
-      const fullConfig: EpisodeSkipConfig = {
+      const fullConfig: UiAndDbSkipConfig = {
         source: currentSourceRef.current,
         id: currentIdRef.current,
         title: videoTitleRef.current,
         segments: newSegments,
         updated_time: Date.now(),
+        enable: newConfig.enable,
+        intro_time: newConfig.intro_time,
+        outro_time: newConfig.outro_time,
       };
 
       setSkipConfig(newConfig);
@@ -3210,9 +3213,20 @@ function PlayPageClient() {
       const response = await fetch(`/api/episode-skip-config?source=${currentSource}&id=${currentId}`);
       if (response.ok) {
           const config = await response.json();
-          if (config && (config.intro_time || config.outro_time)) {
-              setSkipConfig({ enable: true, ...config });
-              console.log('加载远程跳过配置成功:', { enable: true, ...config });
+          if (config && config.segments && config.segments.length > 0) {
+              // 从segments推导出intro_time和outro_time
+              const introSegment = config.segments.find((s: SkipSegment) => s.type === 'opening');
+              const outroSegment = config.segments.find((s: SkipSegment) => s.type === 'ending');
+              const isEnabled = config.segments.some((s: SkipSegment) => s.autoSkip);
+              
+              const uiConfig: UiAndDbSkipConfig = {
+                ...config,
+                enable: isEnabled,
+                intro_time: introSegment ? introSegment.end : 0,
+                outro_time: outroSegment ? (outroSegment.start - (artPlayerRef.current?.duration || 0)) : 0,
+              };
+              setSkipConfig(uiConfig);
+              console.log('加载远程跳过配置成功:', uiConfig);
               return;
           }
       }
@@ -3220,8 +3234,19 @@ function PlayPageClient() {
       // 如果API没有返回，再从本地IndexedDB存储获取
       const localConfig = await getSkipConfig(currentSource, currentId);
       if (localConfig) {
-        setSkipConfig(localConfig);
-        console.log('加载本地跳过配置成功:', localConfig);
+        // 从本地配置推导UI所需属性
+        const introSegment = localConfig.segments.find(s => s.type === 'opening');
+        const outroSegment = localConfig.segments.find(s => s.type === 'ending');
+        const isEnabled = localConfig.segments.some(s => s.autoSkip);
+        
+        const uiConfig: UiAndDbSkipConfig = {
+          ...localConfig,
+          enable: isEnabled,
+          intro_time: introSegment ? introSegment.end : 0,
+          outro_time: outroSegment ? (outroSegment.start - (artPlayerRef.current?.duration || 0)) : 0,
+        };
+        setSkipConfig(uiConfig);
+        console.log('加载本地跳过配置成功:', uiConfig);
       }
     } catch (err) {
       console.error('读取跳过片头片尾配置失败:', err);
