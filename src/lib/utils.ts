@@ -90,38 +90,68 @@ function getDoubanImageProxyConfig(): {
 }
 
 /**
+ * 获取通用图片代理 URL 设置
+ */
+export function getImageProxyUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  // 本地未开启图片代理，则不使用代理
+  const enableImageProxy = localStorage.getItem('enableImageProxy');
+  if (enableImageProxy !== null) {
+    if (!JSON.parse(enableImageProxy) as boolean) {
+      return null;
+    }
+  }
+
+  const localImageProxy = localStorage.getItem('imageProxyUrl');
+  if (localImageProxy != null) {
+    return localImageProxy.trim() ? localImageProxy.trim() : null;
+  }
+
+  // 如果未设置，则使用全局对象
+  const serverImageProxy = (window as any).RUNTIME_CONFIG?.IMAGE_PROXY;
+  return serverImageProxy && serverImageProxy.trim()
+    ? serverImageProxy.trim()
+    : null;
+}
+
+/**
  * 处理图片 URL，如果设置了图片代理则使用代理
  */
 export function processImageUrl(originalUrl: string): string {
   if (!originalUrl) return originalUrl;
 
-  // 仅处理豆瓣图片代理
-  if (!originalUrl.includes('doubanio.com')) {
-    return originalUrl;
+  // 优先处理豆瓣图片代理
+  if (originalUrl.includes('doubanio.com')) {
+    const { proxyType, proxyUrl } = getDoubanImageProxyConfig();
+    switch (proxyType) {
+      case 'server':
+        return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
+      case 'img3':
+        return originalUrl.replace(/img\d+\.doubanio\.com/g, 'img3.doubanio.com');
+      case 'cmliussss-cdn-tencent':
+        return originalUrl.replace(
+          /img\d+\.doubanio\.com/g,
+          'img.doubanio.cmliussss.net'
+        );
+      case 'cmliussss-cdn-ali':
+        return originalUrl.replace(
+          /img\d+\.doubanio\.com/g,
+          'img.doubanio.cmliussss.com'
+        );
+      case 'custom':
+        return `${proxyUrl}${encodeURIComponent(originalUrl)}`;
+      case 'direct':
+      default:
+        return originalUrl;
+    }
   }
+  
+  // 对于其他图片，使用通用图片代理
+  const proxyUrl = getImageProxyUrl();
+  if (!proxyUrl) return originalUrl;
 
-  const { proxyType, proxyUrl } = getDoubanImageProxyConfig();
-  switch (proxyType) {
-    case 'server':
-      return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
-    case 'img3':
-      return originalUrl.replace(/img\d+\.doubanio\.com/g, 'img3.doubanio.com');
-    case 'cmliussss-cdn-tencent':
-      return originalUrl.replace(
-        /img\d+\.doubanio\.com/g,
-        'img.doubanio.cmliussss.net'
-      );
-    case 'cmliussss-cdn-ali':
-      return originalUrl.replace(
-        /img\d+\.doubanio\.com/g,
-        'img.doubanio.cmliussss.com'
-      );
-    case 'custom':
-      return `${proxyUrl}${encodeURIComponent(originalUrl)}`;
-    case 'direct':
-    default:
-      return originalUrl;
-  }
+  return `${proxyUrl}${encodeURIComponent(originalUrl)}`;
 }
 
 /**
