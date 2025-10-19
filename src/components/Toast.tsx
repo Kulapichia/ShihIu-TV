@@ -24,6 +24,26 @@ interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | null>(null);
 
+/**
+ * 全局显示 Toast 的函数,可用于非 React 组件环境
+ * @param message 消息内容
+ * @param type 类型
+ * @param duration 显示时长
+ */
+export function showGlobalToast(
+  message: string,
+  type: ToastType = 'info',
+  duration: number = 3000
+) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('show-global-toast', {
+        detail: { message, type, duration },
+      })
+    );
+  }
+}
+
 export const useToast = () => {
   const context = useContext(ToastContext);
   if (!context) {
@@ -161,6 +181,23 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     </div>
   );
 
+  useEffect(() => {
+    const handleShowToast = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        message: string;
+        type: ToastType;
+        duration: number;
+      }>;
+      const { message, type, duration } = customEvent.detail;
+      addToast(message, type, duration);
+    };
+
+    window.addEventListener('show-global-toast', handleShowToast);
+    return () => {
+      window.removeEventListener('show-global-toast', handleShowToast);
+    };
+  }, [addToast]);
+  
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
