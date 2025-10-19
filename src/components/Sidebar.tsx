@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Cat, Clover, ExternalLink, Film, Home, Menu, PlaySquare, Radio, Search, Star, Tv } from 'lucide-react';
+import { Cat, Clover, ExternalLink, Film, Home, Menu, PlaySquare, Radio, Search, Send, Star, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -322,6 +322,31 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
 
             {/* 致谢信息 */}
             <div className='px-4 pb-4 mt-auto'>
+              {/* TG 群链接 */}
+              <div className='pb-4'>
+                {!isCollapsed ? (
+                  <a
+                    href='https://t.me/shihyutv'
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className='group flex items-center justify-center gap-2 text-xs text-gray-500 dark:text-gray-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 py-2 rounded-lg hover:bg-gray-500/5 dark:hover:bg-gray-800/50'
+                  >
+                    <Send size={14} className='transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12' />
+                    <span>ShihYuTV官方TG群</span>
+                    <ExternalLink size={12} className='opacity-50 group-hover:opacity-100' />
+                  </a>
+                ) : (
+                  <a
+                    href='https://t.me/shihyutv'
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className='flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 py-2 rounded-lg'
+                    title='ShihYuTV官方TG群'
+                  >
+                    <Send size={16} />
+                  </a>
+                )}
+              </div>
               <div className='border-t border-gray-200/50 dark:border-gray-700/50 pt-4'>
                 {!isCollapsed ? (
                   <div className='text-xs text-gray-500 dark:text-gray-400 text-center leading-relaxed animate-[fadeIn_0.5s_ease-out]'>
