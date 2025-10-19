@@ -34,6 +34,13 @@ import { getDoubanDetails } from '@/lib/douban.client';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 
+// 为UI交互和数据库存储创建一个统一的类型
+type UiAndDbSkipConfig = EpisodeSkipConfig & {
+  enable: boolean;
+  intro_time: number;
+  outro_time: number;
+};
+
 // 扩展 HTMLVideoElement 类型以支持 hls 属性
 declare global {
   interface HTMLVideoElement {
