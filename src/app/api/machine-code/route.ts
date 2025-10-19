@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     // 管理员获取所有用户的机器码信息
     if (action === 'list' && (authInfo.role === 'admin' || authInfo.role === 'owner')) {
-      const machineCodeUsers = await db.getAllMachineCodes();
+      const machineCodeUsers = await db.getMachineCodeUsers();
       return NextResponse.json({ users: machineCodeUsers });
     }
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       if (!targetUser) {
         return NextResponse.json({ error: '目标用户不能为空' }, { status: 400 });
       }
-      await db.unbindMachineCode(targetUser);
+      await db.deleteUserMachineCode(targetUser);
       return NextResponse.json({ success: true, message: '机器码解绑成功' });
     }
 
@@ -106,7 +106,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 解绑机器码
-    await db.unbindMachineCode(authInfo.username);
+    await db.deleteUserMachineCode(authInfo.username);
 
     return NextResponse.json({
       success: true,
