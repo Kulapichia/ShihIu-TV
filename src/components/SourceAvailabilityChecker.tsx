@@ -138,7 +138,7 @@ export async function speedTestAllSources(): Promise<void> {
 
     if (availableSources.length === 0) {
       console.error('❌ 所有视频源均不可用!');
-      localStorage.removeItem('siffcity_blocked_sources');
+      localStorage.removeItem('danmutv_blocked_sources');
       return;
     }
 
@@ -193,7 +193,7 @@ export async function speedTestAllSources(): Promise<void> {
     }
 
     // 显示 Toast 通知
-    const toastMessage = `测速完成! 当前可用视频源 ${availableSources.length} 个, 已自动启用最快的 ${fastestSources.length} 个。`;
+    const toastMessage = `当前可用视频源 ${availableSources.length} 个，已启用速度最快的前 ${fastestSources.length} 个。如需启用所有可用视频源，请在设置→管理视频源中启用`;
 
     showGlobalToast(toastMessage, 'success', 8000); // 显示8秒
   } catch (error) {
@@ -215,11 +215,13 @@ export default function SourceAvailabilityChecker() {
     const performSpeedTest = async () => {
       // 防止重复执行（组件级别）
       if (hasRunRef.current) {
+        console.log('[SourceChecker] 本组件实例已执行过，跳过');
         return;
       }
 
       // 防止并发执行（全局级别）
       if (isSpeedTestRunning) {
+        console.log('[SourceChecker] 其他测速正在进行中，跳过');
         return;
       }
 
