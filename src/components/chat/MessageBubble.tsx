@@ -46,15 +46,51 @@ export const MessageBubble = React.memo(function MessageBubble({
           )}
 
           {/* 消息气泡 */}
-          <div className={`relative px-5 py-3 rounded-2xl shadow-lg ${isOwnMessage ? '' : ''}`}>
+          <div
+            className={`relative px-5 py-3 rounded-2xl shadow-lg backdrop-blur-sm transition-all duration-200 hover:shadow-xl ${isOwnMessage
+              ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-blue-500/25 rounded-br-md'
+              : 'bg-white/90 dark:bg-gray-700/90 text-gray-900 dark:text-white shadow-gray-900/10 dark:shadow-black/20 ring-1 ring-gray-200/50 dark:ring-gray-600/50 rounded-bl-md'
+            }`}
+          >
             {message.message_type === 'image' ? (
-                // ... Image Message JSX ...
-                <img src={message.content} alt="image content" className="max-w-full h-auto rounded-lg" />
+              <div className="group">
+                <img
+                  src={message.content}
+                  alt="图片消息"
+                  className="max-w-full h-auto rounded-xl cursor-pointer transition-transform group-hover:scale-[1.02] shadow-md"
+                  style={{ maxHeight: '300px' }}
+                  onClick={() => {
+                    const img = new Image();
+                    img.src = message.content;
+                    const newWindow = window.open('');
+                    if (newWindow) {
+                      newWindow.document.write(`
+                        <html>
+                          <head>
+                            <title>图片查看</title>
+                            <style>body { margin:0; padding:20px; background:#000; display:flex; align-items:center; justify-content:center; } img { max-width:100%; max-height:100vh; object-fit:contain; border-radius:8px; box-shadow:0 20px 25px -5px rgb(0 0 0 / 0.4); }</style>
+                          </head>
+                          <body><img src="${message.content}" /></body>
+                        </html>
+                      `);
+                    }
+                  }}
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 rounded-xl transition-colors pointer-events-none"></div>
+              </div>
             ) : (
-                <div className="text-sm">{message.content}</div>
+              <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                {message.content}
+              </div>
             )}
+
             {/* 消息气泡装饰尾巴 */}
-            <div className={`absolute bottom-2 w-3 h-3`}></div>
+            <div
+              className={`absolute bottom-2 w-3 h-3 ${isOwnMessage
+                ? 'right-0 -mr-1.5 bg-gradient-to-br from-blue-500 to-blue-600'
+                : 'left-0 -ml-1.5 bg-white/90 dark:bg-gray-700/90 ring-1 ring-gray-200/50 dark:ring-gray-600/50'
+              } transform rotate-45`}
+            ></div>
           </div>
 
           {/* 时间戳 */}
