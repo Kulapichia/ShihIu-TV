@@ -9,6 +9,7 @@ import {
   Camera,
   Check,
   ChevronDown,
+  Database,
   ExternalLink,
   Heart,
   KeyRound,
@@ -29,7 +30,7 @@ import ReactCrop, { Crop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
-
+import { DEFAULT_VIDEO_SOURCES } from '@/lib/default-video-sources'; 
 import { CURRENT_VERSION } from '@/lib/version';
 import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
 import {
@@ -49,6 +50,9 @@ import type { Favorite } from '@/lib/types';
 import { VersionPanel } from './VersionPanel';
 import VideoCard from './VideoCard';
 import { useToast } from './Toast';
+import { showToast } from './GlobalToast';
+import { speedTestAllSources } from './SourceAvailabilityChecker';
+
 interface AuthInfo {
   username?: string;
   role?: 'owner' | 'admin' | 'user';
@@ -175,6 +179,45 @@ export const UserMenu: React.FC = () => {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [isChecking, setIsChecking] = useState(true);
 
+  // 新增：视频源管理相关状态
+  interface VideoSource {
+    key: string;
+    name: string;
+    api: string;
+    detail?: string;
+    disabled?: boolean;
+  }
+  const [isVideoSourceOpen, setIsVideoSourceOpen] = useState(false);
+  const [videoSources, setVideoSources] = useState<VideoSource[]>([]);
+  const [editingSource, setEditingSource] = useState<VideoSource | null>(null);
+  const [isAddingSource, setIsAddingSource] = useState(false);
+  const [isSpeedTesting, setIsSpeedTesting] = useState(false);
+
+  // 新增：弹幕下载相关状态
+  const [isDanmakuDownloadOpen, setIsDanmakuDownloadOpen] = useState(false);
+  const [danmakuInput, setDanmakuInput] = useState('');
+  const [danmakuFormat, setDanmakuFormat] = useState('xml');
+  const [danmakuLoading, setDanmakuLoading] = useState(false);
+  const [danmakuError, setDanmakuError] = useState('');
+  const [danmakuSavePath, setDanmakuSavePath] = useState('');
+  const [showNameInput, setShowNameInput] = useState('');
+  const [danmakuDuration, setDanmakuDuration] = useState('5'); // SRT/ASS 显示时长
+
+  interface EpisodeItem {
+    title: string;
+    cid: number;
+    section?: string;
+    selected?: boolean;
+  }
+  const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);
+  const [baseTitle, setBaseTitle] = useState('');
+  const [isResolving, setIsResolving] = useState(false);
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartIndex, setDragStartIndex] = useState<number | null>(null);
+  const [dragEndIndex, setDragEndIndex] = useState<number | null>(null);
+  const [dragInitialState, setDragInitialState] = useState<boolean>(false);
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   // 确保组件已挂载
   useEffect(() => {
     setMounted(true);
@@ -297,6 +340,22 @@ export const UserMenu: React.FC = () => {
       const savedEnableAutoNextEpisode = localStorage.getItem('enableAutoNextEpisode');
       if (savedEnableAutoNextEpisode !== null) {
         setEnableAutoNextEpisode(JSON.parse(savedEnableAutoNextEpisode));
+      }
+      // 新增：加载视频源配置
+      const savedSources = localStorage.getItem('danmutv_video_sources');
+      if (savedSources) {
+        try {
+          const parsedSources = JSON.parse(savedSources);
+          setVideoSources(parsedSources);
+        } catch (e) {
+          console.error('解析视频源配置失败,使用默认配置:', e);
+          setVideoSources(DEFAULT_VIDEO_SOURCES);
+          localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_VIDEO_SOURCES));
+        }
+      } else {
+        // 首次使用,初始化默认视频源
+        setVideoSources(DEFAULT_VIDEO_SOURCES);
+        localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_VIDEO_SOURCES));
       }
     }
   }, []);
@@ -1029,6 +1088,465 @@ export const UserMenu: React.FC = () => {
     }
   };
 
+  // 新增：视频源管理相关函数
+  const handleVideoSource = () => {
+    setIsOpen(false);
+    setIsVideoSourceOpen(true);
+  };
+
+  const handleCloseVideoSource = () => {
+    setIsVideoSourceOpen(false);
+  };
+
+  const handleAddSource = () => {
+    setEditingSource({
+      key: '',
+      name: '',
+      api: '',
+      detail: '',
+      disabled: false,
+    });
+    setIsAddingSource(true);
+  };
+
+  const handleEditSource = (source: VideoSource) => {
+    setEditingSource({ ...source });
+    setIsAddingSource(false);
+  };
+
+  const handleDeleteSource = (key: string) => {
+    const newSources = videoSources.filter(s => s.key !== key);
+    setVideoSources(newSources);
+    localStorage.setItem('danmutv_video_sources', JSON.stringify(newSources));
+  };
+
+  const handleSaveSource = () => {
+    if (!editingSource) return;
+    
+    if (!editingSource.key || !editingSource.name || !editingSource.api) {
+      showError('请填写完整的视频源信息(key、名称、API地址为必填项)');
+      return;
+    }
+
+    let newSources: VideoSource[];
+    if (isAddingSource) {
+      if (videoSources.some(s => s.key === editingSource.key)) {
+        showError('该Key已存在,请使用其他Key');
+        return;
+      }
+      newSources = [...videoSources, editingSource];
+    } else {
+      newSources = videoSources.map(s => 
+        s.key === editingSource.key ? editingSource : s
+      );
+    }
+    
+    setVideoSources(newSources);
+    localStorage.setItem('danmutv_video_sources', JSON.stringify(newSources));
+    setEditingSource(null);
+    setIsAddingSource(false);
+  };
+
+  const handleCancelEditSource = () => {
+    setEditingSource(null);
+    setIsAddingSource(false);
+  };
+
+  const handleToggleSourceStatus = (key: string) => {
+    const newSources = videoSources.map(s => 
+      s.key === key ? { ...s, disabled: !s.disabled } : s
+    );
+    setVideoSources(newSources);
+    localStorage.setItem('danmutv_video_sources', JSON.stringify(newSources));
+  };
+
+  const handleEnableAllAvailableSources = () => {
+    if (confirm('确定要启用所有可用视频源吗?\n\n这将清除测速时的屏蔽列表,所有未手动禁用的视频源都将被启用。建议仅在需要更多视频源时使用。')) {
+      localStorage.removeItem('danmutv_blocked_sources');
+      showToast(
+        '已启用所有可用视频源!刷新页面后生效,搜索时将使用所有未被手动禁用的视频源。',
+        'success',
+        6000
+      );
+    }
+  };
+
+  const handleManualSpeedTest = async () => {
+    if (isSpeedTesting) {
+      showToast('测速正在进行中，请稍候...', 'info', 2000);
+      return;
+    }
+
+    if (!confirm('确定要开始视频源测速吗?\n\n这将测试所有未禁用的视频源,并保留速度最快的前20个。测速过程可能需要几秒钟。')) {
+      return;
+    }
+
+    setIsSpeedTesting(true);
+    showToast('开始视频源测速，请稍候...', 'info', 3000);
+
+    try {
+      localStorage.removeItem('source_speed_test_timestamp');
+      await speedTestAllSources();
+      showToast('视频源测速完成！已保留速度最快的前20个源。', 'success', 5000);
+    } catch (error) {
+      console.error('视频源测速失败:', error);
+      showToast('视频源测速失败，请稍后重试', 'error', 5000);
+    } finally {
+      setIsSpeedTesting(false);
+    }
+  };
+
+  // 新增：弹幕下载相关函数
+  const handleResolveInput = async () => {
+    const input = danmakuInput.trim();
+    if (!input) {
+      setDanmakuError('请输入ID或链接');
+      return;
+    }
+
+    setIsResolving(true);
+    setDanmakuError('');
+    setEpisodes([]);
+
+    try {
+      const { kind, value } = detectInputKind(input);
+      console.log('[弹幕下载] 识别类型:', kind, '值:', value);
+
+      let title = '';
+      let items: EpisodeItem[] = [];
+
+      if (kind === 'media_id') {
+        const data = await parseMediaId(value);
+        title = data.title;
+        items = data.episodes;
+      } else if (kind === 'season_id') {
+        const data = await parseSeasonId(value);
+        title = data.title;
+        items = data.episodes;
+      } else if (kind === 'ep_id') {
+        const data = await parseEpId(value);
+        title = data.title;
+        items = data.episodes;
+      } else if (kind === 'bvid') {
+        const data = await parseBvid(value);
+        title = data.title;
+        items = data.episodes;
+      } else if (kind === 'cid') {
+        title = `cid_${value}`;
+        items = [{ title: `CID ${value}`, cid: parseInt(value), section: '单集', selected: true }];
+      } else {
+        throw new Error('无法识别输入类型，请检查输入');
+      }
+
+      setBaseTitle(title);
+      setEpisodes(items.map(item => ({ ...item, selected: true })));
+      setDanmakuError('');
+      showToast(`解析完成，共 ${items.length} 条`, 'success');
+    } catch (e: any) {
+      console.error('[弹幕下载] 解析失败:', e);
+      setDanmakuError(e?.message || '解析失败');
+    } finally {
+      setIsResolving(false);
+    }
+  };
+
+  const detectInputKind = (text: string): { kind: string; value: string } => {
+    const t = text.trim();
+    if (t.startsWith('http')) {
+      try {
+        const url = new URL(t);
+        const path = url.pathname;
+        const bvMatch = path.match(/\/video\/(BV[0-9A-Za-z]{10,})/i);
+        if (bvMatch) return { kind: 'bvid', value: bvMatch[1] };
+        const mdMatch = path.match(/\/bangumi\/(?:media\/)?(md\d+)/i);
+        if (mdMatch) return { kind: 'media_id', value: mdMatch[1].substring(2) };
+        const ssMatch = path.match(/\/bangumi\/(?:season\/)?(ss\d+)/i);
+        if (ssMatch) return { kind: 'season_id', value: ssMatch[1].substring(2) };
+        const epMatch = path.match(/\/bangumi\/play\/(ep\d+)/i);
+        if (epMatch) return { kind: 'ep_id', value: epMatch[1].substring(2) };
+        const bvid = url.searchParams.get('bvid');
+        if (bvid) return { kind: 'bvid', value: bvid };
+        const cid = url.searchParams.get('cid');
+        if (cid && /^\d+$/.test(cid)) return { kind: 'cid', value: cid };
+      } catch (e) { /* continue */ }
+    }
+    if (/^BV[0-9A-Za-z]{10}$/i.test(t)) return { kind: 'bvid', value: t };
+    if (/^md\d+$/i.test(t)) return { kind: 'media_id', value: t.substring(2) };
+    if (/^ss\d+$/i.test(t)) return { kind: 'season_id', value: t.substring(2) };
+    if (/^ep\d+$/i.test(t)) return { kind: 'ep_id', value: t.substring(2) };
+    if (/^\d{5,}$/.test(t)) return { kind: 'cid', value: t };
+    return { kind: 'unknown', value: t };
+  };
+
+  const parseMediaId = async (mediaId: string) => {
+    const resp = await fetch(`https://api.bilibili.com/pgc/review/user?media_id=${mediaId}`);
+    const data = await resp.json();
+    if (data.code !== 0) throw new Error(data.message || '接口返回错误');
+    const seasonId = data.result.media.season_id;
+    const title = data.result.media.title || `season_${seasonId}`;
+    const seasonData = await parseSeasonId(String(seasonId));
+    return { title, episodes: seasonData.episodes };
+  };
+
+  const parseSeasonId = async (seasonId: string) => {
+    const resp = await fetch(`https://api.bilibili.com/pgc/web/season/section?season_id=${seasonId}`);
+    const data = await resp.json();
+    if (data.code !== 0) throw new Error(data.message || '接口返回错误');
+    const result = data.result || {};
+    const episodes: EpisodeItem[] = [];
+    const main = result.main_section || {};
+    const title = main.title || `season_${seasonId}`;
+    (main.episodes || []).forEach((ep: any) => {
+      episodes.push({
+        title: `${ep.title || ''} ${ep.long_title || ''}`.trim() || String(ep.id),
+        cid: parseInt(ep.cid),
+        section: main.title || '正片',
+      });
+    });
+    (result.section || []).forEach((sec: any) => {
+      const secTitle = sec.title || '其他';
+      (sec.episodes || []).forEach((ep: any) => {
+        episodes.push({
+          title: `${ep.title || ''} ${ep.long_title || ''}`.trim() || String(ep.id),
+          cid: parseInt(ep.cid),
+          section: secTitle,
+        });
+      });
+    });
+    return { title, episodes };
+  };
+
+  const parseEpId = async (epId: string) => {
+    const resp = await fetch(`https://api.bilibili.com/pgc/view/web/season?ep_id=${epId}`);
+    const data = await resp.json();
+    if (data.code !== 0) throw new Error(data.message || '接口返回错误');
+    const result = data.result || {};
+    const seasonTitle = result.season_title || `season_${result.season_id}`;
+    const episodes: EpisodeItem[] = [];
+    (result.episodes || []).forEach((ep: any) => {
+      episodes.push({
+        title: `${ep.title || ''} ${ep.long_title || ''}`.trim() || String(ep.id),
+        cid: parseInt(ep.cid),
+        section: '正片',
+      });
+    });
+    return { title: seasonTitle, episodes };
+  };
+
+  const parseBvid = async (bvid: string) => {
+    const resp = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`);
+    const data = await resp.json();
+    if (data.code !== 0) throw new Error(data.message || '接口返回错误');
+    const videoData = data.data || {};
+    const title = videoData.title || bvid;
+    const episodes: EpisodeItem[] = [];
+    (videoData.pages || []).forEach((p: any) => {
+      episodes.push({
+        title: p.part || `P${p.page}`,
+        cid: parseInt(p.cid),
+        section: 'PAGES',
+      });
+    });
+    return { title, episodes };
+  };
+
+  const handleEpisodeClick = (index: number, event: React.MouseEvent) => {
+    if (event.shiftKey && lastClickedIndex !== null) {
+      event.preventDefault();
+      event.stopPropagation();
+      const start = Math.min(lastClickedIndex, index);
+      const end = Math.max(lastClickedIndex, index);
+      const newEps = [...episodes];
+      for (let i = start; i <= end; i++) {
+        newEps[i].selected = true;
+      }
+      setEpisodes(newEps);
+    }
+  };
+
+  const handleMouseDown = (index: number, event: React.MouseEvent) => {
+    if (event.shiftKey) return;
+    event.preventDefault();
+    setDragStartIndex(index);
+    setDragEndIndex(index);
+    setDragInitialState(!episodes[index].selected);
+  };
+
+  const handleMouseEnter = (index: number) => {
+    if (dragStartIndex === null) return;
+    if (index !== dragStartIndex && !isDragging) {
+      setIsDragging(true);
+    }
+    setDragEndIndex(index);
+  };
+
+  const handleMouseUp = () => {
+    if (dragStartIndex !== null) {
+      if (isDragging && dragEndIndex !== null) {
+        const start = Math.min(dragStartIndex, dragEndIndex);
+        const end = Math.max(dragStartIndex, dragEndIndex);
+        const newEps = [...episodes];
+        for (let i = start; i <= end; i++) {
+          newEps[i].selected = dragInitialState;
+        }
+        setEpisodes(newEps);
+        setLastClickedIndex(dragStartIndex);
+      } else {
+        const newEps = [...episodes];
+        newEps[dragStartIndex].selected = !newEps[dragStartIndex].selected;
+        setEpisodes(newEps);
+        setLastClickedIndex(dragStartIndex);
+      }
+    }
+    setIsDragging(false);
+    setDragStartIndex(null);
+    setDragEndIndex(null);
+  };
+
+  useEffect(() => {
+    if (dragStartIndex !== null) {
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => document.removeEventListener('mouseup', handleMouseUp);
+    }
+  }, [dragStartIndex, dragEndIndex, isDragging, episodes, dragInitialState]);
+
+  interface DanmakuEntry { time: number; mode: number; size: number; color: number; text: string; }
+  
+  const sanitizeFilename = (name: string): string => {
+    return name.replace(/[\\/:*?"<>|]/g, '_').trim().substring(0, 120);
+  };
+
+  const parseXmlToDanmakuEntries = (xmlText: string): DanmakuEntry[] => {
+    const entries: DanmakuEntry[] = [];
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+      const dElements = xmlDoc.querySelectorAll('d');
+      dElements.forEach(d => {
+        const p = d.getAttribute('p');
+        if (!p) return;
+        const parts = p.split(',');
+        if (parts.length < 4) return;
+        try {
+          entries.push({
+            time: parseFloat(parts[0]),
+            mode: parseInt(parts[1]),
+            size: parseInt(parts[2]),
+            color: parseInt(parts[3]),
+            text: (d.textContent || '').replace(/[\r\n]/g, ' '),
+          });
+        } catch (e) { /* skip */ }
+      });
+    } catch (e) {
+      console.error('解析XML失败:', e);
+    }
+    entries.sort((a, b) => a.time - b.time);
+    return entries;
+  };
+
+  const formatSRTTimestamp = (seconds: number): string => {
+    if (seconds < 0) seconds = 0;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    const ms = Math.round((seconds - Math.floor(seconds)) * 1000);
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
+  };
+
+  const convertToSRT = (entries: DanmakuEntry[], duration: number): string => {
+    let srt = '';
+    entries.forEach((entry, index) => {
+      const start = formatSRTTimestamp(entry.time);
+      const end = formatSRTTimestamp(entry.time + duration);
+      srt += `${index + 1}\n${start} --> ${end}\n${entry.text}\n\n`;
+    });
+    return srt;
+  };
+
+  const formatASSTimestamp = (seconds: number): string => {
+    if (seconds < 0) seconds = 0;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    const cs = Math.round((seconds - Math.floor(seconds)) * 100);
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`;
+  };
+
+  const convertToASS = (entries: DanmakuEntry[], duration: number): string => {
+    let ass = `[Script Info]\n; Script generated by DanmuTV\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Danmaku, Microsoft YaHei, 36, &H00FFFFFF, &H000000FF, &H00222222, &H64000000, 0, 0, 0, 0, 100, 100, 0, 0, 1, 2, 0, 8, 10, 10, 10, 1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n`;
+    entries.forEach(entry => {
+      const start = formatASSTimestamp(entry.time);
+      const end = formatASSTimestamp(entry.time + duration);
+      let align = '{\\an8}'; // default top
+      if (entry.mode === 4) align = '{\\an2}'; // bottom
+      else if (entry.mode === 5) align = '{\\an8}'; // top
+      const text = entry.text.replace(/[{}]/g, '');
+      ass += `Dialogue: 0,${start},${end},Danmaku,,0,0,0,,${align}${text}\n`;
+    });
+    return ass;
+  };
+
+  const handleDanmakuDownload = async () => {
+    const selectedEps = episodes.filter(ep => ep.selected);
+    if (selectedEps.length === 0) {
+      setDanmakuError('请先解析并选择要下载的集数');
+      return;
+    }
+    setDanmakuLoading(true);
+    setDanmakuError('');
+    try {
+      const folderName = sanitizeFilename(showNameInput || baseTitle || 'danmu');
+      const format = danmakuFormat;
+      const duration = parseFloat(danmakuDuration) || 5.0;
+      let successCount = 0;
+      let failCount = 0;
+      for (let i = 0; i < selectedEps.length; i++) {
+        const ep = selectedEps[i];
+        try {
+          const xmlUrl = `/api/danmaku/bilibili?cid=${ep.cid}`;
+          const resp = await fetch(xmlUrl);
+          if (!resp.ok) throw new Error('下载失败');
+          const xmlData = await resp.text();
+          const fileName = sanitizeFilename(
+            `${ep.section || ''}_${ep.title}_cid${ep.cid}`.replace(/^_/, '')
+          );
+          let fileData = '';
+          let fileExt = format;
+          if (format === 'xml') {
+            fileData = xmlData;
+          } else if (format === 'srt') {
+            const entries = parseXmlToDanmakuEntries(xmlData);
+            fileData = convertToSRT(entries, duration);
+          } else if (format === 'ass') {
+            const entries = parseXmlToDanmakuEntries(xmlData);
+            fileData = convertToASS(entries, duration);
+          }
+          const blob = new Blob([fileData], { type: 'text/plain' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `${folderName}/${fileName}.${fileExt}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          successCount++;
+        } catch (e: any) {
+          console.error(`[${i+1}/${selectedEps.length}] 失败: cid=${ep.cid}`, e);
+          failCount++;
+        }
+      }
+      setIsDanmakuDownloadOpen(false);
+      showToast(
+        `下载完成！成功 ${successCount} 条，失败 ${failCount} 条`,
+        successCount > 0 ? 'success' : 'error',
+        6000
+      );
+    } catch (e: any) {
+      setDanmakuError(e?.message || '下载失败');
+    } finally {
+      setDanmakuLoading(false);
+    }
+  };
+  
   // 检查是否显示管理面板按钮
   const showAdminPanel =
     authInfo?.role === 'owner' || authInfo?.role === 'admin';
@@ -1232,6 +1750,24 @@ export const UserMenu: React.FC = () => {
             <span className='font-medium'>TVBox 配置</span>
           </button>
 
+          {/* 新增：视频源管理按钮 */}
+          <button
+            onClick={handleVideoSource}
+            className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
+          >
+            <Database className='w-4 h-4 text-gray-500 dark:text-gray-400' />
+            <span className='font-medium'>视频源管理</span>
+          </button>
+
+          {/* 新增：弹幕下载按钮 */}
+          <button
+            onClick={() => { setIsOpen(false); setIsDanmakuDownloadOpen(true); }}
+            className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
+          >
+            <Database className='w-4 h-4 text-gray-500 dark:text-gray-400' />
+            <span className='font-medium'>弹幕下载</span>
+          </button>
+          
           {/* 修改头像按钮 */}
           <button
             onClick={handleChangeAvatar}
@@ -2284,6 +2820,231 @@ export const UserMenu: React.FC = () => {
     </>
   );
 
+  // 新增：视频源管理面板内容
+  const videoSourcePanel = (
+    <>
+      {/* 背景遮罩 */}
+      <div
+        className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[1000]'
+        onClick={handleCloseVideoSource}
+      />
+
+      {/* 面板容器 */}
+      <div className='fixed inset-x-4 md:left-1/2 md:-translate-x-1/2 top-[10vh] md:w-[700px] max-h-[80vh] bg-white dark:bg-gray-900 rounded-xl shadow-2xl z-[1001] overflow-hidden select-none flex flex-col'>
+        <div className='p-6 overflow-y-auto flex-1'>
+          {/* 标题栏 */}
+          <div className='flex items-center justify-between mb-6'>
+            <h3 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
+              视频源管理
+            </h3>
+            <button
+              onClick={handleCloseVideoSource}
+              className='w-8 h-8 p-1 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors'
+              aria-label='Close'
+            >
+              <X className='w-full h-full' />
+            </button>
+          </div>
+
+          {/* 添加/编辑/管理按钮区域 */}
+          {!editingSource && (
+            <div className='space-y-2.5 mb-4'>
+              <button
+                onClick={handleAddSource}
+                className='w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-sm hover:shadow-md'
+              >
+                <span className='text-lg'>+</span>
+                <span>添加新视频源</span>
+              </button>
+              <button
+                onClick={handleManualSpeedTest}
+                disabled={isSpeedTesting}
+                className={`w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-sm ${
+                  isSpeedTesting
+                    ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white hover:shadow-md'
+                }`}
+              >
+                <span className='text-lg'>{isSpeedTesting ? '⏳' : '⚡'}</span>
+                <span>{isSpeedTesting ? '测速中...' : '手动优选视频源'}</span>
+              </button>
+              <button
+                onClick={handleEnableAllAvailableSources}
+                className='w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-sm hover:shadow-md'
+              >
+                <span className='text-lg'>🚀</span>
+                <span>启用所有可用视频源</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm(`确定要重置为默认视频源吗?\n\n这将清除所有自定义配置,恢复 ${DEFAULT_VIDEO_SOURCES.length} 个默认视频源。`)) {
+                    setVideoSources(DEFAULT_VIDEO_SOURCES);
+                    localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_VIDEO_SOURCES));
+                    showToast('已重置为默认视频源', 'success', 3000);
+                  }
+                }}
+                className='w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 dark:from-gray-600 dark:to-gray-700 dark:hover:from-gray-700 dark:hover:to-gray-800 text-white shadow-sm hover:shadow-md'
+              >
+                <span className='text-lg'>🔄</span>
+                <span>重置为默认视频源</span>
+              </button>
+            </div>
+          )}
+
+          {/* 编辑/添加表单 */}
+          {editingSource && (
+            <div className='p-4 mb-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3 bg-gray-50 dark:bg-gray-800'>
+              <h4 className='font-semibold text-gray-700 dark:text-gray-300'>{isAddingSource ? '添加视频源' : '编辑视频源'}</h4>
+              <input
+                type='text'
+                placeholder='Key (英文, 唯一标识)'
+                value={editingSource.key}
+                onChange={(e) => setEditingSource({ ...editingSource, key: e.target.value })}
+                disabled={!isAddingSource}
+                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700 disabled:bg-gray-200 dark:disabled:bg-gray-600'
+              />
+              <input
+                type='text'
+                placeholder='名称 (例如: XX资源)'
+                value={editingSource.name}
+                onChange={(e) => setEditingSource({ ...editingSource, name: e.target.value })}
+                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700'
+              />
+              <input
+                type='text'
+                placeholder='API地址 (例如: https://.../api.php/provide/vod)'
+                value={editingSource.api}
+                onChange={(e) => setEditingSource({ ...editingSource, api: e.target.value })}
+                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700'
+              />
+              <input
+                type='text'
+                placeholder='详情页地址 (可选)'
+                value={editingSource.detail}
+                onChange={(e) => setEditingSource({ ...editingSource, detail: e.target.value })}
+                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700'
+              />
+              <div className='flex gap-3'>
+                <button onClick={handleSaveSource} className='flex-1 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors'>保存</button>
+                <button onClick={handleCancelEditSource} className='flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-gray-200 rounded-md transition-colors'>取消</button>
+              </div>
+            </div>
+          )}
+
+          {/* 视频源列表 */}
+          <div className='space-y-2'>
+            {videoSources.map(source => (
+              <div key={source.key} className='flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:shadow-sm transition-shadow'>
+                <div className='flex-1 min-w-0'>
+                  <div className='font-medium text-gray-800 dark:text-gray-200 text-sm'>{source.name}</div>
+                  <div className='text-xs text-gray-500 dark:text-gray-400 truncate'>{source.api}</div>
+                </div>
+                <div className='flex items-center gap-2 ml-4'>
+                  <button onClick={() => handleEditSource(source)} className='p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-full' title='编辑'>
+                    <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z' /></svg>
+                  </button>
+                  <button onClick={() => handleDeleteSource(source.key)} className='p-1.5 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full' title='删除'>
+                    <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' /></svg>
+                  </button>
+                  <label className='flex items-center cursor-pointer'>
+                    <div className='relative'>
+                      <input type='checkbox' className='sr-only peer' checked={!source.disabled} onChange={() => handleToggleSourceStatus(source.key)} />
+                      <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
+                      <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  // 新增：弹幕下载面板内容
+  const danmakuDownloadPanel = (
+    <div className='fixed inset-0 z-[1100] flex items-center justify-center'>
+      <div className='absolute inset-0 bg-black/40 backdrop-blur-sm' onClick={() => setIsDanmakuDownloadOpen(false)} />
+      <div className='relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-6 w-[95vw] max-w-3xl max-h-[85vh] z-[1101] flex flex-col'>
+        <div className='flex items-center justify-between mb-4'>
+          <h3 className='text-lg font-bold text-gray-800 dark:text-gray-200'>弹幕下载</h3>
+          <button onClick={() => setIsDanmakuDownloadOpen(false)} className='w-8 h-8 p-1 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors' aria-label='Close'>
+            <X className='w-full h-full' />
+          </button>
+        </div>
+        
+        <div className='flex-1 overflow-y-auto'>
+          <div className='space-y-4'>
+            <div className='flex gap-2'>
+              <input
+                type='text'
+                value={danmakuInput}
+                onChange={(e) => setDanmakuInput(e.target.value)}
+                placeholder='输入B站链接、BV/AV号、SS/MD/EP号或CID'
+                className='flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800'
+              />
+              <button onClick={handleResolveInput} disabled={isResolving} className='px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:bg-blue-400'>
+                {isResolving ? '解析中...' : '解析'}
+              </button>
+            </div>
+            {danmakuError && <div className='text-sm text-red-500'>{danmakuError}</div>}
+            
+            {episodes.length > 0 && (
+              <>
+                <div className='max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800 p-2 space-y-1' onMouseLeave={() => setDragEndIndex(null)}>
+                  {episodes.map((ep, index) => (
+                    <div
+                      key={ep.cid}
+                      onClick={(e) => handleEpisodeClick(index, e)}
+                      onMouseDown={(e) => handleMouseDown(index, e)}
+                      onMouseEnter={() => handleMouseEnter(index)}
+                      className={`flex justify-between items-center p-2 rounded cursor-pointer text-sm transition-colors ${
+                        ep.selected ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                      } ${
+                        dragStartIndex !== null && dragEndIndex !== null && Math.min(dragStartIndex, dragEndIndex) <= index && index <= Math.max(dragStartIndex, dragEndIndex)
+                          ? dragInitialState ? 'bg-blue-100 dark:bg-blue-900/50' : 'bg-transparent'
+                          : ''
+                      }`}
+                    >
+                      <span className='truncate flex-1' title={ep.title}>{ep.title}</span>
+                      <span className='text-xs text-gray-400 ml-2'>{ep.section}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                  <div>
+                    <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1'>下载格式</label>
+                    <select value={danmakuFormat} onChange={(e) => setDanmakuFormat(e.target.value)} className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800'>
+                      <option value='xml'>XML (B站原生)</option>
+                      <option value='srt'>SRT (字幕格式)</option>
+                      <option value='ass'>ASS (高级字幕)</option>
+                    </select>
+                  </div>
+                  {(danmakuFormat === 'srt' || danmakuFormat === 'ass') && (
+                    <div>
+                      <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1'>弹幕显示时长 (秒)</label>
+                      <input type='number' value={danmakuDuration} onChange={(e) => setDanmakuDuration(e.target.value)} className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800' min='1' max='30' step='0.5' />
+                    </div>
+                  )}
+                  <div className='md:col-span-2'>
+                    <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1'>保存文件夹名称 (可选)</label>
+                    <input type='text' value={showNameInput} onChange={(e) => setShowNameInput(e.target.value)} placeholder={baseTitle} className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800' />
+                  </div>
+                </div>
+                
+                <button onClick={handleDanmakuDownload} disabled={danmakuLoading} className='w-full px-4 py-3 bg-green-600 text-white rounded-md text-base font-medium hover:bg-green-700 disabled:bg-green-400'>
+                  {danmakuLoading ? `下载中... (${episodes.filter(e => e.selected).length}个)` : `下载已选 (${episodes.filter(e => e.selected).length}个)`}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div className='relative'>
@@ -2395,6 +3156,13 @@ export const UserMenu: React.FC = () => {
         isOpen={isVersionPanelOpen}
         onClose={() => setIsVersionPanelOpen(false)}
       />
+
+      {/* 新增：视频源管理面板 */}
+      {isVideoSourceOpen && mounted && createPortal(videoSourcePanel, document.body)}
+  
+      {/* 新增：弹幕下载面板 */}
+      {isDanmakuDownloadOpen && mounted && createPortal(danmakuDownloadPanel, document.body)}
     </>
   );
 };
+
