@@ -47,7 +47,8 @@ export const ChatModal = React.memo(function ChatModal({
   const [isMobile, setIsMobile] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null); // Ref for the modal itself to get its dimensions
-  const currentUser = getAuthInfoFromBrowserCookie();
+  const authInfo = getAuthInfoFromBrowserCookie();
+  const currentUser = authInfo && authInfo.username ? authInfo : null;
   const { showError, showSuccess } = useToast();
 
   // 拖动相关事件处理
@@ -638,7 +639,7 @@ export const ChatModal = React.memo(function ChatModal({
           conversations={conversations.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))}
           selectedConversation={selectedConversation}
           onConversationSelect={handleConversationSelect}
-          currentUser={currentUser}
+          currentUser={currentUser as any}
           getDisplayName={getDisplayName}
           isUserOnline={(username) => onlineUsers.includes(username)}
           conversationUnreadCounts={conversationUnreadCounts}
@@ -656,7 +657,7 @@ export const ChatModal = React.memo(function ChatModal({
           getAvatarUrl={getAvatarUrl}
           getDisplayName={getDisplayName}
           isUserOnline={(username) => onlineUsers.includes(username)}
-          currentUser={currentUser}
+          currentUser={currentUser as any}
           messages={messages}
           newMessage={newMessage}
           onNewMessageChange={setNewMessage}
