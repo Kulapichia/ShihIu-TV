@@ -326,24 +326,19 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                 {!isCollapsed ? (
                   <div className='text-xs text-gray-500 dark:text-gray-400 text-center leading-relaxed animate-[fadeIn_0.5s_ease-out]'>
                     <span>本项目基于 </span>
-                    <button
-                      onClick={() => window.open('https://github.com/MoonTechLab/LunaTV', '_blank')}
-                      className='text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium transition-colors inline-flex items-center gap-1'
-                    >
-                      MoonTV
-                      <ExternalLink className='h-3 w-3' />
-                    </button>
+                    <span className='text-green-600 dark:text-green-400 font-medium'>
+                      ShihYuTV
+                    </span>
                     <span> 二次开发</span>
                   </div>
                 ) : (
                   <div className='flex justify-center animate-[fadeIn_0.5s_ease-out]'>
-                    <button
-                      onClick={() => window.open('https://github.com/MoonTechLab/LunaTV', '_blank')}
-                      className='text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors p-1'
-                      title='基于 MoonTV 的二次开发'
+                    <span
+                      className='text-green-600 dark:text-green-400 transition-colors p-1'
+                      title='基于 ShihYuTV 二次开发'
                     >
-                      <ExternalLink className='h-4 w-4' />
-                    </button>
+                      <Star className='h-4 w-4' />
+                    </span>
                   </div>
                 )}
               </div>
