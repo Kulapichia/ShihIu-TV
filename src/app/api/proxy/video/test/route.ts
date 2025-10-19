@@ -55,7 +55,7 @@ export async function GET(request: Request) {
         // 只发送HEAD请求来检查URL可达性，避免下载大文件
         const response = await fetch(decodedUrl, {
           method: 'HEAD',
-          headers: config.headers,
+          headers: config.headers as Record<string, string>, 
           signal: AbortSignal.timeout(10000), // 10秒超时
         });
 
