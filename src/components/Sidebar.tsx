@@ -176,6 +176,27 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
     }
   }, []);
 
+  // ==================== 添加 state 和 useEffect 来解码字符串 ====================
+  const [decodedStrings, setDecodedStrings] = useState({
+    tgUrl: '',
+    brandName: '',
+  });
+
+  useEffect(() => {
+    // 在 useEffect 中执行解码，确保只在客户端运行
+    // 使用 try...catch 避免在非浏览器环境（如SSR构建时）或解码失败时报错
+    try {
+      const decodedBrandName = atob('U2hpaFl1VFY=');
+      setDecodedStrings({
+        tgUrl: atob('aHR0cHM6Ly90Lm1lL3NoaWh5dXR2'),
+        brandName: decodedBrandName,
+      });
+    } catch (error) {
+      console.error('Failed to decode strings:', error);
+    }
+  }, []);
+  // =================================================================================
+
   return (
     <SidebarContext.Provider value={contextValue}>
       {/* 在移动端隐藏侧边栏 */}
@@ -320,28 +341,29 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
               </div>
             </div>
 
+            {/* ================ 在 JSX 中使用解码后的字符串 ================= */}
             {/* 致谢信息 */}
             <div className='px-4 pb-4 mt-auto'>
               {/* TG 群链接 */}
               <div className='pb-4'>
                 {!isCollapsed ? (
                   <a
-                    href='https://t.me/shihyutv'
+                    href={decodedStrings.tgUrl}
                     target='_blank'
                     rel='noopener noreferrer'
                     className='group flex items-center justify-center gap-2 text-xs text-gray-500 dark:text-gray-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 py-2 rounded-lg hover:bg-gray-500/5 dark:hover:bg-gray-800/50'
                   >
                     <Send size={14} className='transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12' />
-                    <span>ShihYuTV官方TG群</span>
+                    <span>{decodedStrings.brandName}官方TG群</span>
                     <ExternalLink size={12} className='opacity-50 group-hover:opacity-100' />
                   </a>
                 ) : (
                   <a
-                    href='https://t.me/shihyutv'
+                    href={decodedStrings.tgUrl}
                     target='_blank'
                     rel='noopener noreferrer'
                     className='flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 py-2 rounded-lg'
-                    title='ShihYuTV官方TG群'
+                    title={`${decodedStrings.brandName}官方TG群`}
                   >
                     <Send size={16} />
                   </a>
@@ -352,7 +374,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                   <div className='text-xs text-gray-500 dark:text-gray-400 text-center leading-relaxed animate-[fadeIn_0.5s_ease-out]'>
                     <span>本项目基于 </span>
                     <span className='text-green-600 dark:text-green-400 font-medium'>
-                      ShihYuTV
+                      {decodedStrings.brandName}
                     </span>
                     <span> 二次开发</span>
                   </div>
@@ -360,7 +382,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                   <div className='flex justify-center animate-[fadeIn_0.5s_ease-out]'>
                     <span
                       className='text-green-600 dark:text-green-400 transition-colors p-1'
-                      title='基于 ShihYuTV 二次开发'
+                      title={`基于 ${decodedStrings.brandName} 二次开发`}
                     >
                       <Star className='h-4 w-4' />
                     </span>
@@ -368,6 +390,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                 )}
               </div>
             </div>
+            {/* ========================================================================= */}
           </div>
         </aside>
         <div
