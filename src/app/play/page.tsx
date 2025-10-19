@@ -14,6 +14,7 @@ import PageLayout from '@/components/PageLayout';
 import SkipController, { SkipSettingsButton } from '@/components/SkipController';
 import artplayerPluginChromecast from '@/lib/artplayer-plugin-chromecast';
 import { ClientCache } from '@/lib/client-cache';
+import { triggerGlobalError } from '@/components/GlobalErrorIndicator';
 import {
   deleteFavorite,
   deletePlayRecord,
@@ -24,6 +25,8 @@ import {
   saveFavorite,
   savePlayRecord,
   subscribeToDataUpdates,
+  saveSkipConfig,
+  deleteSkipConfig,
 } from '@/lib/db.client';
 import { getDoubanDetails } from '@/lib/douban.client';
 import { SearchResult } from '@/lib/types';
@@ -63,7 +66,7 @@ function PlayPageClient() {
   const [favorited, setFavorited] = useState(false);
 
     // 跳过片头片尾配置
-  const [skipConfig, setSkipConfig] = useState<{
+  const [skipConfig, setSkipConfig] = useState<EpisodeSkipConfig | null>(null);
     enable: boolean;
     intro_time: number;
     outro_time: number;
