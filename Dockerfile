@@ -4,7 +4,8 @@ ARG TARGETPLATFORM
 
 # ---- 第 1 阶段：安装依赖 ----
 # 使用 slim 镜像以获得更好的原生模块兼容性
-FROM --platform=$BUILDPLATFORM node:20-slim AS deps
+# 移除 --platform=$BUILDPLATFORM 以使用目标平台架构
+FROM node:20-slim AS deps
 
 # 启用 corepack 并激活 pnpm（Node20 默认提供 corepack）
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -19,9 +20,14 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm store prune && pnpm install --frozen-lockfile --no-optional
 
 # ---- 第 2 阶段：构建项目 (增加详细日志) ----
-FROM --platform=$BUILDPLATFORM node:20-slim AS builder
+# 移除 --platform=$BUILDPLATFORM 以使用目标平台架构，确保 standalone 输出正确生成
+FROM node:20-slim AS builder
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
+
+# 显示当前构建的平台信息
+ARG TARGETPLATFORM
+RUN echo "=== Building for platform: ${TARGETPLATFORM} ==="
 
 # 复制package files和源代码
 COPY package.json pnpm-lock.yaml ./
@@ -47,8 +53,11 @@ RUN rm -rf .git .github docs *.md .gitignore .env.example && \
     ls -la src/ && \
     find src -type f -name "*.css" -o -name "*.scss" | head -10
 
-# 在构建阶段也显式设置 DOCKER_ENV，
+# 在构建阶段也显式设置 DOCKER_ENV
 ENV DOCKER_ENV=true
+
+# 添加 NEXT_PRIVATE_STANDALONE 环境变量以确保 standalone 输出正确生成
+ENV NEXT_PRIVATE_STANDALONE=true
 
 # 为 Node.js 构建进程增加内存限制，防止因内存不足而构建失败
 ENV NODE_OPTIONS="--max-old-space-size=4096"
@@ -81,7 +90,16 @@ RUN echo "=== Starting Next.js Build with Debug Output ===" && \
     echo "=== Checking build output ===" && \
     ls -la .next/ && \
     ls -la .next/static/ || echo "No static directory found" && \
-    ls -la .next/standalone/ || echo "No standalone directory found"
+    echo "=== Verifying standalone output ===" && \
+    if [ ! -d ".next/standalone" ]; then \
+      echo "ERROR: .next/standalone directory not found!" && \
+      echo "This usually means the Next.js build failed or output:'standalone' is not configured" && \
+      echo "Listing .next directory contents:" && \
+      find .next -maxdepth 2 -type d && \
+      exit 1; \
+    fi && \
+    echo "✓ Standalone directory found successfully" && \
+    ls -la .next/standalone/
 # ======================================================
 
 # ---- 第 3 阶段：生成运行时镜像 ----
