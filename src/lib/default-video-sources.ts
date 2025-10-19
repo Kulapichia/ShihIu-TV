@@ -1,14 +1,7 @@
 // 默认视频源配置 - 从原项目 config.json 导入
+import { Site } from '@/lib/admin.types';
 
-export interface VideoSource {
-  key: string;
-  name: string;
-  api: string;
-  detail?: string;
-  disabled?: boolean;
-}
-
-export const DEFAULT_VIDEO_SOURCES: VideoSource[] = [
+export const DEFAULT_VIDEO_SOURCES: Site[] = [
   {
     key: 'dyttzy',
     name: '电影天堂资源',
