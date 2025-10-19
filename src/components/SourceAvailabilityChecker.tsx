@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { showGlobalToast } from './Toast';
+import { showToast } from './GlobalToast'; // 修正：从新的GlobalToast导入
 
 // 全局标记，防止多个组件实例同时执行测速
 let isSpeedTestRunning = false;
@@ -26,8 +26,8 @@ interface SourceSpeedResult {
  */
 async function testSourceSpeed(source: VideoSource): Promise<SourceSpeedResult> {
   try {
-    // 使用项目A的API格式进行测试
-    const testUrl = `${source.api}?ac=list&pg=1`;
+    // 修正：使用更通用的 videolist 测试，兼容性更好
+    const testUrl = `${source.api}?ac=videolist&pg=1&t=1`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
@@ -159,12 +159,13 @@ export async function speedTestAllSources(): Promise<void> {
 
     // 保存屏蔽列表
     if (blockedSourceKeys.length > 0) {
+      // 修正：使用更通用的key，与视频源管理的localStorage key保持一致
       localStorage.setItem(
-        'siffcity_blocked_sources',
+        'danmutv_blocked_sources',
         JSON.stringify(blockedSourceKeys)
       );
     } else {
-      localStorage.removeItem('siffcity_blocked_sources');
+      localStorage.removeItem('danmutv_blocked_sources');
     }
 
     // 输出测速结果
@@ -209,7 +210,7 @@ export default function SourceAvailabilityChecker() {
   const hasRunRef = useRef(false);
 
   useEffect(() => {
-    const SPEED_TEST_KEY = 'siffcity_speed_test_timestamp';
+    const SPEED_TEST_KEY = 'source_speed_test_timestamp';
     const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时有效期
 
     const performSpeedTest = async () => {
