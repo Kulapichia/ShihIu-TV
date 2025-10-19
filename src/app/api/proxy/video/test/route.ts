@@ -1,3 +1,5 @@
+// src/app/api/proxy/video/test/route.ts
+
 /* eslint-disable no-console */
 
 import { NextResponse } from "next/server";
@@ -55,7 +57,8 @@ export async function GET(request: Request) {
         // 只发送HEAD请求来检查URL可达性，避免下载大文件
         const response = await fetch(decodedUrl, {
           method: 'HEAD',
-          headers: config.headers as Record<string, string>, 
+          // [FIX] 添加类型断言，解决 TypeScript 错误 TS2769
+          headers: config.headers as Record<string, string>,
           signal: AbortSignal.timeout(10000), // 10秒超时
         });
 
