@@ -4,6 +4,7 @@
 import { MessageCircle, Search, Users, X, UserPlus } from 'lucide-react';
 import { Conversation, Friend, FriendRequest } from '../../lib/types';
 import { User } from '@/lib/admin.types';
+
 // 定义 Props 类型
 interface SidePanelProps {
   isMobile: boolean;
@@ -190,15 +191,15 @@ export function SidePanel({
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.style.display = 'none';
-                          target.nextElementSibling?.classList.remove('hidden');
+                          const nextEl = target.nextElementSibling;
+                          if (nextEl) nextEl.classList.remove('hidden');
                         }}
                       />
                       <div className="hidden w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold ring-2 ring-white dark:ring-gray-700 shadow-sm">
                         {getDisplayName(otherUser).charAt(0).toUpperCase()}
                       </div>
                       {/* 在线状态指示器 */}
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white dark:border-gray-700 ${isUserOnline(otherUser) ? 'bg-green-400' : 'bg-gray-400'
-                        }`} />
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white dark:border-gray-700 ${isUserOnline(otherUser) ? 'bg-green-400' : 'bg-gray-400'}`} />
                     </div>
                   ) : null;
                 } else {
@@ -231,7 +232,6 @@ export function SidePanel({
                     <div className="flex-shrink-0">
                       {getConversationAvatar()}
                     </div>
-
                     {/* 对话信息 */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
@@ -248,7 +248,6 @@ export function SidePanel({
                           </div>
                         )}
                       </div>
-
                       <div className="flex items-center justify-between">
                         <div className="text-sm text-gray-500 dark:text-gray-400 truncate flex-1 mr-2">
                           {conv.last_message?.message_type === 'image'
@@ -256,7 +255,6 @@ export function SidePanel({
                             : (conv.last_message?.content || '暂无消息')
                           }
                         </div>
-
                         {/* 未读消息数量 */}
                         {conversationUnreadCounts[conv.id] > 0 && (
                           <div className="flex-shrink-0">
@@ -292,14 +290,14 @@ export function SidePanel({
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
                               target.style.display = 'none';
-                              target.nextElementSibling?.classList.remove('hidden');
+                              const nextEl = target.nextElementSibling;
+                              if (nextEl) nextEl.classList.remove('hidden');
                             }}
                           />
                           <div className="hidden w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold ring-2 ring-white dark:ring-gray-700 shadow-sm">
                             {request.from_user.charAt(0).toUpperCase()}
                           </div>
                         </div>
-
                         {/* 申请者信息 */}
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
@@ -315,11 +313,9 @@ export function SidePanel({
                           </div>
                         </div>
                       </div>
-
                       <div className="text-xs text-gray-600 dark:text-gray-300 mb-3 pl-13">
                         {request.message}
                       </div>
-
                       <div className="flex space-x-2 pl-13">
                         <button
                           onClick={() => onFriendRequestAction(request.id, 'accepted')}
@@ -338,7 +334,6 @@ export function SidePanel({
                   ))}
               </div>
             )}
-
             {/* 好友列表 */}
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">我的好友</h3>
             {friends.map((friend) => (
@@ -357,15 +352,15 @@ export function SidePanel({
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';
-                        target.nextElementSibling?.classList.remove('hidden');
+                        const nextEl = target.nextElementSibling;
+                        if (nextEl) nextEl.classList.remove('hidden');
                       }}
                     />
                     <div className="hidden w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
                       {(friend.nickname || friend.username).charAt(0).toUpperCase()}
                     </div>
                     {/* 在线状态指示器 */}
-                    <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 ${isUserOnline(friend.username) ? 'bg-green-400' : 'bg-gray-400'
-                      }`} />
+                    <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800 ${isUserOnline(friend.username) ? 'bg-green-400' : 'bg-gray-400'}`} />
                   </div>
                   <div className="flex-1 text-left">
                     <div className="font-medium text-gray-900 dark:text-white">
