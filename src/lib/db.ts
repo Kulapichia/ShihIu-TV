@@ -254,9 +254,18 @@ class MemoryStorage implements IStorage {
   async getSkipConfig(): Promise<EpisodeSkipConfig | null> { return null; }
   async setSkipConfig(): Promise<void> { }
   async deleteSkipConfig(): Promise<void> { }
-  async getAdminConfig(): Promise<AdminConfig> { return {} as AdminConfig; }
-  async setAdminConfig(): Promise<void> { }
-  async getAllUsers(): Promise<string[]> { return []; }
+  async getAdminConfig(): Promise<AdminConfig> { return this.data['admin_config'] || null; }
+  async setAdminConfig(config: AdminConfig): Promise<void> { this.data['admin_config'] = config; }
+  async getAllUsers(): Promise<string[]> {
+    // 为本地存储模式提供一个基本实现
+    const users: string[] = [];
+    for (const key in this.data) {
+      if (key.startsWith('u:') && key.endsWith(':pwd')) {
+        users.push(key.split(':')[1]);
+      }
+    }
+    return users;
+  }
   async getAllSkipConfigs(): Promise<{ [key: string]: EpisodeSkipConfig }> { return {}; }
   async clearAllData(): Promise<void> { this.data = {}; }
   async addFriend(): Promise<void> { }
