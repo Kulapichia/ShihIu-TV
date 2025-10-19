@@ -30,7 +30,7 @@ import ReactCrop, { Crop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
-import { DEFAULT_VIDEO_SOURCES } from '@/lib/default-video-sources'; 
+import { DEFAULT_CMS_VIDEO_SOURCES } from '@/lib/default-video-sources';
 import { CURRENT_VERSION } from '@/lib/version';
 import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
 import {
@@ -50,7 +50,7 @@ import type { Favorite } from '@/lib/types';
 import { VersionPanel } from './VersionPanel';
 import VideoCard from './VideoCard';
 import { useToast } from './Toast';
-import { showToast } from './GlobalToast';
+import { showGlobalToast } from './GlobalToast';
 import { speedTestAllSources } from './SourceAvailabilityChecker';
 
 interface AuthInfo {
