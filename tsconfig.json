@@ -26,8 +26,8 @@
 
     // --- 融合点 ---
     // 1. 采用更现代、更推荐的模块系统
-    "module": "Node16",
-    "moduleResolution": "node16",
+    "module": "esnext",
+    "moduleResolution": "bundler",
 
     // 2. 为ES5目标提供的更强的兼容性保障
     "downlevelIteration": true
