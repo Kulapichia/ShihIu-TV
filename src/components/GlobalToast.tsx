@@ -15,7 +15,7 @@ let toastListeners: Array<(messages: ToastMessage[]) => void> = [];
 let toastIdCounter = 0;
 
 // 全局方法：显示 Toast
-export function showToast(
+export function showGlobalToast(
   message: string,
   type: 'success' | 'info' | 'warning' | 'error' = 'info',
   duration: number = 5000
