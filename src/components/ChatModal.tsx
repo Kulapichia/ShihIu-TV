@@ -272,6 +272,15 @@ export const ChatModal = React.memo(function ChatModal({
     enabled: true,
   });
 
+  const loadConversations = useCallback(async () => {
+    const data = await fetchWithHandling('/api/chat/conversations');
+    if (data) {
+      setConversations(data);
+      const allParticipants = data.reduce((acc: string[], conv: Conversation) => [...acc, ...conv.participants], []);
+      preloadUserAvatars(allParticipants);
+    }
+  }, [preloadUserAvatars]);
+
   useEffect(() => {
     if (isOpen) {
       loadConversations();
@@ -286,10 +295,42 @@ export const ChatModal = React.memo(function ChatModal({
         createTestDataIfNeeded();
       }
     }
-  }, [isOpen, currentUser?.username, preloadUserAvatars]);
+  }, [isOpen, currentUser?.username, preloadUserAvatars, loadConversations]);
 
   // 创建测试数据（仅开发模式）
-  const createTestDataIfNeeded = async () => { /* ... (此函数无变化) ... */ };
+  const createTestDataIfNeeded = async () => {
+    if (!currentUser) return;
+
+    try {
+      // 检查是否已有对话
+      const response = await fetch('/api/chat/conversations');
+      if (response.ok) {
+        const existingConversations = await response.json();
+        if (existingConversations.length === 0) {
+          // 创建一个测试对话
+          const testConversation = {
+            name: '测试对话',
+            participants: [currentUser.username, 'test-user'],
+            type: 'private',
+            created_at: Date.now(),
+            updated_at: Date.now(),
+          };
+
+          const createResponse = await fetch('/api/chat/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(testConversation),
+          });
+
+          if (createResponse.ok) {
+            loadConversations(); // 重新加载对话列表
+          }
+        }
+      }
+    } catch (error) {
+      console.error('创建测试数据失败:', error);
+    }
+  };
 
   // 点击外部关闭表情选择器
   useEffect(() => {
@@ -350,15 +391,6 @@ export const ChatModal = React.memo(function ChatModal({
       return null;
     }
   };
-  
-  const loadConversations = useCallback(async () => {
-    const data = await fetchWithHandling('/api/chat/conversations');
-    if (data) {
-      setConversations(data);
-      const allParticipants = data.reduce((acc: string[], conv: Conversation) => [...acc, ...conv.participants], []);
-      preloadUserAvatars(allParticipants);
-    }
-  }, [preloadUserAvatars]);
 
   const loadFriends = useCallback(async () => {
     const data = await fetchWithHandling('/api/chat/friends');
@@ -377,14 +409,35 @@ export const ChatModal = React.memo(function ChatModal({
   }, [preloadUserAvatars]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
-    const data = await fetchWithHandling(`/api/chat/messages?conversationId=${conversationId}`);
-    if (data) {
-      setMessages(data);
-      preloadUserAvatars(data.map((msg: ChatMessage) => msg.sender_id));
-    } else {
-      setMessages([]); // Clear messages on error
+    try {
+      const response = await fetch(`/api/chat/messages?conversationId=${conversationId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(data);
+        preloadUserAvatars(data.map((msg: ChatMessage) => msg.sender_id));
+      } else {
+        // 处理非200状态码
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Failed to load messages - Status:', response.status, 'Error:', errorData);
+
+        if (response.status === 401) {
+          showError('未授权', '请重新登录');
+        } else if (response.status === 403) {
+          showError('无权限', '您没有权限访问此对话');
+        } else if (response.status === 404) {
+          showError('对话不存在', '该对话可能已被删除');
+        } else {
+          showError('加载消息失败', errorData.error || '服务器错误');
+        }
+        
+        setMessages([]); // Clear messages on error
+      }
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+      showError('加载消息失败', '网络错误，请稍后重试');
+      setMessages([]);
     }
-  }, [preloadUserAvatars]);
+  }, [preloadUserAvatars, showError]);
 
   const handleSendMessage = useCallback(async () => {
     if (!newMessage.trim() || !selectedConversation || !currentUser) return;
