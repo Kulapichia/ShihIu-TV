@@ -21,7 +21,8 @@ type Action =
   | 'update_check_results'
   | 'batch_delete_invalid'
   | 'batch_import'
-  | 'edit';
+  | 'edit'
+  | 'import_defaults';
 
 interface BaseBody {
   action?: Action;
