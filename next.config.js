@@ -39,7 +39,7 @@ const nextConfig = {
     ],
   },
 
-  webpack(config, { dev }) {
+  webpack(config, { dev, isServer }) {
     // Grab the existing rule that handles SVG imports
     const fileLoaderRule = config.module.rules.find((rule) =>
       rule.test?.test?.('.svg')
@@ -104,6 +104,16 @@ const nextConfig = {
             },
           };
         }
+      });
+    }
+
+    // 针对 Electron 环境的服务端构建优化
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push({
+        'artplayer': 'commonjs artplayer',
+        'hls.js': 'commonjs hls.js',
+        'artplayer-plugin-danmuku': 'commonjs artplayer-plugin-danmuku',
       });
     }
 
