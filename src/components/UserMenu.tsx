@@ -1173,7 +1173,7 @@ export const UserMenu: React.FC = () => {
 
   const handleManualSpeedTest = async () => {
     if (isSpeedTesting) {
-      showToast('测速正在进行中，请稍候...', 'info', 2000);
+      showToast({ title: '测速正在进行中，请稍候...', type: 'info', duration: 2000 });
       return;
     }
 
@@ -1182,15 +1182,15 @@ export const UserMenu: React.FC = () => {
     }
 
     setIsSpeedTesting(true);
-    showToast('开始视频源测速，请稍候...', 'info', 3000);
+    showToast({ title: '开始视频源测速，请稍候...', type: 'info', duration: 3000 });
 
     try {
       localStorage.removeItem('source_speed_test_timestamp');
       await speedTestAllSources();
-      showToast('视频源测速完成！已保留速度最快的前20个源。', 'success', 5000);
+      showToast({ title: '视频源测速完成！已保留速度最快的前20个源。', type: 'success', duration: 5000 });
     } catch (error) {
       console.error('视频源测速失败:', error);
-      showToast('视频源测速失败，请稍后重试', 'error', 5000);
+      showToast({ title: '视频源测速失败，请稍后重试', type: 'error', duration: 5000 });
     } finally {
       setIsSpeedTesting(false);
     }
@@ -1241,7 +1241,7 @@ export const UserMenu: React.FC = () => {
       setBaseTitle(title);
       setEpisodes(items.map(item => ({ ...item, selected: true })));
       setDanmakuError('');
-      showToast(`解析完成，共 ${items.length} 条`, 'success');
+      showToast({ title: `解析完成，共 ${items.length} 条`, type: 'success' });
     } catch (e: any) {
       console.error('[弹幕下载] 解析失败:', e);
       setDanmakuError(e?.message || '解析失败');
