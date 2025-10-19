@@ -93,6 +93,23 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     }, duration);
   }, [removeToast]);
 
+  useEffect(() => {
+    const handleShowToast = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        message: string;
+        type: ToastType;
+        duration: number;
+      }>;
+      const { message, type, duration } = customEvent.detail;
+      showToast({ title: message, type, duration });
+    };
+
+    window.addEventListener('show-global-toast', handleShowToast);
+    return () => {
+      window.removeEventListener('show-global-toast', handleShowToast);
+    };
+  }, [showToast]);
+  
   const showSuccess = useCallback((title: string, message?: string) => {
     showToast({ type: 'success', title, message });
   }, [showToast]);
@@ -181,23 +198,6 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     </div>
   );
 
-  useEffect(() => {
-    const handleShowToast = (event: Event) => {
-      const customEvent = event as CustomEvent<{
-        message: string;
-        type: ToastType;
-        duration: number;
-      }>;
-      const { message, type, duration } = customEvent.detail;
-      addToast(message, type, duration);
-    };
-
-    window.addEventListener('show-global-toast', handleShowToast);
-    return () => {
-      window.removeEventListener('show-global-toast', handleShowToast);
-    };
-  }, [addToast]);
-  
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
