@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { showToast } from './GlobalToast'; // 修正：从新的GlobalToast导入
-
+import { showGlobalToast } from './GlobalToast';
 // 全局标记，防止多个组件实例同时执行测速
 let isSpeedTestRunning = false;
 
