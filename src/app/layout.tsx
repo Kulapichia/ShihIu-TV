@@ -10,6 +10,7 @@ import { getConfig } from '@/lib/config';
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
 import { SessionTracker } from '../components/SessionTracker';
 import { SiteProvider } from '../components/SiteProvider';
+import SourceAvailabilityChecker from '../components/SourceAvailabilityChecker';
 import { ThemeProvider } from '../components/ThemeProvider';
 import { ToastProvider } from '../components/Toast';
 import { VirtualScrollProvider } from '../components/VirtualScrollProvider';
@@ -223,6 +224,7 @@ export default async function RootLayout({
                 >
                   <GlobalThemeLoader />
                   <SessionTracker />
+                  <SourceAvailabilityChecker />
                   {children}
                   <GlobalErrorIndicator />
                 </VirtualScrollProvider>
