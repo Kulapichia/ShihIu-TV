@@ -1,27 +1,50 @@
 import { NextResponse } from 'next/server';
 
 import { getCacheTime } from '@/lib/config';
-import { fetchDoubanData } from '@/lib/douban';
 import { RawDoubanItemSchema } from '@/lib/schemas';
 import { DoubanItem, DoubanResult } from '@/lib/types';
 
 interface DoubanCategoryApiResponse {
   total: number;
-  items: Array<{
-    id: string;
-    title: string;
-    card_subtitle: string;
-    pic: {
-      large: string;
-      normal: string;
-    };
-    rating: {
-      value: number;
-    };
-  }>;
+  items: Array<any>;
 }
 
-export const runtime = 'nodejs';
+// 封装带超时的fetch逻辑
+async function fetchDoubanDataWithTimeout(url: string): Promise<DoubanCategoryApiResponse> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+
+  const fetchOptions = {
+    signal: controller.signal,
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      Referer: 'https://movie.douban.com/',
+      Accept: 'application/json, text/plain, */*',
+      Origin: 'https://movie.douban.com',
+    },
+  };
+
+  try {
+    const response = await fetch(url, fetchOptions);
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    // 如果是 AbortError，抛出自定义的超时错误
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('请求豆瓣API超时');
+    }
+    throw error;
+  }
+}
+
+export const runtime = 'edge';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -67,8 +90,8 @@ export async function GET(request: Request) {
   try {
     console.log(`[豆瓣分类] 请求URL: ${target}`);
     
-    // 调用豆瓣 API
-    const doubanData = await fetchDoubanData<DoubanCategoryApiResponse>(target);
+    // 调用带超时的豆瓣 API
+    const doubanData = await fetchDoubanDataWithTimeout(target);
     
     console.log(`[豆瓣分类] 成功获取数据，项目数: ${doubanData.items?.length || 0}`);
 
