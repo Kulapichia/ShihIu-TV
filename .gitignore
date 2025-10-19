@@ -19,7 +19,10 @@
 # Next.js
 /.next/
 /out/
+# production
 /build
+/dist
+/release
 
 # Vercel
 .vercel
@@ -61,6 +64,8 @@ next-env.d.ts
 # Custom script generated files
 src/lib/runtime.ts
 public/manifest.json
+# electron
+/electron/dist
 
 # =========================================================================
 #  Operating System & Editor Specific
