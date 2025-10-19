@@ -1,201 +1,137 @@
-/* eslint-disable no-console */
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
-export const dynamic = 'force-dynamic';
+const UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-function extractBV(input?: string | null): string | null {
-  if (!input) return null;
-  const m = input.match(/BV[0-9A-Za-z]+/i);
-  return m ? m[0] : null;
+async function fetchApi(url: string, options: RequestInit = {}) {
+  const resp = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'User-Agent': UA,
+      Referer: 'https://www.bilibili.com/',
+    },
+  });
+  if (!resp.ok) {
+    const msg = await resp.text().catch(() => '');
+    throw new Error(`请求B站接口失败 ${resp.status}: ${msg.slice(0, 100)}`);
+  }
+  const data = await resp.json();
+  if (data.code !== 0) {
+    throw new Error(data.message || 'B站接口返回错误');
+  }
+  return data.data || data.result;
 }
 
-function extractBangumi(
-  input?: string | null
-): { season_id?: string; media_id?: string } | null {
-  if (!input) return null;
-  const ss = input.match(/bangumi\/(?:play\/)?ss(\d+)/i);
-  if (ss && ss[1]) return { season_id: ss[1] };
-  const md = input.match(/bangumi\/(?:media\/)?md(\d+)/i);
-  if (md && md[1]) return { media_id: md[1] };
-  return null;
-}
+const QuerySchema = z.object({
+  link: z.string().optional(),
+  bv: z.string().optional(),
+  cid: z.string().optional(),
+  season_id: z.string().optional(),
+  media_id: z.string().optional(),
+  ep: z.string().optional().default('1'),
+  p: z.string().optional().default('1'),
+});
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const link = searchParams.get('link');
-    const bv = searchParams.get('bv') || extractBV(link);
-    const cidParam = searchParams.get('cid');
-    const page = Number(searchParams.get('p') || '1'); // for BV 分P
-    let mediaIdParam = searchParams.get('media_id');
-    let seasonIdParam = searchParams.get('season_id');
-    // 允许从 link 自动识别番剧 ss/md
-    if (!seasonIdParam && !mediaIdParam && link) {
-      const bangumi = extractBangumi(link);
-      if (bangumi?.season_id) seasonIdParam = bangumi.season_id;
-      if (bangumi?.media_id) mediaIdParam = bangumi.media_id;
-    }
-    const epIndex = Number(searchParams.get('ep') || '1'); // 选择集数（1基），用于番剧
-
-    let cid: string | undefined = cidParam ?? undefined;
-
-    if (!cid) {
-      // 优先支持番剧入口：media_id / season_id
-      let seasonId = seasonIdParam ? Number(seasonIdParam) : undefined;
-
-      if (!seasonId && mediaIdParam) {
-        // 通过 media_id 获取 season_id
-        type ReviewUserResp = {
-          code: number;
-          result?: { media?: { season_id?: number | string } };
-        };
-        const reviewResp = await fetch(
-          `https://api.bilibili.com/pgc/review/user?media_id=${encodeURIComponent(
-            mediaIdParam
-          )}`,
-          { headers: { 'user-agent': 'Mozilla/5.0' }, cache: 'no-store' }
-        );
-        if (!reviewResp.ok) {
-          return NextResponse.json(
-            { error: 'media_id 解析 season_id 失败' },
-            { status: reviewResp.status }
-          );
-        }
-        const reviewJson: ReviewUserResp = await reviewResp.json();
-        const sid = reviewJson?.result?.media?.season_id;
-        if (!sid) {
-          return NextResponse.json(
-            { error: '未解析到 season_id' },
-            { status: 404 }
-          );
-        }
-        seasonId = typeof sid === 'string' ? Number(sid) : sid;
-      }
-
-      if (seasonId) {
-        // 通过 season_id 解析主正片列表的 cid
-        type SectionEpisode = { cid?: number; title?: string };
-        type SeasonSectionResp = {
-          code: number;
-          result?: {
-            main_section?: { episodes?: SectionEpisode[] };
-            section?: Array<{ episodes?: SectionEpisode[] }>;
-          };
-        };
-        const sectionResp = await fetch(
-          `https://api.bilibili.com/pgc/web/season/section?season_id=${encodeURIComponent(
-            String(seasonId)
-          )}`,
-          { headers: { 'user-agent': 'Mozilla/5.0' }, cache: 'no-store' }
-        );
-        if (!sectionResp.ok) {
-          return NextResponse.json(
-            { error: 'season_id 解析剧集失败' },
-            { status: sectionResp.status }
-          );
-        }
-        const sectionJson: SeasonSectionResp = await sectionResp.json();
-        const episodes =
-          sectionJson?.result?.main_section?.episodes &&
-          Array.isArray(sectionJson.result.main_section.episodes)
-            ? sectionJson.result.main_section.episodes
-            : [];
-        if (episodes.length === 0) {
-          return NextResponse.json(
-            { error: '未找到正片剧集列表' },
-            { status: 404 }
-          );
-        }
-        const idx = Math.max(
-          0,
-          Math.min(episodes.length - 1, (epIndex || 1) - 1)
-        );
-        const chosen = episodes[idx];
-        cid = chosen?.cid != null ? String(chosen.cid) : undefined;
-        if (!cid) {
-          return NextResponse.json(
-            { error: '该集未解析到 cid' },
-            { status: 404 }
-          );
-        }
-      }
+    const params = Object.fromEntries(req.nextUrl.searchParams.entries());
+    const query = QuerySchema.safeParse(params);
+    if (!query.success) {
+      return NextResponse.json({ error: '参数无效' }, { status: 400 });
     }
 
-    if (!cid) {
-      // 普通视频入口：BV / link
-      if (!bv) {
-        return NextResponse.json(
-          {
-            error: '缺少可用参数（需要 cid 或 season_id/media_id 或 bv/link）',
-          },
-          { status: 400 }
+    const { link, bv, cid, season_id, media_id, ep, p } = query.data;
+
+    let targetCid = cid;
+
+    if (link) {
+      const url = new URL(link);
+      const path = url.pathname;
+      const bvid = url.searchParams.get('bvid');
+      const cidParam = url.searchParams.get('cid');
+      const mdMatch = path.match(/\/bangumi\/(?:media\/)?(md\d+)/i);
+      const ssMatch = path.match(/\/bangumi\/(?:season\/)?(ss\d+)/i);
+      const epMatch = path.match(/\/bangumi\/play\/(ep\d+)/i);
+      const bvMatch = path.match(/\/video\/(BV[0-9A-Za-z]{10,})/i);
+      
+      if (mdMatch) {
+        const data = await fetchApi(
+          `https://api.bilibili.com/pgc/review/user?media_id=${mdMatch[1].substring(2)}`
         );
+        const epData = await fetchApi(
+          `https://api.bilibili.com/pgc/web/season/section?season_id=${data.media.season_id}`
+        );
+        const epItem = epData.main_section?.episodes?.[Number(ep) - 1];
+        if (!epItem) throw new Error('未找到指定集数');
+        targetCid = epItem.cid;
+      } else if (ssMatch) {
+        const epData = await fetchApi(
+          `https://api.bilibili.com/pgc/web/season/section?season_id=${ssMatch[1].substring(2)}`
+        );
+        const epItem = epData.main_section?.episodes?.[Number(ep) - 1];
+        if (!epItem) throw new Error('未找到指定集数');
+        targetCid = epItem.cid;
+      } else if (epMatch) {
+        const epData = await fetchApi(
+          `https://api.bilibili.com/pgc/view/web/season?ep_id=${epMatch[1].substring(2)}`
+        );
+        targetCid = epData.episodes?.[0]?.cid;
+      } else if (bvid || bvMatch) {
+        const finalBv = bvid || bvMatch?.[1];
+        const videoData = await fetchApi(
+          `https://api.bilibili.com/x/web-interface/view?bvid=${finalBv}`
+        );
+        targetCid = videoData.pages?.[Number(p) - 1]?.cid;
+      } else if (cidParam) {
+        targetCid = cidParam;
       }
-      // 获取 cid（默认第 1 页或指定 p）
-      const viewResp = await fetch(
-        `https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(
-          bv
-        )}`,
-        { headers: { 'user-agent': 'Mozilla/5.0' }, cache: 'no-store' }
+    } else if (bv) {
+      const videoData = await fetchApi(
+        `https://api.bilibili.com/x/web-interface/view?bvid=${bv}`
       );
-      if (!viewResp.ok) {
-        return NextResponse.json(
-          { error: '获取视频信息失败' },
-          { status: viewResp.status }
-        );
-      }
-      type BiliViewResponse = {
-        code: number;
-        message: string;
-        ttl: number;
-        data?: {
-          pages?: Array<{ cid?: number; page?: number; part?: string }>;
-        };
-      };
-      const viewJson: BiliViewResponse = await viewResp.json();
-      const pagesList =
-        viewJson && viewJson.data && Array.isArray(viewJson.data.pages)
-          ? viewJson.data.pages
-          : [];
-      if (pagesList.length === 0) {
-        return NextResponse.json(
-          { error: '未找到视频分P信息' },
-          { status: 404 }
-        );
-      }
-      const idx = Math.max(0, Math.min(pagesList.length - 1, page - 1));
-      const pageCid = pagesList[idx]?.cid;
-      cid = pageCid != null ? String(pageCid) : undefined;
-      if (!cid) {
-        return NextResponse.json({ error: '未解析到 cid' }, { status: 404 });
-      }
+      targetCid = videoData.pages?.[Number(p) - 1]?.cid;
+    } else if (season_id) {
+      const epData = await fetchApi(
+        `https://api.bilibili.com/pgc/web/season/section?season_id=${season_id}`
+      );
+      const epItem = epData.main_section?.episodes?.[Number(ep) - 1];
+      if (!epItem) throw new Error('未找到指定集数');
+      targetCid = epItem.cid;
+    } else if (media_id) {
+      const data = await fetchApi(
+        `https://api.bilibili.com/pgc/review/user?media_id=${media_id}`
+      );
+      const epData = await fetchApi(
+        `https://api.bilibili.com/pgc/web/season/section?season_id=${data.media.season_id}`
+      );
+      const epItem = epData.main_section?.episodes?.[Number(ep) - 1];
+      if (!epItem) throw new Error('未找到指定集数');
+      targetCid = epItem.cid;
+    }
+    
+    if (!targetCid) {
+      throw new Error('无法解析CID');
     }
 
-    // 使用新的 XML 弹幕接口（按 cid）
-    const xmlResp = await fetch(`https://comment.bilibili.com/${cid}.xml`, {
-      headers: {
-        'user-agent': 'Mozilla/5.0',
-        referer: 'https://www.bilibili.com/',
-      },
-      cache: 'no-store',
+    const danmakuUrl = `https://comment.bilibili.com/${targetCid}.xml`;
+    const danmakuResp = await fetch(danmakuUrl, {
+      headers: { 'User-Agent': UA },
     });
-    if (!xmlResp.ok) {
-      return NextResponse.json(
-        { error: '获取弹幕失败' },
-        { status: xmlResp.status }
-      );
+    if (!danmakuResp.ok) {
+      throw new Error(`获取弹幕失败 ${danmakuResp.status}`);
     }
-    const xmlText = await xmlResp.text();
+    const danmakuXml = await danmakuResp.text();
 
-    return new NextResponse(xmlText, {
-      status: 200,
+    return new Response(danmakuXml, {
       headers: {
-        'content-type': 'application/xml; charset=utf-8',
-        'cache-control': 'no-store',
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
       },
     });
-  } catch (err) {
-    console.error('获取弹幕异常:', err);
-    return NextResponse.json({ error: '服务器错误' }, { status: 500 });
+  } catch (e: any) {
+    console.error('弹幕API错误:', e);
+    return NextResponse.json({ error: e?.message || '未知错误' }, { status: 500 });
   }
 }
