@@ -1,7 +1,8 @@
 // 客户端搜索工具 - 直接从API获取视频源配置进行搜索
-import { SearchResult, Site } from './types'; // 假设项目A的类型定义
+import { SearchResult } from './types';
+import { ApiSite } from './config';
 
-interface VideoSource extends Site {}
+type VideoSource = ApiSite;
 
 // 缓存视频源列表，避免重复请求
 let cachedSources: VideoSource[] | null = null;
@@ -68,7 +69,7 @@ export async function searchFromAllEnabledSources(query: string): Promise<Search
   const blockedSources = blockedSourcesStr ? JSON.parse(blockedSourcesStr) : [];
 
   const enabledSources = sources.filter(
-    s => s.isActive && !s.isSearchDisabled && !blockedSources.includes(s.key)
+    s => !s.disabled && !blockedSources.includes(s.key)
   );
 
   if (enabledSources.length === 0) {
