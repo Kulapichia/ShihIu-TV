@@ -1163,11 +1163,11 @@ export const UserMenu: React.FC = () => {
   const handleEnableAllAvailableSources = () => {
     if (confirm('确定要启用所有可用视频源吗?\n\n这将清除测速时的屏蔽列表,所有未手动禁用的视频源都将被启用。建议仅在需要更多视频源时使用。')) {
       localStorage.removeItem('danmutv_blocked_sources');
-      showToast(
-        '已启用所有可用视频源!刷新页面后生效,搜索时将使用所有未被手动禁用的视频源。',
-        'success',
-        6000
-      );
+      showToast({
+        title: '已启用所有可用视频源!刷新页面后生效,搜索时将使用所有未被手动禁用的视频源。',
+        type: 'success',
+        duration: 6000,
+      });
     }
   };
 
@@ -1535,11 +1535,11 @@ export const UserMenu: React.FC = () => {
         }
       }
       setIsDanmakuDownloadOpen(false);
-      showToast(
-        `下载完成！成功 ${successCount} 条，失败 ${failCount} 条`,
-        successCount > 0 ? 'success' : 'error',
-        6000
-      );
+      showToast({
+        title: `下载完成！成功 ${successCount} 条，失败 ${failCount} 条`,
+        type: successCount > 0 ? 'success' : 'error',
+        duration: 6000,
+      });
     } catch (e: any) {
       setDanmakuError(e?.message || '下载失败');
     } finally {
