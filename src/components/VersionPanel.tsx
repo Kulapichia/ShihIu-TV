@@ -88,7 +88,15 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
 
         // 检查是否有更新
         if (parsed.length > 0) {
-          const latest = parsed[0];
+          // 按日期排序，找到真正的最新版本
+          const sortedByDate = [...parsed].sort((a, b) => {
+            // 解析日期进行比较
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            return dateB.getTime() - dateA.getTime(); // 降序排列，最新的在前
+          });
+
+          const latest = sortedByDate[0];
           setLatestVersion(latest.version);
           setIsHasUpdate(
             compareVersions(latest.version) === UpdateStatus.HAS_UPDATE
