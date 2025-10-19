@@ -60,6 +60,7 @@ import {
 } from '@/lib/admin.types';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { exportData, parseImportData } from '@/lib/utils';
+import { DEFAULT_CMS_VIDEO_SOURCES } from '@/lib/default-video-sources';
 import TelegramConfigComponent from '@/components/TelegramConfigComponent';
 import AIRecommendConfig from '@/components/AIRecommendConfig';
 import CacheManager from '@/components/CacheManager';
@@ -3357,6 +3358,35 @@ const VideoSourceConfig = ({
           >
             <Upload className='w-4 h-4' />
             <span>导入</span>
+          </button>
+          <button
+            onClick={() => {
+              setConfirmModal({
+                isOpen: true,
+                title: '导入默认视频源',
+                message: `确定要导入 ${DEFAULT_CMS_VIDEO_SOURCES.length} 个项目内置的默认视频源吗？已存在的源将会被跳过。`,
+                onConfirm: () => {
+                  withLoading('importDefaults', () => callSourceApi({ action: 'import_defaults' }))
+                    .then((apiResponse: any) => {
+                      // 确保后端有返回 message
+                      if (apiResponse && apiResponse.message) {
+                        showSuccess(apiResponse.message, showAlert);
+                      } else {
+                        showSuccess('默认视频源导入成功', showAlert);
+                      }
+                    })
+                    .catch(() => {});
+                  setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {}, onCancel: () => {} });
+                },
+                onCancel: () => {
+                  setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {}, onCancel: () => {} });
+                }
+              });
+            }}
+            className={buttonStyles.primary} // 使用统一的按钮样式
+            title="一键导入项目内置的默认视频源"
+          >
+            导入默认源
           </button>
           <button
             onClick={() => setImportExportModal({ isOpen: true, mode: 'export' })}
