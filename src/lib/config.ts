@@ -57,7 +57,7 @@ export const API_CONFIG = {
     baseUrl: 'https://api.r2afosne.dpdns.org',
     headers: {
       'Accept': 'application/json',
-      'User-Agent': 'SiffCITY/1.0',
+      'User-Agent': 'MoonTV/1.0',
     },
   },
 };
