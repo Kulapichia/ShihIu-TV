@@ -644,17 +644,27 @@ export const ChatModal = React.memo(function ChatModal({
         ? 'fixed top-0 left-0 right-0 bottom-0 bg-white dark:bg-gray-900'
         : 'fixed inset-0 flex items-center justify-center bg-black bg-opacity-50'
         }`}
-      style={{ zIndex: '2147483647' }}
+      style={{
+        zIndex: '2147483647',
+        ...(isMobile && {
+          paddingTop: '56px', // 减少顶部padding
+          paddingBottom: '72px' // 减少底部padding
+        })
+      }}
     >
       <div
         ref={modalRef}
         className={`${isMobile
-          ? 'w-full h-full bg-white dark:bg-gray-900 flex flex-col'
+          ? 'w-full bg-white dark:bg-gray-900 flex flex-col'
           : 'w-full max-w-6xl h-[80vh] bg-white dark:bg-gray-900 rounded-lg shadow-xl flex flex-row relative'
           }`}
         style={{
           transform: !isMobile ? `translate(${dragPosition.x}px, ${dragPosition.y}px)` : 'none',
           transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+          ...(isMobile && {
+            height: 'calc(100vh - 128px)', // 调整为新的padding总和
+            minHeight: 'calc(100vh - 128px)'
+          })
         }}
       >
         {/* 拖动头部 - 仅桌面端显示 */}
