@@ -66,7 +66,7 @@ function PlayPageClient() {
   const [favorited, setFavorited] = useState(false);
 
     // 跳过片头片尾配置
-  const [skipConfig, setSkipConfig] = useState<EpisodeSkipConfig | null>(null);
+  const [skipConfig, setSkipConfig] = useState<{
     enable: boolean;
     intro_time: number;
     outro_time: number;
