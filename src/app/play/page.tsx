@@ -3,8 +3,9 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
+import React from 'react'; // 引入 React 用于 ErrorBoundary
 import Hls from 'hls.js';
-import { Heart, ChevronUp } from 'lucide-react';
+import { Heart, ChevronUp, Copy, AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
@@ -59,6 +60,117 @@ function PlayPageClient() {
 
   // 收藏状态
   const [favorited, setFavorited] = useState(false);
+
+    // 跳过片头片尾配置
+  const [skipConfig, setSkipConfig] = useState<{
+    enable: boolean;
+    intro_time: number;
+    outro_time: number;
+  }>({
+    enable: false,
+    intro_time: 0,
+    outro_time: 0,
+  });
+  const skipConfigRef = useRef(skipConfig);
+  useEffect(() => {
+    skipConfigRef.current = skipConfig;
+  }, [
+    skipConfig,
+    skipConfig.enable,
+    skipConfig.intro_time,
+    skipConfig.outro_time,
+  ]);
+
+  // 跳过检查的时间间隔控制
+  const lastSkipCheckRef = useRef(0);
+
+  // 弹幕相关状态
+  const [danmakuEnabled, setDanmakuEnabled] = useState(false);
+  const [danmakuOffset, setDanmakuOffset] = useState(0); // 秒，可正可负
+  const danmakuPluginRef = useRef<any>(null);
+  const danmakuFileRef = useRef<File | null>(null); // 存储本地弹幕文件
+  const danmakuFilesRef = useRef<File[]>([]); // 存储批量上传的弹幕文件
+  const [danmakuFilesList, setDanmakuFilesList] = useState<File[]>([]); // 用于UI显示
+  const isFirstLoadRef = useRef(true); // 标记是否是首次加载
+  // 弹幕高级加载面板
+  const [danmakuPanelOpen, setDanmakuPanelOpen] = useState(false);
+  type DanmakuSourceType =
+    | 'bv'
+    | 'link'
+    | 'season_id'
+    | 'media_id'
+    | 'cid'
+    | 'local';
+  const [danmakuSourceType, setDanmakuSourceType] =
+    useState<DanmakuSourceType>('link');
+  const [danmakuInput, setDanmakuInput] = useState('');
+  const [danmakuEp, setDanmakuEp] = useState<number>(1); // season/media 专用（1基）
+  const [danmakuP, setDanmakuP] = useState<number>(1); // BV 分P（1基）
+  const [danmakuLoading, setDanmakuLoading] = useState(false);
+  const [danmakuMsg, setDanmakuMsg] = useState<string | null>(null);
+  // 弹幕优化：密度限制与关键词屏蔽
+  const [danmakuLimitPerSec, setDanmakuLimitPerSec] = useState<number>(() => {
+    try {
+      const v =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('danmaku_limit_per_sec')
+          : null;
+      const n = v ? Number(v) : 50; // 默认 50 条/秒
+      return Number.isFinite(n) && n >= 0 ? n : 50;
+    } catch {
+      return 50;
+    }
+  });
+  const [danmakuKeywords, setDanmakuKeywords] = useState<string>(() => {
+    try {
+      return typeof window !== 'undefined'
+        ? localStorage.getItem('danmaku_keywords') || ''
+        : '';
+    } catch {
+      return '';
+    }
+  });
+  // 弹幕合并开关
+  const [danmakuMergeEnabled, setDanmakuMergeEnabled] = useState<boolean>(() => {
+    try {
+      const v = typeof window !== 'undefined'
+        ? localStorage.getItem('danmaku_merge_enabled')
+        : null;
+      return v === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [danmakuMergeWindow, setDanmakuMergeWindow] = useState<number>(() => {
+    try {
+      const v = typeof window !== 'undefined'
+        ? localStorage.getItem('danmaku_merge_window')
+        : null;
+      const n = v ? Number(v) : 5; // 默认5秒窗口
+      return Number.isFinite(n) && n > 0 ? n : 5;
+    } catch {
+      return 5;
+    }
+  });
+  // 当插件未就绪时暂存待加载的数据源（URL 解析为数组后再存）；同样记录最近一次成功加载的数据源
+  const pendingDanmakuDataRef = useRef<any[] | null>(null);
+  const lastDanmakuDataRef = useRef<any[] | null>(null);
+
+  // 弹幕加载历史记录
+  type DanmakuHistory = {
+    type: DanmakuSourceType;
+    value: string; // cid/bv/season_id/media_id 或 url
+    ep?: number; // season/media 的集数
+    p?: number; // BV 的分P
+    timestamp: number;
+  };
+
+  // 剧集弹幕配置（按剧保存 season_id/media_id）
+  type SeriesDanmakuConfig = {
+    type: 'season_id' | 'media_id';
+    value: string;
+    timestamp: number;
+  };
 
   // 豆瓣详情状态
   const [movieDetails, setMovieDetails] = useState<any>(null);
@@ -382,6 +494,1135 @@ function PlayPageClient() {
 
   // Wake Lock 相关
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+    // 工具函数（Utils）
+  // -----------------------------------------------------------------------------
+
+  // 获取当前剧集的唯一标识（用于剧集弹幕配置）
+  const getSeriesKey = (): string | null => {
+    // 优先使用 site_id + detail_id（来自详情页的播放）
+    const siteId = searchParams.get('site_id');
+    const detailId = searchParams.get('detail_id');
+    if (siteId && detailId) {
+      return `series_${siteId}_${detailId}`;
+    }
+
+    // 其次使用 source + id（直接播放页面）
+    const source = searchParams.get('source');
+    const id = searchParams.get('id');
+    if (source && id) {
+      return `series_${source}_${id}`;
+    }
+
+    // 无法确定剧集标识
+    return null;
+  };
+
+  // 获取当前播放的集数（从 URL 或 state）
+  const getCurrentEpisode = (): number => {
+    // 从当前播放的集数索引获取（1-based）
+    return currentEpisodeIndex + 1;
+  };
+
+  // 获取当前视频的唯一标识（用于保存弹幕历史）
+  const getVideoKey = (): string => {
+    // 优先使用 source_id（如果有的话）
+    const sourceId = searchParams.get('source_id');
+    if (sourceId) return `source_${sourceId}`;
+
+    // 其次使用 site_id + detail_id（来自详情页）
+    const siteId = searchParams.get('site_id');
+    const detailId = searchParams.get('detail_id');
+    if (siteId && detailId) {
+      const episode = getCurrentEpisode();
+      return `site_${siteId}_${detailId}_ep${episode}`;
+    }
+
+    // 再次使用 source + id（直接播放页面）
+    const source = searchParams.get('source');
+    const id = searchParams.get('id');
+    if (source && id) {
+      const episode = getCurrentEpisode();
+      return `video_${source}_${id}_ep${episode}`;
+    }
+
+    // 兜底使用视频标题（如果有的话）
+    if (videoTitle) {
+      return `title_${videoTitle.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}`;
+    }
+
+    // 最后兜底
+    return `video_${Date.now()}`;
+  };
+
+  // 保存剧集弹幕配置（season_id/media_id）
+  const saveSeriesDanmakuConfig = (
+    type: 'season_id' | 'media_id',
+    value: string
+  ) => {
+    try {
+      const seriesKey = getSeriesKey();
+      if (!seriesKey) {
+        console.log('[danmaku] 无法确定剧集标识，不保存剧集配置');
+        return;
+      }
+      const config: SeriesDanmakuConfig = {
+        type,
+        value,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(
+        `danmaku_series_${seriesKey}`,
+        JSON.stringify(config)
+      );
+      console.log('[danmaku] 已保存剧集弹幕配置', { seriesKey, config });
+    } catch (e) {
+      console.warn('[danmaku] 保存剧集弹幕配置失败', e);
+    }
+  };
+
+  // 读取剧集弹幕配置
+  const loadSeriesDanmakuConfig = (): SeriesDanmakuConfig | null => {
+    try {
+      const seriesKey = getSeriesKey();
+      if (!seriesKey) return null;
+      const stored = localStorage.getItem(`danmaku_series_${seriesKey}`);
+      if (!stored) return null;
+      const config = JSON.parse(stored) as SeriesDanmakuConfig;
+      console.log('[danmaku] 读取到剧集弹幕配置', { seriesKey, config });
+      return config;
+    } catch (e) {
+      console.warn('[danmaku] 读取剧集弹幕配置失败', e);
+      return null;
+    }
+  };
+
+  // 保存弹幕加载历史
+  const saveDanmakuHistory = (
+    type: DanmakuSourceType,
+    value: string,
+    ep?: number,
+    p?: number
+  ) => {
+    try {
+      const key = getVideoKey();
+      const history: DanmakuHistory = {
+        type,
+        value,
+        ep,
+        p,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(`danmaku_history_${key}`, JSON.stringify(history));
+      console.log('[danmaku] 已保存加载历史', { key, history });
+
+      // 如果是剧集类型，同时保存剧集配置
+      if (type === 'season_id' || type === 'media_id') {
+        saveSeriesDanmakuConfig(type, value);
+      } else if (type === 'link') {
+        // 尝试从 link 中提取 season_id 或 media_id
+        const ssMatch = value.match(/\/ss(\d+)/);
+        const mdMatch = value.match(/\/md(\d+)/);
+        if (ssMatch) {
+          saveSeriesDanmakuConfig('season_id', ssMatch[1]);
+        } else if (mdMatch) {
+          saveSeriesDanmakuConfig('media_id', mdMatch[1]);
+        }
+      }
+    } catch (e) {
+      console.warn('[danmaku] 保存加载历史失败', e);
+    }
+  };
+
+  // 读取弹幕加载历史
+  const loadDanmakuHistory = (): DanmakuHistory | null => {
+    try {
+      const key = getVideoKey();
+      const stored = localStorage.getItem(`danmaku_history_${key}`);
+      if (!stored) return null;
+      const history = JSON.parse(stored) as DanmakuHistory;
+      console.log('[danmaku] 读取到加载历史', { key, history });
+      return history;
+    } catch (e) {
+      console.warn('[danmaku] 读取加载历史失败', e);
+      return null;
+    }
+  };
+  
+  // 保存批量弹幕配置(用于多文件上传)
+  interface BatchDanmakuConfig {
+    files: { name: string; content: string }[];
+    timestamp: number;
+  }
+  
+  const saveBatchDanmakuConfig = async (files: File[]) => {
+    try {
+      const seriesKey = getSeriesKey();
+      if (!seriesKey) {
+        console.log('[danmaku] 无法确定剧集标识，不保存批量配置');
+        return;
+      }
+      
+      // 读取所有文件内容
+      const fileContents = await Promise.all(
+        files.map(async (file) => ({
+          name: file.name,
+          content: await file.text(),
+        }))
+      );
+      
+      const config: BatchDanmakuConfig = {
+        files: fileContents,
+        timestamp: Date.now(),
+      };
+      
+      localStorage.setItem(
+        `danmaku_batch_${seriesKey}`,
+        JSON.stringify(config)
+      );
+      console.log('[danmaku] 已保存批量弹幕配置', { seriesKey, count: files.length });
+    } catch (e) {
+      console.warn('[danmaku] 保存批量弹幕配置失败', e);
+    }
+  };
+  
+  // 读取批量弹幕配置
+  const loadBatchDanmakuConfig = (): BatchDanmakuConfig | null => {
+    try {
+      const seriesKey = getSeriesKey();
+      if (!seriesKey) return null;
+      const stored = localStorage.getItem(`danmaku_batch_${seriesKey}`);
+      if (!stored) return null;
+      const config = JSON.parse(stored) as BatchDanmakuConfig;
+      // 验证配置结构
+      if (!config || !Array.isArray(config.files)) {
+        console.warn('[danmaku] 批量弹幕配置格式无效');
+        return null;
+      }
+      console.log('[danmaku] 读取到批量弹幕配置', { seriesKey, count: config.files.length });
+      return config;
+    } catch (e) {
+      console.warn('[danmaku] 读取批量弹幕配置失败', e);
+      return null;
+    }
+  };
+
+  // 构造弹幕过滤器：关键词屏蔽 + 每秒密度限制
+  const buildDanmakuFilter = (keywords?: string, limitPerSec?: number) => {
+    const kw = (keywords ?? danmakuKeywords ?? '')
+      .split(/[,\n;\s]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const kwSet = new Set(kw);
+    const limit = Number(limitPerSec ?? danmakuLimitPerSec) || 0; // 0 表示不限
+    const perSecondCounter = new Map<number, number>();
+
+    return (item: any) => {
+      if (!item || !item.text) return false;
+      // 关键词过滤
+      if (kwSet.size > 0) {
+        const textLower = String(item.text).toLowerCase();
+        let blocked = false;
+        kwSet.forEach((k) => {
+          if (!blocked && k && textLower.includes(k)) blocked = true;
+        });
+        if (blocked) return false;
+      }
+      // 密度限制（按弹幕出现时间的秒粒度）
+      if (limit > 0) {
+        const sec = Math.max(0, Math.floor(Number(item.time) || 0));
+        const c = (perSecondCounter.get(sec) || 0) + 1;
+        perSecondCounter.set(sec, c);
+        if (c > limit) return false;
+      }
+      return true;
+    };
+  };
+
+  // 获取弹幕插件实例（兼容不同安装方式）
+  const getDanmakuPlugin = (): any | null => {
+    const direct = danmakuPluginRef.current;
+    if (direct && typeof direct.load === 'function') return direct;
+    const art: any = artPlayerRef.current as any;
+    if (art && art.plugins) {
+      const plugins = art.plugins;
+
+      // 优先检查常见路径: plugins.artplayerPluginDanmuku
+      if (
+        plugins.artplayerPluginDanmuku &&
+        typeof plugins.artplayerPluginDanmuku.load === 'function'
+      ) {
+        return plugins.artplayerPluginDanmuku;
+      }
+
+      // 递归查找 plugins 下所有对象，防止循环引用
+      const findDanmaku = (obj: any, visited = new Set()): any | null => {
+        if (!obj || typeof obj !== 'object') return null;
+        if (visited.has(obj)) return null;
+        visited.add(obj);
+        // 只要求 load 方法存在
+        if (typeof obj.load === 'function') {
+          return obj;
+        }
+        for (const key of Object.keys(obj)) {
+          const val = obj[key];
+          if (val && typeof val === 'object') {
+            const found = findDanmaku(val, visited);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      // 先查 plugins 自身
+      const found = findDanmaku(plugins);
+      if (found) return found;
+
+      // 再查 plugins 的每个 key
+      if (Array.isArray(plugins)) {
+        for (const cand of plugins) {
+          const found = findDanmaku(cand);
+          if (found) return found;
+        }
+      } else if (typeof plugins === 'object') {
+        for (const key of Object.keys(plugins)) {
+          const cand = plugins[key];
+          const found = findDanmaku(cand);
+          if (found) return found;
+        }
+      }
+    }
+    return null;
+  };
+
+  // 同步弹幕插件属性时加判空保护
+  const safeSet = (obj: any, key: string, value: any) => {
+    if (obj && typeof obj === 'object') {
+      try {
+        obj[key] = value;
+      } catch (e) {
+        console.warn('同步弹幕插件属性失败', key, e);
+      }
+    }
+  };
+  const showPlayerNotice = (text: string, duration = 2400) => {
+    try {
+      const art: any = artPlayerRef.current as any;
+      if (!art) return;
+      // 方式一：函数形式
+      const fn = art.notice?.show;
+      if (typeof fn === 'function') {
+        try {
+          fn.call(art.notice, text, duration);
+          return;
+        } catch {
+          // ignore
+        }
+      }
+      // 方式二：属性赋值（某些版本是 setter）
+      try {
+        if (art.notice && 'show' in art.notice) {
+          (art.notice as any).show = text;
+          return;
+        }
+      } catch {
+        // ignore
+      }
+      // 方式三：DOM 兜底层
+      const host: HTMLElement | null = (artRef.current as any) || null;
+      if (!host) return;
+      let el = host.querySelector('.danmaku-toast') as HTMLElement | null;
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'danmaku-toast';
+        Object.assign(el.style, {
+          position: 'absolute',
+          left: '12px',
+          top: '12px',
+          zIndex: '100000',
+          background: 'rgba(0,0,0,0.65)',
+          color: '#fff',
+          padding: '6px 10px',
+          borderRadius: '8px',
+          fontSize: '12px',
+          pointerEvents: 'none',
+          transition: 'opacity .2s ease',
+          opacity: '0',
+          maxWidth: '70%',
+        } as CSSStyleDeclaration);
+        const computed = window.getComputedStyle(host);
+        if (computed.position === 'static') {
+          host.style.position = 'relative';
+        }
+        host.appendChild(el);
+      }
+      el.textContent = text;
+      el.style.opacity = '1';
+      // @ts-ignore 临时属性存放计时器
+      window.clearTimeout(el._hideTimer);
+      // @ts-ignore
+      el._hideTimer = window.setTimeout(() => {
+        if (el) el.style.opacity = '0';
+      }, duration);
+    } catch {
+      // ignore
+    }
+  };
+
+  // 自定义输入对话框(替代 prompt,因为 Electron 不支持 prompt)
+  const showInputDialog = (message: string, defaultValue: string = ''): Promise<string | null> => {
+    return new Promise((resolve) => {
+      // 创建对话框遮罩
+      const overlay = document.createElement('div');
+      overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 999999;
+      `;
+
+      // 创建对话框
+      const dialog = document.createElement('div');
+      dialog.style.cssText = `
+        background: #2a2a2a;
+        border-radius: 8px;
+        padding: 24px;
+        min-width: 400px;
+        max-width: 600px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      `;
+
+      // 创建消息文本
+      const messageEl = document.createElement('div');
+      messageEl.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        margin-bottom: 16px;
+        white-space: pre-wrap;
+        line-height: 1.5;
+      `;
+      messageEl.textContent = message;
+
+      // 创建输入框
+      const input = document.createElement('textarea');
+      input.value = defaultValue;
+      input.style.cssText = `
+        width: 100%;
+        padding: 8px 12px;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 4px;
+        color: #fff;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 60px;
+        box-sizing: border-box;
+        outline: none;
+      `;
+      input.addEventListener('focus', () => {
+        input.style.borderColor = '#3b82f6';
+      });
+      input.addEventListener('blur', () => {
+        input.style.borderColor = '#444';
+      });
+
+      // 创建按钮容器
+      const buttons = document.createElement('div');
+      buttons.style.cssText = `
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 16px;
+      `;
+
+      // 取消按钮
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = '取消';
+      cancelBtn.style.cssText = `
+        padding: 8px 16px;
+        background: #444;
+        border: none;
+        border-radius: 4px;
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.2s;
+      `;
+      cancelBtn.addEventListener('mouseenter', () => {
+        cancelBtn.style.background = '#555';
+      });
+      cancelBtn.addEventListener('mouseleave', () => {
+        cancelBtn.style.background = '#444';
+      });
+      cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+        resolve(null);
+      });
+
+      // 确定按钮
+      const confirmBtn = document.createElement('button');
+      confirmBtn.textContent = '确定';
+      confirmBtn.style.cssText = `
+        padding: 8px 16px;
+        background: #3b82f6;
+        border: none;
+        border-radius: 4px;
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.2s;
+      `;
+      confirmBtn.addEventListener('mouseenter', () => {
+        confirmBtn.style.background = '#2563eb';
+      });
+      confirmBtn.addEventListener('mouseleave', () => {
+        confirmBtn.style.background = '#3b82f6';
+      });
+      confirmBtn.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+        resolve(input.value);
+      });
+
+      // 组装对话框
+      buttons.appendChild(cancelBtn);
+      buttons.appendChild(confirmBtn);
+      dialog.appendChild(messageEl);
+      dialog.appendChild(input);
+      dialog.appendChild(buttons);
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+
+      // 自动聚焦并选中文本
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 100);
+
+      // 支持回车确认
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+          e.preventDefault();
+          confirmBtn.click();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          cancelBtn.click();
+        }
+      });
+
+      // 点击遮罩关闭
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          cancelBtn.click();
+        }
+      });
+    });
+  };
+
+  // 解析工具：B站 XML
+  const parseBilibiliXml = (xmlText: string): any[] => {
+    if (!xmlText || typeof xmlText !== 'string') {
+      console.warn('[danmaku] parseBilibiliXml 接收到无效输入', xmlText);
+      return [];
+    }
+    try {
+      const list: any[] = [];
+      const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+      const nodes = Array.from(doc.getElementsByTagName('d'));
+      nodes.forEach((node) => {
+        const p = node.getAttribute('p') || '';
+        const parts = p.split(',');
+        const time = Number.parseFloat(parts[0] || '0') || 0;
+        const colorDec = Number.parseInt(parts[3] || '16777215', 10);
+        const color = `#${(colorDec >>> 0).toString(16).padStart(6, '0')}`;
+        const text = node.textContent || '';
+        if (text) list.push({ text, time, color, mode: 0 });
+      });
+      return list.sort((a, b) => a.time - b.time);
+    } catch {
+      return [];
+    }
+  };
+
+  // 将数字转换为下标格式
+  const toSubscript = (num: number): string => {
+    const subscriptMap: { [key: string]: string } = {
+      '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+      '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉'
+    };
+    return num.toString().split('').map(digit => subscriptMap[digit] || digit).join('');
+  };
+
+  // 强制清空所有弹幕DOM元素的通用函数(只删除弹幕内容,不删除控制UI)
+  const clearAllDanmakuDOM = (): number => {
+    if (!artRef.current) return 0;
+    
+    let cleared = 0;
+    
+    // 只查找弹幕渲染容器,不包括控制按钮
+    // artplayer-plugin-danmuku 的弹幕通常渲染在特定的容器内
+    const danmakuContainer = artRef.current.querySelector('.art-danmaku');
+    
+    if (danmakuContainer) {
+      // 只删除容器内的直接子元素(弹幕item),不删除容器本身和控制UI
+      const items = danmakuContainer.querySelectorAll('div[style*="position"]');
+      items.forEach(item => {
+        // 确保是弹幕元素(有定位样式且有文本内容)
+        const style = item.getAttribute('style') || '';
+        if (style.includes('position') && item.textContent && item.textContent.trim()) {
+          item.remove();
+          cleared++;
+        }
+      });
+    }
+    
+    return cleared;
+  };
+
+  // 弹幕合并：合并一段时间窗口内完全相同的弹幕
+  const mergeSimilarDanmaku = (danmakuList: any[], windowSeconds: number = 5): any[] => {
+    if (!danmakuList || danmakuList.length === 0) return [];
+    
+    const merged: any[] = [];
+    const sorted = [...danmakuList].sort((a, b) => a.time - b.time);
+    
+    for (let i = 0; i < sorted.length; i++) {
+      const current = sorted[i];
+      const currentText = (current.text || '').trim();
+      
+      if (!currentText) continue;
+      
+      // 查找是否可以合并到已有的弹幕
+      let foundMergeTarget = false;
+      
+      for (let j = merged.length - 1; j >= 0; j--) {
+        const target = merged[j];
+        // 提取原始文本（去除可能已有的角标）
+        const targetText = (target.originalText || target.text || '').trim();
+        
+        // 时间超出窗口，后续不可能合并
+        if (current.time - target.time > windowSeconds) break;
+        
+        // 文本完全相同且在时间窗口内
+        if (targetText === currentText && current.time - target.time <= windowSeconds) {
+          // 合并：增加计数
+          const newCount = (target.mergeCount || 1) + 1;
+          target.mergeCount = newCount;
+          
+          // 更新显示文本（添加下标角标）
+          target.text = `${currentText} ${toSubscript(newCount)}`;
+          
+          // 根据合并数量设置字号,但保持原始颜色不变
+          let mergedFontSize = 25;
+          if (newCount <= 3) {
+            mergedFontSize = 25;
+          } else if (newCount <= 10) {
+            mergedFontSize = 35;
+          } else if (newCount <= 20) {
+            mergedFontSize = 45;
+          } else {
+            mergedFontSize = 55;
+          }
+          
+          // 添加自定义样式对象,只设置字号
+          target.style = {
+            fontSize: `${mergedFontSize}px`,
+            fontWeight: newCount > 3 ? 'bold' : 'normal',
+          };
+          
+          console.log(`[danmaku] 合并弹幕: "${currentText}" 计数=${newCount}, 字号=${mergedFontSize}px`);
+          
+          foundMergeTarget = true;
+          break;
+        }
+      }
+      
+      if (!foundMergeTarget) {
+        // 创建新弹幕条目
+        merged.push({
+          ...current,
+          mergeCount: 1, // 初始计数为1
+          originalText: currentText, // 保存原始文本
+        });
+      }
+    }
+    
+    console.log(`[danmaku] 弹幕合并完成: ${danmakuList.length} → ${merged.length} (减少 ${danmakuList.length - merged.length} 条)`);
+    return merged;
+  };
+
+  // 解析工具：ASS（极简实现，仅取起始时间和文本）
+  const parseASSToDanmaku = (assText: string): any[] => {
+    if (!assText || typeof assText !== 'string') {
+      console.warn('[danmaku] parseASSToDanmaku 接收到无效输入', assText);
+      return [];
+    }
+    const lines = assText.split(/\r?\n/);
+    const res: any[] = [];
+    const timeToSec = (t: string) => {
+      const m = t.trim().match(/(?:(\d+):)?(\d+):(\d+)[.,](\d+)/);
+      if (!m) return 0;
+      const h = Number(m[1] || 0);
+      const mi = Number(m[2] || 0);
+      const s = Number(m[3] || 0);
+      const cs = Number(m[4] || 0);
+      return h * 3600 + mi * 60 + s + cs / 100;
+    };
+    for (const line of lines) {
+      if (!line.startsWith('Dialogue:')) continue;
+      const m = line.match(
+        /^Dialogue:[^,]*,([^,]*),([^,]*),[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,[^,]*,(.*)$/
+      );
+      if (!m) continue;
+      const start = timeToSec(m[1]);
+      let text = m[3] || '';
+      text = text.replace(/{[^}]*}/g, '').replace(/\\N/g, '\n');
+      if (text) res.push({ text, time: start, color: '#ffffff', mode: 0 });
+    }
+    return res.sort((a, b) => a.time - b.time);
+  };
+
+  // 解析入口：根据内容识别 XML/ASS/JSON
+  const parseDanmakuText = (text: string): any[] => {
+    if (!text || typeof text !== 'string') {
+      console.warn('[danmaku] parseDanmakuText 接收到无效输入', text);
+      return [];
+    }
+    const t = text.trim();
+    if (!t) return [];
+    if (t.startsWith('<')) {
+      // B站 XML
+      return parseBilibiliXml(t);
+    }
+    if (t.startsWith('{') || t.startsWith('[')) {
+      try {
+        const data = JSON.parse(t);
+        if (Array.isArray(data)) return data;
+      } catch {
+        /* ignore */
+      }
+    }
+    // 兜底按 ASS 解析
+    return parseASSToDanmaku(t);
+  };
+
+  // 从 URL 加载并解析为数组
+  const loadDanmakuFromUrl = async (url: string) => {
+    if (!url) return;
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) {
+      const msg = await r.text().catch(() => '');
+      throw new Error(`请求失败 ${r.status}: ${msg.slice(0, 120)}`);
+    }
+    const text = await r.text();
+    let data = parseDanmakuText(text);
+    console.log('[danmaku] 解析弹幕', { url, dataLen: data.length });
+    if (!data.length) throw new Error('弹幕解析为空');
+
+    // 从localStorage读取最新的合并状态（避免闭包中的旧值）
+    let currentMergeEnabled = false;
+    let currentMergeWindow = 5;
+    try {
+      currentMergeEnabled = localStorage.getItem('danmaku_merge_enabled') === 'true';
+      const windowStr = localStorage.getItem('danmaku_merge_window');
+      currentMergeWindow = windowStr ? Number(windowStr) : 5;
+    } catch (e) {
+      console.warn('[danmaku] 读取合并设置失败', e);
+    }
+
+    // 应用弹幕合并（如果启用）
+    if (currentMergeEnabled && data && Array.isArray(data) && data.length > 0) {
+      const beforeMerge = data.length;
+      data = mergeSimilarDanmaku(data, currentMergeWindow);
+      console.log(`[danmaku] 弹幕合并: ${beforeMerge} → ${data.length} (窗口: ${currentMergeWindow}秒)`);
+    }
+
+    // 手动应用过滤器
+    const filter = buildDanmakuFilter();
+    const originalCount = data.length;
+    data = data.filter(filter);
+    const filteredCount = data.length;
+    const blockedCount = originalCount - filteredCount;
+    console.log('[danmaku] 过滤后', {
+      原始: originalCount,
+      保留: filteredCount,
+      屏蔽: blockedCount,
+    });
+
+    const plugin = getDanmakuPlugin();
+    if (plugin && typeof plugin.load === 'function') {
+      // 加载前先清空旧弹幕DOM
+      try {
+        await plugin.load([]);
+        const cleared = clearAllDanmakuDOM();
+        if (cleared > 0) {
+          console.log(`[danmaku] 加载前清除了 ${cleared} 个旧DOM元素`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } catch (e) {
+        console.warn('[danmaku] 清空旧弹幕失败', e);
+      }
+      
+      // 加载新弹幕
+      try {
+        await plugin.load(data);
+        console.log('[danmaku] plugin.load(data) 成功', data.length);
+      } catch (e) {
+        console.warn('[danmaku] 以数组加载弹幕失败，尝试回退为 URL 加载', e);
+        try {
+          await plugin.load(url);
+          console.log('[danmaku] plugin.load(url) 成功');
+        } catch (e2) {
+          console.error('[danmaku] URL 加载弹幕仍失败', e2);
+          throw e2;
+        }
+      }
+      safeSet(plugin.config, 'visible', true);
+      if (typeof plugin.update === 'function') plugin.update();
+
+      const msg =
+        blockedCount > 0
+          ? `弹幕已加载：保留 ${filteredCount} 条，屏蔽 ${blockedCount} 条`
+          : `弹幕已加载：${filteredCount} 条`;
+      showPlayerNotice(msg, 2600);
+    } else {
+      console.warn('[danmaku] 插件未就绪，pending', data.length);
+      pendingDanmakuDataRef.current = data;
+      // 兜底：1秒后强制重试
+      setTimeout(() => {
+        const p = getDanmakuPlugin();
+        if (
+          p &&
+          typeof p.load === 'function' &&
+          pendingDanmakuDataRef.current
+        ) {
+          try {
+            p.load(pendingDanmakuDataRef.current);
+            showPlayerNotice(
+              `弹幕已加载：${pendingDanmakuDataRef.current.length} 条`,
+              2600
+            );
+            pendingDanmakuDataRef.current = null;
+            console.log('[danmaku] 兜底重试成功');
+          } catch (e) {
+            console.error('[danmaku] 兜底重试失败', e);
+          }
+        }
+      }, 1000);
+    }
+    // 保存原始数据用于重新过滤
+    lastDanmakuDataRef.current = parseDanmakuText(text);
+  };
+
+  // 从文本内容加载(用于本地文件)
+  const loadDanmakuFromText = async (text: string) => {
+    let data = parseDanmakuText(text);
+    console.log('[danmaku] 解析本地弹幕', { dataLen: data.length });
+    if (!data.length) throw new Error('弹幕解析为空');
+
+    // 从localStorage读取最新的合并状态（避免闭包中的旧值）
+    let currentMergeEnabled = false;
+    let currentMergeWindow = 5;
+    try {
+      currentMergeEnabled = localStorage.getItem('danmaku_merge_enabled') === 'true';
+      const windowStr = localStorage.getItem('danmaku_merge_window');
+      currentMergeWindow = windowStr ? Number(windowStr) : 5;
+    } catch (e) {
+      console.warn('[danmaku] 读取合并设置失败', e);
+    }
+
+    // 应用弹幕合并（如果启用）
+    if (currentMergeEnabled && data && Array.isArray(data) && data.length > 0) {
+      const beforeMerge = data.length;
+      data = mergeSimilarDanmaku(data, currentMergeWindow);
+      console.log(`[danmaku] 弹幕合并: ${beforeMerge} → ${data.length} (窗口: ${currentMergeWindow}秒)`);
+    }
+
+    // 手动应用过滤器
+    const filter = buildDanmakuFilter();
+    const originalCount = data.length;
+    data = data.filter(filter);
+    const filteredCount = data.length;
+    const blockedCount = originalCount - filteredCount;
+    console.log('[danmaku] 过滤后', {
+      原始: originalCount,
+      保留: filteredCount,
+      屏蔽: blockedCount,
+    });
+
+    const plugin = getDanmakuPlugin();
+    if (plugin && typeof plugin.load === 'function') {
+      // 加载前先清空旧弹幕DOM
+      try {
+        await plugin.load([]);
+        const cleared = clearAllDanmakuDOM();
+        if (cleared > 0) {
+          console.log(`[danmaku] 加载前清除了 ${cleared} 个旧DOM元素`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } catch (e) {
+        console.warn('[danmaku] 清空旧弹幕失败', e);
+      }
+      
+      // 加载新弹幕
+      try {
+        await plugin.load(data);
+        console.log('[danmaku] plugin.load(data) 成功', data.length);
+      } catch (e) {
+        console.warn('[danmaku] 以数组加载本地弹幕失败，尝试回退为文本加载', e);
+        try {
+          await plugin.load(text);
+          console.log('[danmaku] plugin.load(text) 成功');
+        } catch (e2) {
+          console.error('[danmaku] 文本加载本地弹幕仍失败', e2);
+          throw e2;
+        }
+      }
+      safeSet(plugin.config, 'visible', true);
+      if (typeof plugin.update === 'function') plugin.update();
+
+      const msg =
+        blockedCount > 0
+          ? `弹幕已加载：保留 ${filteredCount} 条，屏蔽 ${blockedCount} 条`
+          : `弹幕已加载：${filteredCount} 条`;
+      showPlayerNotice(msg, 2600);
+    } else {
+      console.warn('[danmaku] 插件未就绪，pending', data.length);
+      pendingDanmakuDataRef.current = data;
+      setTimeout(() => {
+        const p = getDanmakuPlugin();
+        if (
+          p &&
+          typeof p.load === 'function' &&
+          pendingDanmakuDataRef.current
+        ) {
+          try {
+            p.load(pendingDanmakuDataRef.current);
+            showPlayerNotice(
+              `弹幕已加载：${pendingDanmakuDataRef.current.length} 条`,
+              2600
+            );
+            pendingDanmakuDataRef.current = null;
+            console.log('[danmaku] 兜底重试成功');
+          } catch (e) {
+            console.error('[danmaku] 兜底重试失败', e);
+          }
+        }
+      }, 1000);
+    }
+    // 保存原始数据用于重新过滤
+    lastDanmakuDataRef.current = parseDanmakuText(text);
+  };
+
+  // 重新以当前过滤规则加载上一次弹幕源
+  const reloadDanmakuWithFilter = async (keywords?: string, limitPerSec?: number): Promise<string> => {
+    const data = lastDanmakuDataRef.current || pendingDanmakuDataRef.current;
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      console.warn('[danmaku] 无可用弹幕数据,跳过重载');
+      return '无弹幕源';
+    }
+    
+    console.log(`[danmaku] ===== 开始重新加载弹幕 =====`);
+    console.log(`[danmaku] 原始数据条数: ${data.length}`);
+    
+    // 暂停视频,防止在清空和加载期间弹幕继续滚动
+    const wasPlaying = artPlayerRef.current && !artPlayerRef.current.paused;
+    const currentTime = artPlayerRef.current?.currentTime || 0;
+    
+    if (wasPlaying && artPlayerRef.current) {
+      artPlayerRef.current.pause();
+      console.log('[danmaku] 暂停视频以重新加载弹幕');
+    }
+    
+    try {
+      const plugin = getDanmakuPlugin();
+      if (plugin) {
+        // 直接使用 lastDanmakuDataRef 中的数据(已经在初始加载时应用了合并)
+        // 这里只需要应用新的过滤规则
+        const processedData = [...data];
+        
+        // 手动应用过滤器,使用传入的参数或当前状态
+        const filter = buildDanmakuFilter(keywords, limitPerSec);
+        const beforeCount = processedData.length;
+        const filteredData = processedData.filter(filter);
+        const afterCount = filteredData.length;
+        const blockedCount = beforeCount - afterCount;
+
+        console.log('[danmaku] 过滤统计:', {
+          原始: beforeCount,
+          保留: afterCount,
+          屏蔽: blockedCount,
+          关键词: keywords ?? danmakuKeywords,
+          密度限制: limitPerSec ?? danmakuLimitPerSec,
+        });
+
+        // 清空并重新加载弹幕
+        try {
+          console.log('[danmaku] 清空旧弹幕...');
+          
+          // 新策略:强制清空所有弹幕DOM元素
+          // 步骤1: 先加载空数组清空插件数据
+          await plugin.load([]);
+          console.log('[danmaku] 插件数据已清空');
+          
+          // 步骤2: 使用通用函数清除所有弹幕DOM
+          const cleared = clearAllDanmakuDOM();
+          if (cleared > 0) {
+            console.log(`[danmaku] 强制清除了 ${cleared} 个DOM元素`);
+          }
+          
+          // 步骤3: 等待确保清除完成
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          console.log('[danmaku] 清空完成');
+        } catch (e: any) {
+          console.error('[danmaku] 清空失败:', e?.message || e);
+        }
+
+        // 加载过滤后的数据
+        console.log('[danmaku] 开始加载新弹幕数据:', filteredData.length, '条');
+        await plugin.load(filteredData);
+        
+        // 显示弹幕
+        if (typeof plugin.show === 'function') {
+          plugin.show();
+          console.log('[danmaku] 显示弹幕');
+        }
+        
+        // 更新插件
+        if (typeof plugin.update === 'function') {
+          plugin.update();
+          console.log('[danmaku] 更新插件');
+        }
+
+        const msg =
+          blockedCount > 0
+            ? `弹幕过滤已应用：保留 ${afterCount} 条，屏蔽 ${blockedCount} 条`
+            : `弹幕过滤已应用：共 ${afterCount} 条`;
+        showPlayerNotice(msg, 2500);
+        
+        // 恢复播放状态
+        if (wasPlaying && artPlayerRef.current) {
+          // 确保时间没有变化
+          if (Math.abs(artPlayerRef.current.currentTime - currentTime) > 0.5) {
+            artPlayerRef.current.currentTime = currentTime;
+          }
+          // 延迟恢复播放,确保弹幕加载完成
+          setTimeout(() => {
+            if (artPlayerRef.current) {
+              artPlayerRef.current.play().catch((e: any) => console.warn('[danmaku] 恢复播放失败', e));
+              console.log('[danmaku] 恢复视频播放');
+            }
+          }, 200);
+        }
+        
+        console.log('[danmaku] ===== 弹幕重新加载完成 =====');
+        
+        return '已应用并重载';
+      }
+      pendingDanmakuDataRef.current = data;
+      return '插件未就绪，稍后自动应用';
+    } catch (e: any) {
+      console.error('重载弹幕失败', e);
+      const msg = e?.message || '重载失败';
+      triggerGlobalError(msg);
+      
+      // 即使失败也尝试恢复播放
+      if (wasPlaying && artPlayerRef.current) {
+        artPlayerRef.current.play().catch(() => {});
+      }
+      
+      return '失败';
+    }
+  };
+
+  // 跳过片头片尾配置相关函数
+  const handleSkipConfigChange = async (newConfig: {
+    enable: boolean;
+    intro_time: number;
+    outro_time: number;
+  }) => {
+    if (!currentSourceRef.current || !currentIdRef.current) return;
+
+    try {
+      setSkipConfig(newConfig);
+      if (!newConfig.enable && !newConfig.intro_time && !newConfig.outro_time) {
+        await deleteSkipConfig(currentSourceRef.current, currentIdRef.current);
+        artPlayerRef.current.setting.update({
+          name: '跳过片头片尾',
+          html: '跳过片头片尾',
+          switch: skipConfigRef.current.enable,
+          onSwitch: function (item: any) {
+            const newConfig = {
+              ...skipConfigRef.current,
+              enable: !item.switch,
+            };
+            handleSkipConfigChange(newConfig);
+            return !item.switch;
+          },
+        });
+        artPlayerRef.current.setting.update({
+          name: '设置片头',
+          html: '设置片头',
+          icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="12" r="2" fill="#ffffff"/><path d="M9 12L17 12" stroke="#ffffff" stroke-width="2"/><path d="M17 6L17 18" stroke="#ffffff" stroke-width="2"/></svg>',
+          tooltip:
+            skipConfigRef.current.intro_time === 0
+              ? '设置片头时间'
+              : `${formatTime(skipConfigRef.current.intro_time)}`,
+          onClick: function () {
+            const currentTime = artPlayerRef.current?.currentTime || 0;
+            if (currentTime > 0) {
+              const newConfig = {
+                ...skipConfigRef.current,
+                intro_time: currentTime,
+              };
+              handleSkipConfigChange(newConfig);
+              return `${formatTime(currentTime)}`;
+            }
+          },
+        });
+        artPlayerRef.current.setting.update({
+          name: '设置片尾',
+          html: '设置片尾',
+          icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 6L7 18" stroke="#ffffff" stroke-width="2"/><path d="M7 12L15 12" stroke="#ffffff" stroke-width="2"/><circle cx="19" cy="12" r="2" fill="#ffffff"/></svg>',
+          tooltip:
+            skipConfigRef.current.outro_time >= 0
+              ? '设置片尾时间'
+              : `-${formatTime(-skipConfigRef.current.outro_time)}`,
+          onClick: function () {
+            const outroTime =
+              -(
+                artPlayerRef.current?.duration -
+                artPlayerRef.current?.currentTime
+              ) || 0;
+            if (outroTime < 0) {
+              const newConfig = {
+                ...skipConfigRef.current,
+                outro_time: outroTime,
+              };
+              handleSkipConfigChange(newConfig);
+              return `-${formatTime(-outroTime)}`;
+            }
+          },
+        });
+      } else {
+        await saveSkipConfig(
+          currentSourceRef.current,
+          currentIdRef.current,
+          newConfig
+        );
+      }
+      console.log('跳过片头片尾配置已保存:', newConfig);
+    } catch (err) {
+      console.error('保存跳过片头片尾配置失败:', err);
+    }
+  };
+  
   // -----------------------------------------------------------------------------
   // 亮点功能：源预连接与预加载
   // -----------------------------------------------------------------------------
