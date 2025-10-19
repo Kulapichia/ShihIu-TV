@@ -61,7 +61,7 @@ interface AuthInfo {
 
 export const UserMenu: React.FC = () => {
   const router = useRouter();
-  const { showError, showSuccess } = useToast();
+  const { showError, showSuccess, showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -349,13 +349,13 @@ export const UserMenu: React.FC = () => {
           setVideoSources(parsedSources);
         } catch (e) {
           console.error('解析视频源配置失败,使用默认配置:', e);
-          setVideoSources(DEFAULT_VIDEO_SOURCES);
-          localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_VIDEO_SOURCES));
+          setVideoSources(DEFAULT_CMS_VIDEO_SOURCES);
+          localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_CMS_VIDEO_SOURCES));
         }
       } else {
         // 首次使用,初始化默认视频源
-        setVideoSources(DEFAULT_VIDEO_SOURCES);
-        localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_VIDEO_SOURCES));
+        setVideoSources(DEFAULT_CMS_VIDEO_SOURCES);
+        localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_CMS_VIDEO_SOURCES));
       }
     }
   }, []);
@@ -2877,10 +2877,10 @@ export const UserMenu: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  if (confirm(`确定要重置为默认视频源吗?\n\n这将清除所有自定义配置,恢复 ${DEFAULT_VIDEO_SOURCES.length} 个默认视频源。`)) {
-                    setVideoSources(DEFAULT_VIDEO_SOURCES);
-                    localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_VIDEO_SOURCES));
-                    showToast('已重置为默认视频源', 'success', 3000);
+                  if (confirm(`确定要重置为默认视频源吗?\n\n这将清除所有自定义配置,恢复 ${DEFAULT_CMS_VIDEO_SOURCES.length} 个默认视频源。`)) {
+                    setVideoSources(DEFAULT_CMS_VIDEO_SOURCES);
+                    localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_CMS_VIDEO_SOURCES));
+                    showToast({title: '已重置为默认视频源', type: 'success', duration: 3000});
                   }
                 }}
                 className='w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 dark:from-gray-600 dark:to-gray-700 dark:hover:from-gray-700 dark:hover:to-gray-800 text-white shadow-sm hover:shadow-md'
