@@ -1270,8 +1270,23 @@ const UserConfig = ({ config, role, refreshConfig, machineCodeUsers, fetchMachin
         )}
 
         {/* 用户列表 */}
-        <div className='border border-gray-200 dark:border-gray-700 rounded-lg max-h-[28rem] overflow-y-auto overflow-x-auto relative' data-table="user-list">
-          <table className='min-w-full divide-y divide-gray-200 dark:divide-gray-700'>
+        <div 
+          className='border border-gray-200 dark:border-gray-700 rounded-lg max-h-[28rem] overflow-y-auto overflow-x-auto relative' 
+          data-table="user-list"
+          style={{
+            scrollbarWidth: 'thin',
+            ['scrollbar-color' as any]: '#cbd5e0 transparent'
+          }}
+          onMouseEnter={(e) => {
+            const target = e.currentTarget;
+            target.style.setProperty('scrollbar-color', '#94a3b8 #f1f5f9');
+          }}
+          onMouseLeave={(e) => {
+            const target = e.currentTarget;
+            target.style.setProperty('scrollbar-color', '#cbd5e0 transparent');
+          }}
+        >
+          <table className='min-w-[1200px] w-full divide-y divide-gray-200 dark:divide-gray-700'>
             <thead className='bg-gray-50 dark:bg-gray-900 sticky top-0 z-10'>
               <tr>
                 <th className='w-4' />
