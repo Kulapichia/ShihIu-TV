@@ -89,7 +89,17 @@ async function createWindow() {
   
   // 获取默认 session
   const session = mainWindow.webContents.session;
+  const storagePath = session.getStoragePath();
   
+  // 增加会话持久化和存储路径的日志，便于调试
+  console.log(`[${appName}] Session persist:`, session.isPersistent());
+  console.log(`[${appName}] Storage path:`, storagePath);
+  
+  // 确保存储路径存在
+  if (storagePath && !fs.existsSync(storagePath)) {
+    fs.mkdirSync(storagePath, { recursive: true });
+    console.log(`[${appName}] Created storage directory`);
+  }  
   // 禁用 CORS 限制
   session.webRequest.onBeforeSendHeaders((details, callback) => {
     const { requestHeaders } = details;
@@ -176,8 +186,20 @@ ipcMain.handle('get-desktop-path', async () => {
 });
 
 // IPC 处理程序 - 全屏控制
-ipcMain.handle('set-fullscreen', (event, flag) => mainWindow?.setFullScreen(flag));
-ipcMain.handle('is-fullscreen', () => mainWindow?.isFullScreen() ?? false);
+ipcMain.handle('set-fullscreen', async (event, flag) => {
+  if (mainWindow) {
+    mainWindow.setFullScreen(flag);
+    return mainWindow.isFullScreen();
+  }
+  return false;
+});
+
+ipcMain.handle('is-fullscreen', async () => {
+  if (mainWindow) {
+    return mainWindow.isFullScreen();
+  }
+  return false;
+});
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
