@@ -69,23 +69,10 @@ function PlayPageClient() {
 
     // 跳过片头片尾配置
   const [skipConfig, setSkipConfig] = useState<EpisodeSkipConfig | null>(null);
-    enable: boolean;
-    intro_time: number;
-    outro_time: number;
-  }>({
-    enable: false,
-    intro_time: 0,
-    outro_time: 0,
-  });
   const skipConfigRef = useRef(skipConfig);
   useEffect(() => {
     skipConfigRef.current = skipConfig;
-  }, [
-    skipConfig,
-    skipConfig.enable,
-    skipConfig.intro_time,
-    skipConfig.outro_time,
-  ]);
+}, [skipConfig]);
 
   // 跳过检查的时间间隔控制
   const lastSkipCheckRef = useRef(0);
