@@ -107,18 +107,23 @@ export function ChatArea({
     const timeStr = messageDate.toLocaleTimeString('zh-CN', {
       hour: '2-digit',
       minute: '2-digit',
+      second: '2-digit'
     });
 
     if (messageDay.getTime() === today.getTime()) {
+      // 今天的消息：只显示时分秒
       return timeStr;
     } else if (messageDay.getTime() === yesterday.getTime()) {
-      return `昨天 ${timeStr}`;
+      // 昨天的消息：昨天-时分秒
+      return `昨天-${timeStr}`;
     } else {
+      // 更早的消息：年月日-时分秒
       const dateStr = messageDate.toLocaleDateString('zh-CN', {
+        year: 'numeric',
         month: '2-digit',
         day: '2-digit'
       });
-      return `${dateStr} ${timeStr}`;
+      return `${dateStr}-${timeStr}`;
     }
   };
 
