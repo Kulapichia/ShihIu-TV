@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -42,82 +44,70 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: '参数无效' }, { status: 400 });
     }
 
-    const { link, bv, cid, season_id, media_id, ep, p } = query.data;
+    let { link, bv, cid, season_id, media_id, ep, p } = query.data;
 
     let targetCid = cid;
 
+    // 优先从 link 中解析参数
     if (link) {
-      const url = new URL(link);
-      const path = url.pathname;
-      const bvid = url.searchParams.get('bvid');
-      const cidParam = url.searchParams.get('cid');
-      const mdMatch = path.match(/\/bangumi\/(?:media\/)?(md\d+)/i);
-      const ssMatch = path.match(/\/bangumi\/(?:season\/)?(ss\d+)/i);
-      const epMatch = path.match(/\/bangumi\/play\/(ep\d+)/i);
-      const bvMatch = path.match(/\/video\/(BV[0-9A-Za-z]{10,})/i);
-      
-      if (mdMatch) {
-        const data = await fetchApi(
-          `https://api.bilibili.com/pgc/review/user?media_id=${mdMatch[1].substring(2)}`
-        );
-        const epData = await fetchApi(
-          `https://api.bilibili.com/pgc/web/season/section?season_id=${data.media.season_id}`
-        );
-        const epItem = epData.main_section?.episodes?.[Number(ep) - 1];
-        if (!epItem) throw new Error('未找到指定集数');
-        targetCid = epItem.cid;
-      } else if (ssMatch) {
-        const epData = await fetchApi(
-          `https://api.bilibili.com/pgc/web/season/section?season_id=${ssMatch[1].substring(2)}`
-        );
-        const epItem = epData.main_section?.episodes?.[Number(ep) - 1];
-        if (!epItem) throw new Error('未找到指定集数');
-        targetCid = epItem.cid;
-      } else if (epMatch) {
-        const epData = await fetchApi(
-          `https://api.bilibili.com/pgc/view/web/season?ep_id=${epMatch[1].substring(2)}`
-        );
-        targetCid = epData.episodes?.[0]?.cid;
-      } else if (bvid || bvMatch) {
-        const finalBv = bvid || bvMatch?.[1];
-        const videoData = await fetchApi(
-          `https://api.bilibili.com/x/web-interface/view?bvid=${finalBv}`
-        );
-        targetCid = videoData.pages?.[Number(p) - 1]?.cid;
-      } else if (cidParam) {
-        targetCid = cidParam;
+      try {
+        const url = new URL(link);
+        const path = url.pathname;
+
+        const bvid = url.searchParams.get('bvid');
+        const cidParam = url.searchParams.get('cid');
+        const mdMatch = path.match(/\/bangumi\/(?:media\/)?(md\d+)/i);
+        const ssMatch = path.match(/\/bangumi\/(?:season\/)?(ss\d+)/i);
+        const epMatch = path.match(/\/bangumi\/play\/(ep\d+)/i);
+        const bvMatch = path.match(/\/video\/(BV[0-9A-Za-z]{10,})/i);
+
+        if (bvid || bvMatch) bv = bvid || bvMatch?.[1];
+        if (cidParam) cid = cidParam;
+        if (mdMatch) media_id = mdMatch[1].substring(2);
+        if (ssMatch) season_id = ssMatch[1].substring(2);
+        if (epMatch) {
+          const epData = await fetchApi(`https://api.bilibili.com/pgc/view/web/season?ep_id=${epMatch[1].substring(2)}`);
+          targetCid = epData.episodes?.[0]?.cid;
+        }
+      } catch (e) {
+        console.error("解析链接失败:", e);
       }
-    } else if (bv) {
-      const videoData = await fetchApi(
-        `https://api.bilibili.com/x/web-interface/view?bvid=${bv}`
-      );
-      targetCid = videoData.pages?.[Number(p) - 1]?.cid;
-    } else if (season_id) {
-      const epData = await fetchApi(
-        `https://api.bilibili.com/pgc/web/season/section?season_id=${season_id}`
-      );
-      const epItem = epData.main_section?.episodes?.[Number(ep) - 1];
-      if (!epItem) throw new Error('未找到指定集数');
-      targetCid = epItem.cid;
-    } else if (media_id) {
-      const data = await fetchApi(
-        `https://api.bilibili.com/pgc/review/user?media_id=${media_id}`
-      );
-      const epData = await fetchApi(
-        `https://api.bilibili.com/pgc/web/season/section?season_id=${data.media.season_id}`
-      );
-      const epItem = epData.main_section?.episodes?.[Number(ep) - 1];
-      if (!epItem) throw new Error('未找到指定集数');
-      targetCid = epItem.cid;
+    }
+
+    if (!targetCid) {
+      // 优先处理番剧逻辑 (media_id 或 season_id)
+      if (media_id && !season_id) {
+        const data = await fetchApi(`https://api.bilibili.com/pgc/review/user?media_id=${media_id}`);
+        if (data.media?.season_id) {
+          season_id = data.media.season_id;
+        }
+      }
+
+      if (season_id) {
+        const epData = await fetchApi(`https://api.bilibili.com/pgc/web/season/section?season_id=${season_id}`);
+        const episodes = epData.main_section?.episodes || [];
+        const epIndex = Math.max(0, Math.min(episodes.length - 1, Number(ep) - 1));
+        const epItem = episodes[epIndex];
+        if (!epItem?.cid) throw new Error('未找到指定集数的CID');
+        targetCid = epItem.cid;
+      } else if (bv) {
+        // 处理普通视频 (BV号)
+        const videoData = await fetchApi(`https://api.bilibili.com/x/web-interface/view?bvid=${bv}`);
+        const pages = videoData.pages || [];
+        const pageIndex = Math.max(0, Math.min(pages.length - 1, Number(p) - 1));
+        const pageItem = pages[pageIndex];
+        if (!pageItem?.cid) throw new Error('未找到指定分P的CID');
+        targetCid = pageItem.cid;
+      }
     }
     
     if (!targetCid) {
-      throw new Error('无法解析CID');
+      throw new Error('无法解析CID，请提供有效的cid, bv, season_id, media_id或link参数');
     }
 
     const danmakuUrl = `https://comment.bilibili.com/${targetCid}.xml`;
     const danmakuResp = await fetch(danmakuUrl, {
-      headers: { 'User-Agent': UA },
+      headers: { 'User-Agent': UA, 'Referer': 'https://www.bilibili.com/' },
     });
     if (!danmakuResp.ok) {
       throw new Error(`获取弹幕失败 ${danmakuResp.status}`);
@@ -127,7 +117,7 @@ export async function GET(req: NextRequest) {
     return new Response(danmakuXml, {
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',
-        'Cache-Control': 'public, max-age=3600',
+        'Cache-Control': 'public, max-age=3600', // 保留项目A的缓存策略
       },
     });
   } catch (e: any) {
