@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getCacheTime } from '@/lib/config';
+import { getEdgeCacheTime } from '@/lib/edge-config';
 
 // 用户代理池
 const USER_AGENTS = [
@@ -22,7 +22,7 @@ function randomDelay(min = 1000, max = 3000): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, delay));
 }
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
     // 解析详细信息
     const details = parseDoubanDetails(html, id);
 
-    const cacheTime = await getCacheTime();
+    const cacheTime = getEdgeCacheTime();
     return NextResponse.json(details, {
       headers: {
         'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
