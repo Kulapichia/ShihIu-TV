@@ -200,12 +200,12 @@ export abstract class BaseRedisStorage implements IStorage {
   ): Promise<Record<string, PlayRecord>> {
     const pattern = `u:${userName}:pr:*`;
     const keys: string[] = [];
-    let cursor = 0;
+    let cursor = '0';
     do {
-      const reply = await this.client.scan(cursor, { MATCH: pattern, COUNT: 100 });
-      cursor = reply.cursor;
+      const reply = await this.client.scan(cursor as any, { MATCH: pattern, COUNT: 100 });
+      cursor = reply.cursor as any;
       keys.push(...reply.keys);
-    } while (cursor !== 0);
+    } while (cursor !== '0');
     if (keys.length === 0) return {};
     const values = await this.withRetry(() => this.client.mGet(keys));
     const result: Record<string, PlayRecord> = {};
@@ -260,12 +260,12 @@ export abstract class BaseRedisStorage implements IStorage {
   async getAllFavorites(userName: string): Promise<Record<string, Favorite>> {
     const pattern = `u:${userName}:fav:*`;
     const keys: string[] = [];
-    let cursor = 0;
+    let cursor = '0';
     do {
-      const reply = await this.client.scan(cursor, { MATCH: pattern, COUNT: 100 });
-      cursor = reply.cursor;
+      const reply = await this.client.scan(cursor as any, { MATCH: pattern, COUNT: 100 });
+      cursor = reply.cursor as any;
       keys.push(...reply.keys);
-    } while (cursor !== 0);
+    } while (cursor !== '0');
     if (keys.length === 0) return {};
     const values = await this.withRetry(() => this.client.mGet(keys));
     const result: Record<string, Favorite> = {};
@@ -349,12 +349,12 @@ export abstract class BaseRedisStorage implements IStorage {
     ];
 
     for (const pattern of patterns) {
-      let cursor = 0;
+      let cursor = '0';
       do {
-        const reply = await this.client.scan(cursor, { MATCH: pattern, COUNT: 250 });
-        cursor = reply.cursor;
+        const reply = await this.client.scan(cursor as any, { MATCH: pattern, COUNT: 250 });
+        cursor = reply.cursor as any;
         keysToDelete.push(...reply.keys);
-      } while (cursor !== 0);
+      } while (cursor !== '0');
     }
 
     if (keysToDelete.length > 0) {
@@ -397,17 +397,17 @@ export abstract class BaseRedisStorage implements IStorage {
   // ---------- 获取全部用户 ----------
   async getAllUsers(): Promise<string[]> {
     const users: string[] = [];
-    let cursor = 0;
+    let cursor = '0';
     do {
-      const reply = await this.client.scan(cursor, { MATCH: 'u:*:pwd', COUNT: 100 });
-      cursor = reply.cursor;
+      const reply = await this.client.scan(cursor as any, { MATCH: 'u:*:pwd', COUNT: 100 });
+      cursor = reply.cursor as any;
       for (const key of reply.keys) {
         const match = key.match(/^u:(.+?):pwd$/);
         if (match) {
           users.push(ensureString(match[1]));
         }
       }
-    } while (cursor !== 0);
+    } while (cursor !== '0');
     return users;
   }
 
@@ -487,12 +487,12 @@ export abstract class BaseRedisStorage implements IStorage {
   ): Promise<{ [key: string]: EpisodeSkipConfig }> {
     const pattern = `u:${userName}:skip:*`;
     const keys: string[] = [];
-    let cursor = 0;
+    let cursor = '0';
     do {
-      const reply = await this.client.scan(cursor, { MATCH: pattern, COUNT: 100 });
-      cursor = reply.cursor;
+      const reply = await this.client.scan(cursor as any, { MATCH: pattern, COUNT: 100 });
+      cursor = reply.cursor as any;
       keys.push(...reply.keys);
-    } while (cursor !== 0);
+    } while (cursor !== '0');
 
     if (keys.length === 0) {
       return {};
@@ -576,12 +576,12 @@ export abstract class BaseRedisStorage implements IStorage {
   ): Promise<{ [key: string]: EpisodeSkipConfig }> {
     const pattern = `u:${userName}:episodeskip:*`;
     const keys: string[] = [];
-    let cursor = 0;
+    let cursor = '0';
     do {
-      const reply = await this.client.scan(cursor, { MATCH: pattern, COUNT: 100 });
-      cursor = reply.cursor;
+      const reply = await this.client.scan(cursor as any, { MATCH: pattern, COUNT: 100 });
+      cursor = reply.cursor as any;
       keys.push(...reply.keys);
-    } while (cursor !== 0);
+    } while (cursor !== '0');
 
     if (keys.length === 0) {
       return {};
@@ -691,12 +691,12 @@ export abstract class BaseRedisStorage implements IStorage {
     // 可以根据需要实现特定前缀的缓存清理
     const pattern = prefix ? `cache:${prefix}*` : 'cache:*';
     const keys: string[] = [];
-    let cursor = 0;
+    let cursor = '0';
     do {
-      const reply = await this.client.scan(cursor, { MATCH: pattern, COUNT: 100 });
-      cursor = reply.cursor;
+      const reply = await this.client.scan(cursor as any, { MATCH: pattern, COUNT: 100 });
+      cursor = reply.cursor as any;
       keys.push(...reply.keys);
-    } while (cursor !== 0);
+    } while (cursor !== '0');
 
 
     if (keys.length > 0) {
@@ -738,12 +738,12 @@ export abstract class BaseRedisStorage implements IStorage {
   async getPendingUsers(): Promise<PendingUser[]> {
     const pattern = 'pending:user:*';
     const keys: string[] = [];
-    let cursor = 0;
+    let cursor = '0';
     do {
-      const reply = await this.client.scan(cursor, { MATCH: pattern, COUNT: 100 });
-      cursor = reply.cursor;
+      const reply = await this.client.scan(cursor as any, { MATCH: pattern, COUNT: 100 });
+      cursor = reply.cursor as any;
       keys.push(...reply.keys);
-    } while (cursor !== 0);
+    } while (cursor !== '0');
     
     if (keys.length === 0) return [];
 
@@ -1434,10 +1434,10 @@ export abstract class BaseRedisStorage implements IStorage {
   async getMachineCodeUsers(): Promise<Record<string, { machineCode: string; deviceInfo?: string; bindTime: number }>> {
     const result: Record<string, { machineCode: string; deviceInfo?: string; bindTime: number }> = {};
     const pattern = 'u:*:machine_code';
-    let cursor = 0;
+    let cursor = '0';
     do {
-      const reply = await this.client.scan(cursor, { MATCH: pattern, COUNT: 100 });
-      cursor = reply.cursor;
+      const reply = await this.client.scan(cursor as any, { MATCH: pattern, COUNT: 100 });
+      cursor = reply.cursor as any;
       for (const key of reply.keys) {
         const userName = key.replace('u:', '').replace(':machine_code', '');
         const val = await this.withRetry(() => this.client.get(key));
@@ -1447,7 +1447,7 @@ export abstract class BaseRedisStorage implements IStorage {
           } catch { /* 忽略解析错误 */ }
         }
       }
-    } while (cursor !== 0);
+    } while (cursor !== '0');
     return result;
   }
 
