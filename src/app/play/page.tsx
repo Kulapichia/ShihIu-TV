@@ -4,7 +4,6 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react'; // 引入 React 用于 ErrorBoundary
-import Hls from 'hls.js';
 import { Heart, ChevronUp, Copy, AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -59,6 +58,29 @@ interface WakeLockSentinel {
 function PlayPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // 动态导入客户端库
+  // -----------------------------------------------------------------------------
+  const [Artplayer, setArtplayer] = useState<any>(null);
+  const [Hls, setHls] = useState<any>(null);
+  const [artplayerPluginDanmuku, setArtplayerPluginDanmuku] = useState<any>(null);
+
+  useEffect(() => {
+    // 动态导入客户端依赖,避免服务器端编译错误
+    Promise.all([
+      import('artplayer'),
+      import('hls.js'),
+      import('artplayer-plugin-danmuku'),
+    ]).then(([artplayerModule, hlsModule, danmukuModule]) => {
+      setArtplayer(() => artplayerModule.default);
+      setHls(() => hlsModule.default);
+      setArtplayerPluginDanmuku(() => danmukuModule.default);
+      console.log('[DynamicImport] 客户端库加载完成');
+    }).catch((err) => {
+      console.error('[DynamicImport] 加载失败:', err);
+      setError('播放器库加载失败,请刷新页面重试');
+    });
+  }, []);
 
   // -----------------------------------------------------------------------------
   // 状态变量（State）
@@ -2549,36 +2571,6 @@ function PlayPageClient() {
     }
   };
 
-  class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
-    constructor(config: any) {
-      super(config);
-      const load = this.load.bind(this);
-      this.load = function (context: any, config: any, callbacks: any) {
-        // 拦截manifest和level请求
-        if (
-          (context as any).type === 'manifest' ||
-          (context as any).type === 'level'
-        ) {
-          const onSuccess = callbacks.onSuccess;
-          callbacks.onSuccess = function (
-            response: any,
-            stats: any,
-            context: any
-          ) {
-            // 如果是m3u8文件，处理内容以移除广告分段
-            if (response.data && typeof response.data === 'string') {
-              // 过滤掉广告段 - 实现更精确的广告过滤逻辑
-              response.data = filterAdsFromM3U8(response.data);
-            }
-            return onSuccess(response, stats, context, null);
-          };
-        }
-        // 执行原始load方法
-        load(context, config, callbacks);
-      };
-    }
-  }
-
   // 🚀 优化的弹幕操作处理函数（防抖 + 性能优化）
   const handleDanmuOperationOptimized = (nextState: boolean) => {
     // 清除之前的防抖定时器
@@ -3701,6 +3693,36 @@ function PlayPageClient() {
       cleanupPlayer();
     };
 
+  class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
+    constructor(config: any) {
+      super(config);
+      const load = this.load.bind(this);
+      this.load = function (context: any, config: any, callbacks: any) {
+        // 拦截manifest和level请求
+        if (
+          (context as any).type === 'manifest' ||
+          (context as any).type === 'level'
+        ) {
+          const onSuccess = callbacks.onSuccess;
+          callbacks.onSuccess = function (
+            response: any,
+            stats: any,
+            context: any
+          ) {
+            // 如果是m3u8文件，处理内容以移除广告分段
+            if (response.data && typeof response.data === 'string') {
+              // 过滤掉广告段 - 实现更精确的广告过滤逻辑
+              response.data = filterAdsFromM3U8(response.data);
+            }
+            return onSuccess(response, stats, context, null);
+          };
+        }
+        // 执行原始load方法
+        load(context, config, callbacks);
+      };
+    }
+  }
+
     // 页面可见性变化时保存播放进度和释放 Wake Lock
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
@@ -3803,7 +3825,9 @@ function PlayPageClient() {
     // 异步初始化播放器，避免SSR问题
     const initPlayer = async () => {
       if (
+        !Artplayer ||
         !Hls ||
+        !artplayerPluginDanmuku ||
         !videoUrl ||
         loading ||
         currentEpisodeIndex === null ||
@@ -3969,12 +3993,52 @@ function PlayPageClient() {
       // 使用动态导入的 Artplayer
       const Artplayer = (window as any).DynamicArtplayer;
       const artplayerPluginDanmuku = (window as any).DynamicArtplayerPluginDanmuku;
-      
+      // 创建自定义HLS加载器的工厂函数
+      const createCustomHlsLoader = (HlsClass: any) => {
+        if (!HlsClass || !HlsClass.DefaultConfig) {
+          return null;
+        }
+        class CustomHlsJsLoader extends HlsClass.DefaultConfig.loader {
+          constructor(config: any) {
+            super(config);
+            const load = this.load.bind(this);
+            this.load = function (context: any, config: any, callbacks: any) {
+              // 拦截manifest和level请求
+              if (
+                (context as any).type === 'manifest' ||
+                (context as any).type === 'level'
+              ) {
+                const onSuccess = callbacks.onSuccess;
+                callbacks.onSuccess = function (
+                  response: any,
+                  stats: any,
+                  context: any
+                ) {
+                  // 如果是m3u8文件，处理内容以移除广告分段
+                  if (response.data && typeof response.data === 'string') {
+                    // 过滤掉广告段 - 实现更精确的广告过滤逻辑
+                    response.data = filterAdsFromM3U8(response.data);
+                  }
+                  return onSuccess(response, stats, context, null);
+                };
+              }
+              // 执行原始load方法
+              load(context, config, callbacks);
+            };
+          }
+        }
+        return CustomHlsJsLoader;
+      };
+
       // 创建新的播放器实例
       Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
       Artplayer.USE_RAF = true;
       // 重新启用5.3.0内存优化功能，但使用false参数避免清空DOM
       Artplayer.REMOVE_SRC_WHEN_DESTROY = true;
+
+      const CustomLoader = blockAdEnabledRef.current 
+              ? createCustomHlsLoader(Hls) 
+              : null;
 
       artPlayerRef.current = new Artplayer({
         container: artRef.current,
@@ -4090,7 +4154,7 @@ function PlayPageClient() {
 
               /* 自定义loader */
               loader: blockAdEnabledRef.current
-                ? CustomHlsJsLoader
+                ? createCustomHlsLoader(Hls)
                 : Hls.DefaultConfig.loader,
             });
             
@@ -5605,27 +5669,9 @@ function PlayPageClient() {
     }
     }; // 结束 initPlayer 函数
 
-    // 动态导入 ArtPlayer 并初始化
-    const loadAndInit = async () => {
-      try {
-        const [{ default: Artplayer }, { default: artplayerPluginDanmuku }] = await Promise.all([
-          import('artplayer'),
-          import('artplayer-plugin-danmuku')
-        ]);
-        
-        // 将导入的模块设置为全局变量供 initPlayer 使用
-        (window as any).DynamicArtplayer = Artplayer;
-        (window as any).DynamicArtplayerPluginDanmuku = artplayerPluginDanmuku;
-        
-        await initPlayer();
-      } catch (error) {
-        console.error('动态导入 ArtPlayer 失败:', error);
-        setError('播放器加载失败');
-      }
-    };
-
-    loadAndInit();
-  }, [Hls, videoUrl, loading, blockAdEnabled]);
+    // 动态库加载完成后初始化播放器
+    initPlayer();
+  }, [Artplayer, Hls, artplayerPluginDanmuku, videoUrl, loading, blockAdEnabled]);
 
   // 当组件卸载时清理定时器、Wake Lock 和播放器资源
   useEffect(() => {
