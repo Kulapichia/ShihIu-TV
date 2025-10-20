@@ -3990,9 +3990,6 @@ function PlayPageClient() {
     }
 
     try {
-      // 使用动态导入的 Artplayer
-      const Artplayer = (window as any).DynamicArtplayer;
-      const artplayerPluginDanmuku = (window as any).DynamicArtplayerPluginDanmuku;
       // 创建自定义HLS加载器的工厂函数
       const createCustomHlsLoader = (HlsClass: any) => {
         if (!HlsClass || !HlsClass.DefaultConfig) {
@@ -4029,6 +4026,10 @@ function PlayPageClient() {
         }
         return CustomHlsJsLoader;
       };
+
+      // 使用动态导入的 Artplayer
+      // const Artplayer = (window as any).DynamicArtplayer; // 不再需要，已从 state 获取
+      // const artplayerPluginDanmuku = (window as any).DynamicArtplayerPluginDanmuku; // 不再需要，已从 state 获取
 
       // 创建新的播放器实例
       Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
