@@ -1616,9 +1616,9 @@ function PlayPageClient() {
         outro_time: newConfig.outro_time,
       };
 
-      setSkipConfig(newConfig);
+      setSkipConfig(fullConfig);
 
-      if (newConfig.segments.length === 0) {
+      if (fullConfig.segments.length === 0) {
         await deleteSkipConfig(currentSourceRef.current, currentIdRef.current);
         artPlayerRef.current.setting.update({
           name: '跳过片头片尾',
@@ -1683,10 +1683,10 @@ function PlayPageClient() {
         await saveSkipConfig(
           currentSourceRef.current,
           currentIdRef.current,
-          newConfig
+          fullConfig
         );
       }
-      console.log('跳过片头片尾配置已保存:', newConfig);
+      console.log('跳过片头片尾配置已保存:', fullConfig);
     } catch (err) {
       console.error('保存跳过片头片尾配置失败:', err);
     }
