@@ -9,18 +9,19 @@ export const runtime = 'nodejs';
 export async function GET(request: NextRequest) {
   try {
     await ensureAdmin(request);
-    const authInfo = getAuthInfoFromCookie(request);
-    if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const authInfo = getAuthInfoFromCookie(request);
+  if (!authInfo || !authInfo.username) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-    const { searchParams } = new URL(request.url);
-    const sourceKey = searchParams.get('source');
+  const { searchParams } = new URL(request.url);
+  const sourceKey = searchParams.get('source');
 
-    if (!sourceKey) {
-      return NextResponse.json({ error: '缺少 source 参数' }, { status: 400 });
-    }
+  if (!sourceKey) {
+    return NextResponse.json({ error: '缺少 source 参数' }, { status: 400 });
+  }
 
+  try {
     const availableSites = await getAvailableApiSites(authInfo.username);
     const source = availableSites.find((s) => s.key === sourceKey);
     if (!source) {
@@ -72,7 +73,6 @@ export async function GET(request: NextRequest) {
         }
         if (error.name === 'AbortError') {
           return NextResponse.json({ error: '请求超时' }, { status: 408 });
-        }
     }
     return NextResponse.json({ error: '获取分类失败' }, { status: 500 });
   }
