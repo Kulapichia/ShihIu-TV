@@ -1167,15 +1167,6 @@ function PlayPageClient() {
     }
   };
 
-  // 将数字转换为下标格式
-  const toSubscript = (num: number): string => {
-    const subscriptMap: { [key: string]: string } = {
-      '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
-      '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉'
-    };
-    return num.toString().split('').map(digit => subscriptMap[digit] || digit).join('');
-  };
-
   // 强制清空所有弹幕DOM元素的通用函数(只删除弹幕内容,不删除控制UI)
   const clearAllDanmakuDOM = (): number => {
     if (!artRef.current) return 0;
