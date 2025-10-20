@@ -1,4 +1,3 @@
-import { TVBoxCategory, TVBoxVideo } from '@/lib/tvbox';
 import React, { useState, useEffect, useCallback } from 'react';
 import VideoCard from './VideoCard';
 import { buttonStyles } from '@/hooks/useAdminComponents';
@@ -7,6 +6,10 @@ type Site = {
   name: string;
   url: string;
 };
+
+// 假设 TVBoxCategory 和 TVBoxVideo 类型定义如下，因为找不到源文件
+type TVBoxCategory = { type_id: any; type_name: string };
+type TVBoxVideo = { vod_id: any; vod_pic: any; vod_name: any; vod_remarks: any; vod_douban_id: any };
 
 const SourceBrowser: React.FC = () => {
   const [sites, setSites] = useState<Site[]>([]);
@@ -134,7 +137,7 @@ const SourceBrowser: React.FC = () => {
           <button
             key={site.url}
             onClick={() => fetchCategories(site)}
-            className={`${buttonStyles} ${
+            className={`${buttonStyles.secondary} ${
               selectedSite?.url === site.url
                 ? 'bg-blue-600 ring-2 ring-blue-400'
                 : 'bg-gray-700 hover:bg-gray-600'
@@ -155,7 +158,7 @@ const SourceBrowser: React.FC = () => {
               placeholder={`在 ${selectedSite.name} 中搜索...`}
               className="flex-grow bg-gray-900 border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <button type="submit" className={buttonStyles}>
+            <button type="submit" className={buttonStyles.primary}>
               搜索
             </button>
           </form>
@@ -168,7 +171,7 @@ const SourceBrowser: React.FC = () => {
             <button
               key={cat.type_id}
               onClick={() => handleCategorySelect(cat)}
-              className={`${buttonStyles} ${
+              className={`${buttonStyles.secondary} ${
                 selectedCategory?.type_id === cat.type_id
                   ? 'bg-indigo-600 ring-2 ring-indigo-400'
                   : 'bg-gray-700 hover:bg-gray-600'
@@ -186,12 +189,13 @@ const SourceBrowser: React.FC = () => {
         {videos.map((video) => (
           <VideoCard
             key={video.vod_id}
-            id={video.vod_id}
-            cover={video.vod_pic}
+            id={video.vod_id.toString()}
+            poster={video.vod_pic}
             title={video.vod_name}
             source={selectedSite?.name || 'Unknown'}
             remarks={video.vod_remarks}
-            doubanId={video.vod_douban_id}
+            douban_id={video.vod_douban_id}
+            from='search'
           />
         ))}
       </div>
@@ -201,7 +205,7 @@ const SourceBrowser: React.FC = () => {
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage <= 1}
-            className={`${buttonStyles} disabled:opacity-50`}
+            className={`${buttonStyles.secondary} disabled:opacity-50`}
           >
             上一页
           </button>
@@ -211,7 +215,7 @@ const SourceBrowser: React.FC = () => {
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className={`${buttonStyles} disabled:opacity-50`}
+            className={`${buttonStyles.secondary} disabled:opacity-50`}
           >
             下一页
           </button>
