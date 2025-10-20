@@ -2870,7 +2870,7 @@ function PlayPageClient() {
         }
       }, 800); // 缩短延迟时间，提高响应性
     }
-  }, [detail, currentEpisodeIndex]);
+  }, [detail, currentEpisodeIndex, videoTitle, videoYear, videoDoubanId]);
 
   // 进入页面时直接获取全部源信息
   useEffect(() => {
@@ -5678,6 +5678,11 @@ function PlayPageClient() {
       if (cleanupListenersRef.current) {
         cleanupListenersRef.current();
       }
+
+      // 清理动态注入的 CSS 样式
+      document.getElementById('danmuku-controls-optimize')?.remove();
+      document.getElementById('danmaku-drag-fix')?.remove();
+      document.getElementById('danmaku-performance-css')?.remove();
 
       // 在组件卸载前最后保存一次进度
       saveCurrentPlayProgress();
