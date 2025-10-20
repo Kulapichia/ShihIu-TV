@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
       );
     }
     
+  try {
     const availableSites = await getAvailableApiSites(authInfo.username);
     const source = availableSites.find((s) => s.key === sourceKey);
     if (!source) {
