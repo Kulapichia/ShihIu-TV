@@ -25,8 +25,7 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
-    
-  try {
+
     const availableSites = await getAvailableApiSites(authInfo.username);
     const source = availableSites.find((s) => s.key === sourceKey);
     if (!source) {
@@ -107,12 +106,12 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: unknown) {
     if (error instanceof Error) {
-        if (error.message === 'UNAUTHORIZED') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        if (error.name === 'AbortError') {
-          return NextResponse.json({ error: '请求超时' }, { status: 408 });
-        }
+      if (error.message === 'UNAUTHORIZED') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (error.name === 'AbortError') {
+        return NextResponse.json({ error: '请求超时' }, { status: 408 });
+      }
     }
     return NextResponse.json({ error: '获取列表失败' }, { status: 500 });
   }
