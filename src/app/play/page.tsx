@@ -55,6 +55,87 @@ interface WakeLockSentinel {
   removeEventListener(type: 'release', listener: () => void): void;
 }
 
+// 将数字转换为下标格式
+const toSubscript = (num: number): string => {
+  const subscriptMap: { [key: string]: string } = {
+    '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+    '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉'
+  };
+  return num.toString().split('').map(digit => subscriptMap[digit] || digit).join('');
+};
+
+// 弹幕合并：合并一段时间窗口内完全相同的弹幕
+const mergeSimilarDanmaku = (danmakuList: any[], windowSeconds: number = 5): any[] => {
+  if (!danmakuList || danmakuList.length === 0) return [];
+  
+  const merged: any[] = [];
+  const sorted = [...danmakuList].sort((a, b) => a.time - b.time);
+  
+  for (let i = 0; i < sorted.length; i++) {
+    const current = sorted[i];
+    const currentText = (current.text || '').trim();
+    
+    if (!currentText) continue;
+    
+    // 查找是否可以合并到已有的弹幕
+    let foundMergeTarget = false;
+    
+    for (let j = merged.length - 1; j >= 0; j--) {
+      const target = merged[j];
+      // 提取原始文本（去除可能已有的角标）
+      const targetText = (target.originalText || target.text || '').trim();
+      
+      // 时间超出窗口，后续不可能合并
+      if (current.time - target.time > windowSeconds) break;
+      
+      // 文本完全相同且在时间窗口内
+      if (targetText === currentText && current.time - target.time <= windowSeconds) {
+        // 合并：增加计数
+        const newCount = (target.mergeCount || 1) + 1;
+        target.mergeCount = newCount;
+        
+        // 更新显示文本（添加下标角标）
+        target.text = `${currentText} ${toSubscript(newCount)}`;
+        
+        // 根据合并数量设置字号,但保持原始颜色不变
+        let mergedFontSize = 25;
+        if (newCount <= 3) {
+          mergedFontSize = 25;
+        } else if (newCount <= 10) {
+          mergedFontSize = 35;
+        } else if (newCount <= 20) {
+          mergedFontSize = 45;
+        } else {
+          mergedFontSize = 55;
+        }
+        
+        // 添加自定义样式对象,只设置字号
+        target.style = {
+          fontSize: `${mergedFontSize}px`,
+          fontWeight: newCount > 3 ? 'bold' : 'normal',
+        };
+        
+        console.log(`[danmaku] 合并弹幕: "${currentText}" 计数=${newCount}, 字号=${mergedFontSize}px`);
+        
+        foundMergeTarget = true;
+        break;
+      }
+    }
+    
+    if (!foundMergeTarget) {
+      // 创建新弹幕条目
+      merged.push({
+        ...current,
+        mergeCount: 1, // 初始计数为1
+        originalText: currentText, // 保存原始文本
+      });
+    }
+  }
+  
+  console.log(`[danmaku] 弹幕合并完成: ${danmakuList.length} → ${merged.length} (减少 ${danmakuList.length - merged.length} 条)`);
+  return merged;
+};
+
 function PlayPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,6 +145,162 @@ function PlayPageClient() {
   const [Artplayer, setArtplayer] = useState<any>(null);
   const [Hls, setHls] = useState<any>(null);
   const [artplayerPluginDanmuku, setArtplayerPluginDanmuku] = useState<any>(null);
+
+  // 自定义输入对话框(替代 prompt,因为 Electron 不支持 prompt)
+  const showInputDialog = (message: string, defaultValue: string = ''): Promise<string | null> => {
+    return new Promise((resolve) => {
+      // 创建对话框遮罩
+      const overlay = document.createElement('div');
+      overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 999999;
+      `;
+
+      // 创建对话框
+      const dialog = document.createElement('div');
+      dialog.style.cssText = `
+        background: #2a2a2a;
+        border-radius: 8px;
+        padding: 24px;
+        min-width: 400px;
+        max-width: 600px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      `;
+
+      // 创建消息文本
+      const messageEl = document.createElement('div');
+      messageEl.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        margin-bottom: 16px;
+        white-space: pre-wrap;
+        line-height: 1.5;
+      `;
+      messageEl.textContent = message;
+
+      // 创建输入框
+      const input = document.createElement('textarea');
+      input.value = defaultValue;
+      input.style.cssText = `
+        width: 100%;
+        padding: 8px 12px;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 4px;
+        color: #fff;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 60px;
+        box-sizing: border-box;
+        outline: none;
+      `;
+      input.addEventListener('focus', () => {
+        input.style.borderColor = '#3b82f6';
+      });
+      input.addEventListener('blur', () => {
+        input.style.borderColor = '#444';
+      });
+
+      // 创建按钮容器
+      const buttons = document.createElement('div');
+      buttons.style.cssText = `
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 16px;
+      `;
+
+      // 取消按钮
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = '取消';
+      cancelBtn.style.cssText = `
+        padding: 8px 16px;
+        background: #444;
+        border: none;
+        border-radius: 4px;
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.2s;
+      `;
+      cancelBtn.addEventListener('mouseenter', () => {
+        cancelBtn.style.background = '#555';
+      });
+      cancelBtn.addEventListener('mouseleave', () => {
+        cancelBtn.style.background = '#444';
+      });
+      cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+        resolve(null);
+      });
+
+      // 确定按钮
+      const confirmBtn = document.createElement('button');
+      confirmBtn.textContent = '确定';
+      confirmBtn.style.cssText = `
+        padding: 8px 16px;
+        background: #3b82f6;
+        border: none;
+        border-radius: 4px;
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.2s;
+      `;
+      confirmBtn.addEventListener('mouseenter', () => {
+        confirmBtn.style.background = '#2563eb';
+      });
+      confirmBtn.addEventListener('mouseleave', () => {
+        confirmBtn.style.background = '#3b82f6';
+      });
+      confirmBtn.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+        resolve(input.value);
+      });
+
+      // 组装对话框
+      buttons.appendChild(cancelBtn);
+      buttons.appendChild(confirmBtn);
+      dialog.appendChild(messageEl);
+      dialog.appendChild(input);
+      dialog.appendChild(buttons);
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+
+      // 自动聚焦并选中文本
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 100);
+
+      // 支持回车确认
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+          e.preventDefault();
+          confirmBtn.click();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          cancelBtn.click();
+        }
+      });
+
+      // 点击遮罩关闭
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          cancelBtn.click();
+        }
+      });
+    });
+  };
 
   useEffect(() => {
     // 动态导入客户端依赖,避免服务器端编译错误
@@ -3608,7 +3845,20 @@ function PlayPageClient() {
     // f 键 = 切换全屏
     if (e.key === 'f' || e.key === 'F') {
       if (artPlayerRef.current) {
-        artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
+        // 在 Electron 环境下使用系统级全屏
+        if (typeof window !== 'undefined' && (window as any).electronAPI) {
+          (async () => {
+            try {
+              const isFullScreen = await (window as any).electronAPI.isFullScreen();
+              await (window as any).electronAPI.setFullScreen(!isFullScreen);
+            } catch (err) {
+              console.error('切换全屏失败:', err);
+            }
+          })();
+        } else {
+          // 非 Electron 环境使用网页全屏
+          artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
+        }
         e.preventDefault();
       }
     }
@@ -4261,7 +4511,7 @@ function PlayPageClient() {
               return nextState; // 立即返回新状态
             },
           },
-          // 新增：跳过片头片尾设置
+          // 跳过片头片尾设置
           {
             name: '跳过片头片尾',
             html: '跳过片头片尾',
@@ -4332,6 +4582,84 @@ function PlayPageClient() {
                 };
                 handleSkipConfigChange(newConfig);
                 return `-${formatTime(-outroTime)}`;
+              }
+            },
+          },
+          {
+            html: '下载弹幕',
+            tooltip: '下载当前弹幕为XML文件',
+            onClick: async () => {
+              const plugin = getDanmakuPlugin();
+              if (plugin && plugin.danmus && plugin.danmus.length > 0) {
+                try {
+                  const xmlContent = artplayerPluginDanmuku.utils.parseToXml(plugin.danmus);
+                  const blob = new Blob([xmlContent], { type: 'application/xml;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  const title = videoTitleRef.current || 'danmaku';
+                  const episode = currentEpisodeIndexRef.current + 1;
+                  a.href = url;
+                  a.download = `${title}_EP${episode}.xml`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  showPlayerNotice('弹幕下载成功', 2000);
+                } catch (err) {
+                  showPlayerNotice('弹幕下载失败', 2000);
+                  console.error('弹幕下载失败:', err);
+                }
+              } else {
+                showPlayerNotice('当前没有弹幕可下载', 2000);
+              }
+              return ' '; // 返回非空字符串以关闭设置面板
+            }
+          },
+          {
+            html: '弹幕合并',
+            tooltip: danmakuMergeEnabled ? '已开启' : '已关闭',
+            switch: danmakuMergeEnabled,
+            onSwitch: function (item: any) {
+              const newState = !item.switch;
+              try {
+                localStorage.setItem('danmaku_merge_enabled', String(newState));
+                showPlayerNotice(`弹幕合并已${newState ? '开启' : '关闭'}`, 1500);
+                // 刷新页面以应用新状态
+                setTimeout(() => {
+                  window.location.reload();
+                }, 500);
+              } catch (e) {
+                console.error('[DanmuTV] 保存弹幕合并开关失败:', e);
+                showPlayerNotice('切换失败', 1500);
+              }
+              return newState;
+            },
+          },
+          {
+            html: '合并窗口',
+            tooltip: `${danmakuMergeWindow}秒`,
+            onClick: async function () {
+              const val = await showInputDialog(
+                '合并窗口时长（秒）\n在此时间内的相同弹幕将被合并',
+                String(danmakuMergeWindow)
+              );
+              if (val === null) return;
+              
+              const n = Math.max(1, Number(val) || 5);
+              try {
+                localStorage.setItem('danmaku_merge_window', String(n));
+                const mergeEnabled = localStorage.getItem('danmaku_merge_enabled') === 'true';
+                if (mergeEnabled) {
+                  showPlayerNotice(`合并窗口已设为 ${n} 秒，正在刷新...`, 1500);
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 500);
+                } else {
+                  showPlayerNotice(`合并窗口已设为 ${n} 秒`, 1500);
+                }
+              } catch (e) {
+                console.error('[DanmuTV] 保存合并窗口失败:', e);
+                showPlayerNotice('设置失败', 1500);
               }
             },
           },
@@ -4864,6 +5192,36 @@ function PlayPageClient() {
           ] : []),
         ],
       });
+
+      // Electron 环境下，使用系统级全屏替代网页全屏
+      if (typeof window !== 'undefined' && (window as any).electronAPI) {
+        const fullscreenBtn = artPlayerRef.current?.template?.$fullscreen;
+        if (fullscreenBtn) {
+          // 移除原有的点击事件监听器
+          const newFullscreenBtn = fullscreenBtn.cloneNode(true);
+          fullscreenBtn.parentNode?.replaceChild(newFullscreenBtn, fullscreenBtn);
+          
+          // 添加新的点击事件
+          newFullscreenBtn.addEventListener('click', async () => {
+            try {
+              const isFullScreen = await (window as any).electronAPI.isFullScreen();
+              await (window as any).electronAPI.setFullScreen(!isFullScreen);
+            } catch (err) {
+              console.error('切换全屏失败:', err);
+            }
+          });
+        }
+        
+        // 监听 Electron 全屏状态变化，同步到播放器 UI
+        if ((window as any).electronAPI.onFullScreenChange) {
+          (window as any).electronAPI.onFullScreenChange((isFullScreen: boolean) => {
+            // 更新播放器的全屏状态显示（不触发实际全屏切换）
+            if (artPlayerRef.current) {
+              artPlayerRef.current.fullscreen = isFullScreen;
+            }
+          });
+        }
+      }
 
       // 监听播放器事件
       artPlayerRef.current.on('ready', async () => {
