@@ -3,7 +3,7 @@
 import { db } from '@/lib/db';
 
 import { AdminConfig, OAuthConfig, SourceLastCheck } from './admin.types';
-import { API_CONFIG } from './config.shared';
+export { API_CONFIG } from './config.shared';
 export interface ApiSite {
   key: string;
   api: string;
