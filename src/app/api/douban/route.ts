@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getCacheTime } from '@/lib/config';
+import { getEdgeCacheTime } from '@/lib/edge-config';
 import { fetchDoubanData } from '@/lib/douban';
 import { RawDoubanSubjectSchema } from '@/lib/schemas';
 import { DoubanItem, DoubanResult } from '@/lib/types';
@@ -9,7 +9,7 @@ interface DoubanApiResponse {
   subjects: Array<any>;
 }
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -87,7 +87,7 @@ export async function GET(request: Request) {
       list: list,
     };
 
-    const cacheTime = await getCacheTime();
+    const cacheTime = getEdgeCacheTime();
     return NextResponse.json(response, {
       headers: {
         'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
@@ -163,7 +163,7 @@ function handleTop250(pageStart: number) {
         list: movies,
       };
 
-      const cacheTime = await getCacheTime();
+      const cacheTime = getEdgeCacheTime();
       return NextResponse.json(apiResponse, {
         headers: {
           'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
