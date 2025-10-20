@@ -23,12 +23,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # 适配项目A的Node.js版本
+          node-version: '20'
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8 # 建议与项目A的package.json中的pnpm版本匹配
+        uses: pnpm/action-setup@v4
 
       - name: Install dependencies
         run: pnpm install
@@ -56,7 +54,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SiffCITY-${{ matrix.os }} # 使用项目A的应用名称
+          name: SiffCITY-${{ matrix.os }}
           path: |
             release/*.exe
             release/*.dmg
@@ -84,7 +82,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: release-artifacts/**/*
-          # 更新发布说明以匹配项目A的特性
+          # 更新发布说明
           body: |
             ## 🎉 SiffCITY Enhanced ${{ github.ref_name }}
             
