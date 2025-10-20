@@ -3,7 +3,7 @@
 import { db } from '@/lib/db';
 
 import { AdminConfig, OAuthConfig, SourceLastCheck } from './admin.types';
-
+import { API_CONFIG } from './config.shared';
 export interface ApiSite {
   key: string;
   api: string;
@@ -34,33 +34,6 @@ interface ConfigFileStruct {
     [key: string]: LiveCfg;
   }
 }
-
-export const API_CONFIG = {
-  search: {
-    path: '?ac=videolist&wd=',
-    pagePath: '?ac=videolist&wd={query}&pg={page}',
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      Accept: 'application/json',
-    },
-  },
-  detail: {
-    path: '?ac=videolist&ids=',
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      Accept: 'application/json',
-    },
-  },
-  shortdrama: {
-    baseUrl: 'https://api.r2afosne.dpdns.org',
-    headers: {
-      'Accept': 'application/json',
-      'User-Agent': 'MoonTV/1.0',
-    },
-  },
-};
 
 // 在模块加载时根据环境决定配置来源
 let cachedConfig: AdminConfig;
