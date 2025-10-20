@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Box, Cat, Clover, Film, Home, PlaySquare, Radio, Star, Tv } from 'lucide-react';
+import { Box, Cat, Clover, Film, Home, PlaySquare, Radio, Search, Star, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
