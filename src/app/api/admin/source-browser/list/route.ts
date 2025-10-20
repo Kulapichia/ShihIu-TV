@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
       );
     }
     
+  try {
     const availableSites = await getAvailableApiSites(authInfo.username);
     const source = availableSites.find((s) => s.key === sourceKey);
     if (!source) {
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
+    // 苹果CMS常见列表参数：ac=videolist&t=<typeId>&pg=<page>
     const url = `${source.api}?ac=videolist&t=${encodeURIComponent(
       String(typeId)
     )}&pg=${page}`;
