@@ -218,6 +218,28 @@ export const UserMenu: React.FC = () => {
   const [dragEndIndex, setDragEndIndex] = useState<number | null>(null);
   const [dragInitialState, setDragInitialState] = useState<boolean>(false);
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+
+  // 初始化弹幕下载的默认保存路径（Electron环境）
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      console.log('[弹幕下载] 检查 Electron API:', !!(window as any).electronAPI);
+      if ((window as any).electronAPI) {
+        console.log('[弹幕下载] Electron API 可用，获取桌面路径...');
+        (window as any).electronAPI.getDesktopPath().then((desktopPath: string) => {
+          const defaultPath = `${desktopPath}/弹幕`;
+          console.log('[弹幕下载] 默认保存路径:', defaultPath);
+          setDanmakuSavePath(defaultPath);
+        }).catch((err: any) => {
+          console.error('[弹幕下载] 获取桌面路径失败:', err);
+          setDanmakuSavePath('弹幕'); // 降级到相对路径
+        });
+      } else {
+        console.warn('[弹幕下载] Electron API 不可用，可能未在 Electron 环境中运行');
+        setDanmakuSavePath('弹幕');
+      }
+    }
+  }, []);
+
   // 确保组件已挂载
   useEffect(() => {
     setMounted(true);
@@ -1500,6 +1522,7 @@ export const UserMenu: React.FC = () => {
       const duration = parseFloat(danmakuDuration) || 5.0;
       let successCount = 0;
       let failCount = 0;
+      const saveDir = `${danmakuSavePath}/${folderName}`;
       for (let i = 0; i < selectedEps.length; i++) {
         const ep = selectedEps[i];
         try {
@@ -1521,13 +1544,22 @@ export const UserMenu: React.FC = () => {
             const entries = parseXmlToDanmakuEntries(xmlData);
             fileData = convertToASS(entries, duration);
           }
-          const blob = new Blob([fileData], { type: 'text/plain' });
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = `${folderName}/${fileName}.${fileExt}`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
+          // 集成 Electron 文件保存逻辑
+          if (typeof window !== 'undefined' && (window as any).electronAPI) {
+            const fullPath = `${saveDir}/${fileName}.${fileExt}`;
+            const result = await (window as any).electronAPI.saveFile(fullPath, fileData);
+            if (!result.success) throw new Error(result.error);
+            console.log(`[${i+1}/${selectedEps.length}] 已保存: ${result.filePath}`);
+          } else {
+            // 浏览器降级下载
+            const blob = new Blob([fileData], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `${folderName}/${fileName}.${fileExt}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
           successCount++;
         } catch (e: any) {
           console.error(`[${i+1}/${selectedEps.length}] 失败: cid=${ep.cid}`, e);
@@ -3012,7 +3044,34 @@ export const UserMenu: React.FC = () => {
                     </div>
                   ))}
                 </div>
-                
+
+                 {/* 保存目录选择 */}
+                <div>
+                  <label className='block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300'>保存目录</label>
+                  <div className='flex gap-2'>
+                    <input
+                      type='text'
+                      className='flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors'
+                      placeholder='保存路径'
+                      value={danmakuSavePath}
+                      onChange={e => setDanmakuSavePath(e.target.value)}
+                    />
+                    {typeof window !== 'undefined' && (window as any).electronAPI && (
+                      <button
+                        onClick={async () => {
+                          const selected = await (window as any).electronAPI.selectDirectory(danmakuSavePath);
+                          if (selected) {
+                            setDanmakuSavePath(selected);
+                          }
+                        }}
+                        className='px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded-md transition-colors whitespace-nowrap'
+                      >
+                        浏览...
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                   <div>
                     <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1'>下载格式</label>
