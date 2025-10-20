@@ -527,6 +527,7 @@ function PlayPageClient() {
 
   const artPlayerRef = useRef<any>(null);
   const artRef = useRef<HTMLDivElement | null>(null);
+  const cleanupListenersRef = useRef<(() => void) | null>(null);
 
   // Wake Lock 相关
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -3685,68 +3686,6 @@ function PlayPageClient() {
     }
   };
 
-  useEffect(() => {
-    // 页面即将卸载时保存播放进度和清理资源
-    const handleBeforeUnload = () => {
-      saveCurrentPlayProgress();
-      releaseWakeLock();
-      cleanupPlayer();
-    };
-
-  class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
-    constructor(config: any) {
-      super(config);
-      const load = this.load.bind(this);
-      this.load = function (context: any, config: any, callbacks: any) {
-        // 拦截manifest和level请求
-        if (
-          (context as any).type === 'manifest' ||
-          (context as any).type === 'level'
-        ) {
-          const onSuccess = callbacks.onSuccess;
-          callbacks.onSuccess = function (
-            response: any,
-            stats: any,
-            context: any
-          ) {
-            // 如果是m3u8文件，处理内容以移除广告分段
-            if (response.data && typeof response.data === 'string') {
-              // 过滤掉广告段 - 实现更精确的广告过滤逻辑
-              response.data = filterAdsFromM3U8(response.data);
-            }
-            return onSuccess(response, stats, context, null);
-          };
-        }
-        // 执行原始load方法
-        load(context, config, callbacks);
-      };
-    }
-  }
-
-    // 页面可见性变化时保存播放进度和释放 Wake Lock
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        saveCurrentPlayProgress();
-        releaseWakeLock();
-      } else if (document.visibilityState === 'visible') {
-        // 页面重新可见时，如果正在播放则重新请求 Wake Lock
-        if (artPlayerRef.current && !artPlayerRef.current.paused) {
-          requestWakeLock();
-        }
-      }
-    };
-
-    // 添加事件监听器
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      // 清理事件监听器
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [currentEpisodeIndex, detail, artPlayerRef.current]);
-
   // 清理定时器
   useEffect(() => {
     return () => {
@@ -4930,6 +4869,32 @@ function PlayPageClient() {
       artPlayerRef.current.on('ready', async () => {
         setError(null);
 
+        // 在播放器就绪后添加全局事件监听器
+        const handleBeforeUnload = () => {
+          saveCurrentPlayProgress();
+          releaseWakeLock();
+        };
+    
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === 'hidden') {
+            saveCurrentPlayProgress();
+            releaseWakeLock();
+          } else if (document.visibilityState === 'visible') {
+            if (artPlayerRef.current && !artPlayerRef.current.paused) {
+              requestWakeLock();
+            }
+          }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // 将清理函数存储在 ref 中，以便组件卸载时调用
+        cleanupListenersRef.current = () => {
+          window.removeEventListener('beforeunload', handleBeforeUnload);
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+
         // iOS设备自动播放优化：如果是静音启动的，在开始播放后恢复音量
         if ((isIOS || isSafari) && artPlayerRef.current.muted) {
           console.log('iOS设备静音自动播放，准备在播放开始后恢复音量');
@@ -5011,8 +4976,42 @@ function PlayPageClient() {
 
         // 精确解决弹幕菜单与进度条拖拽冲突 - 基于ArtPlayer原生拖拽逻辑
         const fixDanmakuProgressConflict = () => {
-          let isDraggingProgress = false;
+          // 这个定时器ID需要在函数外部可访问，以便清理
+          let danmakuResetInterval: NodeJS.Timeout | null = null;
           
+          // 将事件处理函数定义在 setTimeout 外部，以便在清理时引用它们
+          const handleProgressMouseDown = (event: MouseEvent) => {
+            // 只有左键才开始拖拽检测
+            if (event.button === 0) {
+              const artplayer = document.querySelector('.artplayer') as HTMLElement;
+              if (artplayer) {
+                artplayer.setAttribute('data-dragging', 'true');
+              }
+            }
+          };
+          
+          const handleDocumentMouseMove = () => {
+            const artplayer = document.querySelector('.artplayer') as HTMLElement;
+            // 如果正在拖拽，确保弹幕菜单被隐藏
+            if (artplayer && artplayer.hasAttribute('data-dragging')) {
+              const panels = document.querySelectorAll('.artplayer-plugin-danmuku .apd-config-panel, .artplayer-plugin-danmuku .apd-style-panel') as NodeListOf<HTMLElement>;
+              panels.forEach(panel => {
+                if (panel.style.opacity !== '0') {
+                  panel.style.opacity = '0';
+                  panel.style.pointerEvents = 'none';
+                }
+              });
+            }
+          };
+          
+          const handleDocumentMouseUp = () => {
+            const artplayer = document.querySelector('.artplayer') as HTMLElement;
+            if (artplayer && artplayer.hasAttribute('data-dragging')) {
+              artplayer.removeAttribute('data-dragging');
+              // 立即恢复，不使用延迟
+            }
+          };
+
           setTimeout(() => {
             const progressControl = document.querySelector('.art-control-progress') as HTMLElement;
             if (!progressControl) return;
@@ -5060,44 +5059,6 @@ function PlayPageClient() {
               document.head.appendChild(style);
             };
             
-            // 精确模拟ArtPlayer的拖拽检测逻辑
-            const handleProgressMouseDown = (event: MouseEvent) => {
-              // 只有左键才开始拖拽检测
-              if (event.button === 0) {
-                isDraggingProgress = true;
-                const artplayer = document.querySelector('.artplayer') as HTMLElement;
-                if (artplayer) {
-                  artplayer.setAttribute('data-dragging', 'true');
-                }
-              }
-            };
-            
-            // 监听document的mousemove，与ArtPlayer保持一致
-            const handleDocumentMouseMove = () => {
-              // 如果正在拖拽，确保弹幕菜单被隐藏
-              if (isDraggingProgress) {
-                const panels = document.querySelectorAll('.artplayer-plugin-danmuku .apd-config-panel, .artplayer-plugin-danmuku .apd-style-panel') as NodeListOf<HTMLElement>;
-                panels.forEach(panel => {
-                  if (panel.style.opacity !== '0') {
-                    panel.style.opacity = '0';
-                    panel.style.pointerEvents = 'none';
-                  }
-                });
-              }
-            };
-            
-            // mouseup时立即恢复 - 与ArtPlayer逻辑完全同步
-            const handleDocumentMouseUp = () => {
-              if (isDraggingProgress) {
-                isDraggingProgress = false;
-                const artplayer = document.querySelector('.artplayer') as HTMLElement;
-                if (artplayer) {
-                  artplayer.removeAttribute('data-dragging');
-                }
-                // 立即恢复，不使用延迟
-              }
-            };
-            
             // 绑定事件 - 与ArtPlayer使用相同的事件绑定方式
             progressControl.addEventListener('mousedown', handleProgressMouseDown);
             document.addEventListener('mousemove', handleDocumentMouseMove);
@@ -5107,9 +5068,9 @@ function PlayPageClient() {
             addPrecisionCSS();
 
             // 🔄 添加定期重置机制，防止长时间播放后状态污染
-            const danmakuResetInterval = setInterval(() => {
+            danmakuResetInterval = setInterval(() => {
               if (!artPlayerRef.current?.plugins?.artplayerPluginDanmuku) {
-                clearInterval(danmakuResetInterval);
+                if (danmakuResetInterval) clearInterval(danmakuResetInterval);
                 return;
               }
 
@@ -5139,6 +5100,24 @@ function PlayPageClient() {
                 console.warn('弹幕状态重置失败:', error);
               }
             }, 300000); // 每5分钟重置一次
+
+            // 将此函数的清理逻辑附加到主清理函数中
+            const originalCleanup = cleanupListenersRef.current;
+            cleanupListenersRef.current = () => {
+              originalCleanup?.(); // 确保之前的清理逻辑（beforeunload等）被调用
+              
+              // 清理事件监听器
+              progressControl.removeEventListener('mousedown', handleProgressMouseDown);
+              document.removeEventListener('mousemove', handleDocumentMouseMove);
+              document.removeEventListener('mouseup', handleDocumentMouseUp);
+              
+              // 清理定时器
+              if (danmakuResetInterval) {
+                clearInterval(danmakuResetInterval);
+              }
+              
+              console.log('✅ 弹幕冲突修复的事件监听器和定时器已清理');
+            };
 
             // 🚀 立即恢复hover状态（修复当前可能已存在的问题）
             const immediateRestore = () => {
@@ -5694,6 +5673,14 @@ function PlayPageClient() {
 
       // 释放 Wake Lock
       releaseWakeLock();
+
+      // 调用存储的清理函数来移除 window/document 监听器
+      if (cleanupListenersRef.current) {
+        cleanupListenersRef.current();
+      }
+
+      // 在组件卸载前最后保存一次进度
+      saveCurrentPlayProgress();
 
       // 销毁播放器实例
       cleanupPlayer();
