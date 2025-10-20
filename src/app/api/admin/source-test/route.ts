@@ -3,12 +3,32 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { ensureAdmin } from '@/lib/admin-auth';
 import { API_CONFIG, getConfig } from '@/lib/config';
+import { getAuthInfoFromCookie } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
+async function getAdminRoleFromRequest(request: NextRequest) {
+  const authInfo = getAuthInfoFromCookie(request);
+  if (!authInfo || !authInfo.username) {
+    return null;
+  }
+  const username = authInfo.username;
+  if (username === process.env.USERNAME) {
+    return 'owner';
+  }
+  const config = await getConfig();
+  const user = config.UserConfig.Users.find(
+    (u) => u.username === username && !u.banned
+  );
+  return user?.role === 'admin' ? 'admin' : null;
+}
 export async function GET(request: NextRequest) {
   try {
     await ensureAdmin(request);
+  const role = await getAdminRoleFromRequest(request);
+  if (!role) {
+    return NextResponse.json({ error: '你没有权限访问源检测功能' }, { status: 401 });
+  }
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
     const sourceKey = searchParams.get('source');
@@ -20,7 +40,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
+  try {
     const config = await getConfig();
+    // 查找指定的源（包括禁用的源）
     const targetSource = config.SourceConfig.find(
       (s: any) => s.key === sourceKey
     );
@@ -32,6 +54,7 @@ export async function GET(request: NextRequest) {
     }
 
     const searchUrl = `${targetSource.api}?ac=videolist&wd=${encodeURIComponent(query)}`;
+    // 直接请求源接口，不使用缓存
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -57,6 +80,7 @@ export async function GET(request: NextRequest) {
 
       const data = await response.json();
 
+      // 检查接口返回的数据格式
       if (!data || typeof data !== 'object') {
         return NextResponse.json(
           {
@@ -68,6 +92,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      // 检查是否有错误信息
       if (data.code && data.code !== 1) {
         return NextResponse.json(
           {
@@ -79,7 +104,9 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      // 提取搜索结果
       const results = data.list || data.data || [];
+      // 质量与性能指标
       const durationMs = Date.now() - startedAt;
       const resultCount = Array.isArray(results) ? results.length : 0;
       const lowerQ = (query || '').toLowerCase();
