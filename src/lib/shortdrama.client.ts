@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, no-console */
 
-import { API_CONFIG } from '@/lib/config'; // MODIFIED: Import centralized API config
+// import { API_CONFIG } from '@/lib/config'; // MODIFIED: Import centralized API config
 import {
   ShortDramaCategory,
   ShortDramaItem,
@@ -16,6 +16,34 @@ import {
 } from './shortdrama-cache';
 
 // REMOVED: const SHORTDRAMA_API_BASE = 'https://api.r2afosne.dpdns.org';
+
+// 将 API_CONFIG 从 config.ts 移入此处，断开对服务器端模块的依赖
+export const API_CONFIG = {
+  search: {
+    path: '?ac=videolist&wd=',
+    pagePath: '?ac=videolist&wd={query}&pg={page}',
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      Accept: 'application/json',
+    },
+  },
+  detail: {
+    path: '?ac=videolist&ids=',
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      Accept: 'application/json',
+    },
+  },
+  shortdrama: {
+    baseUrl: 'https://api.r2afosne.dpdns.org',
+    headers: {
+      'Accept': 'application/json',
+      'User-Agent': 'MoonTV/1.0',
+    },
+  },
+};
 
 // 检测是否为移动端环境
 const isMobile = () => {
