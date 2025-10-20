@@ -1490,12 +1490,12 @@ html:not(.dark) body {
 }
 
 /* 隐藏所有滚动条（兼容 WebKit、Firefox、IE/Edge）- 排除ArtPlayer */
-*:not(.artplayer):not(.artplayer *) {
+:not(div[data-radix-scroll-area-viewport]):not(.artplayer):not(.artplayer *):not(pre *) {
   -ms-overflow-style: none; /* IE & Edge */
   scrollbar-width: none; /* Firefox */
 }
 
-*:not(.artplayer):not(.artplayer *)::webkit-scrollbar {
+:not(div[data-radix-scroll-area-viewport]):not(.artplayer):not(.artplayer *):not(pre *)::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Opera */
 }
 
