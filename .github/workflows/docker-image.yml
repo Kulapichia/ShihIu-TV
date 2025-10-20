@@ -86,13 +86,42 @@ jobs:
 
       - name: 🎯 Setup QEMU for multi-platform builds
         uses: docker/setup-qemu-action@v3
+      - name: 🔍 Network diagnostic and Docker status check
+        run: |
+          echo "====== Docker Version ======"
+          docker version
+          echo ""
+          echo "====== Docker Info ======"
+          docker info
+          echo ""
+          echo "====== Testing Registry Connectivity ======"
+          curl -I https://registry.hub.docker.com || echo "Registry connection check completed"
+          echo ""
+          echo "====== Current Docker Context ======"
+          docker context ls
+          echo ""
+          echo "====== Available Docker Builders ======"
+          docker buildx ls || echo "No builders found yet"
       - name: 🔧 Setup Docker Buildx for advanced features
         uses: docker/setup-buildx-action@v3
         with:
-          driver-opts: |
-            image=moby/buildkit:buildx-stable-1
-            network=host
-      
+          driver: docker-container
+          install: true
+        timeout-minutes: 10
+
+      - name: ✅ Verify Buildx setup
+        run: |
+          echo "====== Buildx Version ======"
+          docker buildx version
+          echo ""
+          echo "====== Buildx Builders List ======"
+          docker buildx ls
+          echo ""
+          echo "====== Inspect Current Builder ======"
+          docker buildx inspect --bootstrap
+          echo ""
+          echo "====== Builder setup completed successfully ======"
+
       - name: 🔐 Login to Docker Hub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
