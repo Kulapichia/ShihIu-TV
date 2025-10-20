@@ -25,10 +25,10 @@ async function getAdminRoleFromRequest(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     await ensureAdmin(request);
-  const role = await getAdminRoleFromRequest(request);
-  if (!role) {
-    return NextResponse.json({ error: '你没有权限访问源检测功能' }, { status: 401 });
-  }
+    const role = await getAdminRoleFromRequest(request);
+    if (!role) {
+      return NextResponse.json({ error: '你没有权限访问源检测功能' }, { status: 401 });
+    }
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
     const sourceKey = searchParams.get('source');
@@ -40,7 +40,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-  try {
     const config = await getConfig();
     // 查找指定的源（包括禁用的源）
     const targetSource = config.SourceConfig.find(
@@ -150,7 +149,7 @@ export async function GET(request: NextRequest) {
     }
   } catch (error: any) {
     if (error instanceof Error && error.message === 'UNAUTHORIZED') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('源测试API错误:', error);
     return NextResponse.json(
