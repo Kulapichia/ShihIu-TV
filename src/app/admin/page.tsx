@@ -29,10 +29,12 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
+  ClipboardCheck,
   Database,
   Download,
   ExternalLink,
   FileJson,
+  FileSearch,
   FileText,
   FolderOpen,
   KeyRound,
@@ -71,6 +73,8 @@ import { TVBoxTokenCell, TVBoxTokenModal } from '@/components/TVBoxTokenManager'
 import YouTubeConfig from '@/components/YouTubeConfig';
 import PageLayout from '@/components/PageLayout';
 import ThemeManager from '@/components/ThemeManager';
+import SourceBrowser from '@/components/SourceBrowser';
+import SourceTestModule from '@/components/SourceTestModule';
 
 // 视频源数据类型
 interface DataSource {
@@ -7333,6 +7337,8 @@ function AdminPageClient() {
     userConfig: false,
     videoSource: false,
     liveSource: false,
+    sourceBrowser: false,
+    sourceTest: false,
     siteConfig: false,
     categoryConfig: false,
     netdiskConfig: false,
@@ -7618,6 +7624,36 @@ function AdminPageClient() {
               onToggle={() => toggleTab('liveSource')}
             >
               <LiveSourceConfig config={config} refreshConfig={fetchConfig} />
+            </CollapsibleTab>
+
+            {/* 源浏览器标签 - 新增 */}
+            <CollapsibleTab
+              title='源浏览器'
+              icon={
+                <FileSearch
+                  size={20}
+                  className='text-gray-600 dark:text-gray-400'
+                />
+              }
+              isExpanded={expandedTabs.sourceBrowser}
+              onToggle={() => toggleTab('sourceBrowser')}
+            >
+              <SourceBrowser />
+            </CollapsibleTab>
+
+            {/* 源测试标签 - 新增 */}
+            <CollapsibleTab
+              title='源测试'
+              icon={
+                <ClipboardCheck
+                  size={20}
+                  className='text-gray-600 dark:text-gray-400'
+                />
+              }
+              isExpanded={expandedTabs.sourceTest}
+              onToggle={() => toggleTab('sourceTest')}
+            >
+              <SourceTestModule />
             </CollapsibleTab>
 
             {/* 分类配置标签 */}
