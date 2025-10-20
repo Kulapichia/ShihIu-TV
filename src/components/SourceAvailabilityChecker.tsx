@@ -232,9 +232,9 @@ export default function SourceAvailabilityChecker() {
             const timeSinceLastTest = Date.now() - Number(lastTestTime);
             if (timeSinceLastTest < CACHE_DURATION) {
               console.log(
-                '[SourceChecker] 测速结果仍在有效期内 (剩余',
+                '[SourceChecker] 测速结果仍在有效期内，跳过（剩余',
                 Math.round((CACHE_DURATION - timeSinceLastTest) / 1000 / 60),
-                '分钟), 跳过'
+                '分钟）'
               );
               hasRunRef.current = true;
               return;
