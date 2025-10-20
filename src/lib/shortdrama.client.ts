@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, no-console */
 
-// import { API_CONFIG } from '@/lib/config'; // MODIFIED: Import centralized API config
+import { API_CONFIG } from './config.shared';
 import {
   ShortDramaCategory,
   ShortDramaItem,
