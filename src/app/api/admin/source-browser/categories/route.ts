@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ categories });
   } catch (error: unknown) {
+    if (error instanceof Error) {
       if (error.message === 'UNAUTHORIZED') {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
