@@ -117,10 +117,10 @@ const SourceTestModule: React.FC = () => {
       <div className="mb-4">
         <h3 className="text-lg font-semibold mb-2">选择要测试的视频源</h3>
         <div className="flex gap-2 mb-2">
-          <button onClick={handleSelectAll} className={buttonStyles}>
+          <button onClick={handleSelectAll} className={buttonStyles.secondary}>
             全选
           </button>
-          <button onClick={handleDeselectAll} className={buttonStyles}>
+          <button onClick={handleDeselectAll} className={buttonStyles.secondary}>
             全不选
           </button>
         </div>
@@ -147,7 +147,7 @@ const SourceTestModule: React.FC = () => {
       <button
         onClick={runTest}
         disabled={isTesting}
-        className={`${buttonStyles} bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500`}
+        className={`${buttonStyles.primary} bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500`}
       >
         {isTesting ? '测试中...' : '开始测试'}
       </button>
