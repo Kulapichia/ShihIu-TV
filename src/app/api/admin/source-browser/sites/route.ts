@@ -1,28 +1,31 @@
-import { NextResponse } from 'next/server';
-import { getConfig, isAdmin } from '@/lib/config';
-import { TVBoxSource, parseTVBoxSource } from '@/lib/tvbox';
+import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'edge';
+import { ensureAdmin } from '@/lib/admin-auth';
+import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getAvailableApiSites } from '@/lib/config';
 
-export async function GET(req: Request) {
-  if (!isAdmin(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export const runtime = 'nodejs';
 
-  const config = await getConfig();
-  const sites: TVBoxSource[] = [];
-
-  for (const key in config.api_site) {
-    const site = config.api_site[key];
-    if (site.api.endsWith('.json') || site.api.endsWith('.js')) {
-      sites.push(
-        parseTVBoxSource({
-          name: site.name,
-          url: site.api,
-        })
-      );
+export async function GET(request: NextRequest) {
+  try {
+    // 增加管理员权限验证
+    await ensureAdmin(request);
+    const authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo || !authInfo.username) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-  }
 
-  return NextResponse.json(sites);
+    const availableSites = await getAvailableApiSites(authInfo.username);
+    const sources = availableSites
+      .filter((s) => Boolean(s.api?.trim()))
+      .map((s) => ({ key: s.key, name: s.name, api: s.api }));
+
+    return NextResponse.json({ sources });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'UNAUTHORIZED') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json({ error: '获取源列表失败' }, { status: 500 });
+  }
 }
+
