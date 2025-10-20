@@ -1,6 +1,30 @@
 // 客户端搜索工具 - 直接从API获取视频源配置进行搜索
 import { SearchResult } from './types';
-import { ApiSite } from './config';
+// import { ApiSite } from './config'; // 移除对服务器端文件 config.ts 的依赖
+
+// 将 ApiSite 及其依赖的类型定义移入此处
+export type SourceCheckStatus =
+  | 'untested'
+  | 'valid'
+  | 'invalid'
+  | 'timeout'
+  | 'no_results'
+  | 'unreachable';
+
+export interface SourceLastCheck {
+  status: SourceCheckStatus;
+  latency: number; // in milliseconds, -1 if not applicable
+  timestamp: number; // Unix timestamp of the check
+}
+
+export interface ApiSite {
+  key: string;
+  api: string;
+  name: string;
+  detail?: string;
+  disabled?: boolean;
+  lastCheck?: SourceLastCheck;
+}
 
 type VideoSource = ApiSite;
 
