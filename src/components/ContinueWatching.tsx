@@ -68,14 +68,14 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
     fetchPlayRecords();
 
     // 监听播放记录更新事件
-    const unsubscribe = subscribeToDataUpdates(
+    const unsubscribePlayRecords = subscribeToDataUpdates(
       'playRecordsUpdated',
       (newRecords: Record<string, PlayRecord>) => {
         updatePlayRecords(newRecords);
       }
     );
 
-    return unsubscribe;
+    return unsubscribePlayRecords;
   }, []);
 
   // 获取watching updates数据（仅当有播放记录时）
