@@ -338,7 +338,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
   const handleEpisodeClick = useCallback(
     (episodeNumber: number) => {
-      onChange?.(episodeNumber);
+      onChange?.(episodeNumber - 1);
     },
     [onChange]
   );
