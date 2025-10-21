@@ -1208,11 +1208,12 @@ export const UserMenu: React.FC = () => {
     showToast({ title: '开始视频源测速，请稍候...', type: 'info', duration: 3000 });
 
     try {
+      // 强制测速时，清除时间戳缓存
       localStorage.removeItem('source_speed_test_timestamp');
       await speedTestAllSources();
-      showToast({ title: '视频源测速完成！已保留速度最快的前20个源。', type: 'success', duration: 5000 });
+      // 成功提示已在 speedTestAllSources 内部通过 GlobalToast 显示，此处不再重复提示
     } catch (error) {
-      console.error('视频源测速失败:', error);
+      console.error('手动视频源测速失败:', error);
       showToast({ title: '视频源测速失败，请稍后重试', type: 'error', duration: 5000 });
     } finally {
       setIsSpeedTesting(false);
