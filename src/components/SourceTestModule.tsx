@@ -48,20 +48,40 @@ const SourceTestModule: React.FC = () => {
 
   const runTest = async () => {
     setIsTesting(true);
-    setResults([]);
-    const res = await fetch('/api/admin/source-test', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sources: selectedSources,
-        keyword,
-        timeout,
-      }),
+    setResults([]); // 开始测试前清空结果
+
+    const sourcesToTest = sources.filter((s) => selectedSources.includes(s.key));
+
+    // 并发执行所有测试
+    const testPromises = sourcesToTest.map(async (source) => {
+      try {
+        const res = await fetch(
+          `/api/admin/source-test?q=${encodeURIComponent(
+            keyword
+          )}&source=${source.key}&timeout=${timeout}`
+        );
+
+        // 即使API返回错误状态码，我们仍然期望一个JSON体
+        const data = await res.json();
+
+        // 增量更新结果，让用户可以实时看到进度
+        // 使用函数式更新来确保状态的正确性
+        setResults((prev) => [...prev, data]);
+      } catch (error) {
+        // 网络错误等
+        const result: TestResult = {
+          key: source.key,
+          name: source.name,
+          status: 'error',
+          latency: -1,
+        };
+        setResults((prev) => [...prev, result]);
+      }
     });
-    const data = await res.json();
-    setResults(data);
+
+    // 等待所有测试完成
+    await Promise.all(testPromises);
+
     setIsTesting(false);
   };
 
