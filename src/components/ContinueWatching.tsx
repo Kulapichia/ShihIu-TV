@@ -122,7 +122,6 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
     });
 
     return () => {
-      unsubscribePlayRecords();
       unsubscribeWatchingUpdates();
     };
   }, [loading, playRecords.length]); // 依赖播放记录加载状态
