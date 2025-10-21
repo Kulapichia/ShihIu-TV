@@ -494,7 +494,7 @@ export default function AIRecommendModal({ isOpen, onClose }: AIRecommendModalPr
                                 <img 
                                   src={video.thumbnail} 
                                   alt={video.title}
-                                  className="w-20 h-15 object-cover rounded"
+                                  className="w-20 h-16 object-cover rounded"
                                 />
                                 <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 rounded">
                                   <div className="bg-red-600 text-white rounded-full p-2">
