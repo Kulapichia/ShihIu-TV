@@ -316,16 +316,16 @@ async function getInitConfig(configFile: string, subConfig: {
   adminConfig.UserConfig.Users = allUsers as any;
 
   // 从配置文件中补充源信息
-  Object.entries(cfgFile.api_site || []).forEach(([key, site]) => {
-    adminConfig.SourceConfig.push({
-      key: key,
-      name: site.name,
-      api: site.api,
-      detail: site.detail,
-      from: 'config',
-      disabled: false,
-    });
-  });
+  // Object.entries(cfgFile.api_site || []).forEach(([key, site]) => {
+  //   adminConfig.SourceConfig.push({
+  //     key: key,
+  //     name: site.name,
+  //     api: site.api,
+  //     detail: site.detail,
+  //     from: 'config',
+  //     disabled: false,
+  //   });
+  // });
 
   // 从配置文件中补充自定义分类信息
   cfgFile.custom_category?.forEach((category) => {
@@ -374,11 +374,18 @@ export async function getConfig(): Promise<AdminConfig> {
 
   // db 中无配置，执行一次初始化
   if (!adminConfig) {
-    adminConfig = await getInitConfig("");
+    adminConfig = await getInitConfig('');
+    // 首次初始化后立即保存到数据库，确保基础结构被持久化
+    await db.saveAdminConfig(adminConfig);
   }
+  
+  // 无论是从数据库读取的还是新初始化的，都进行一次 refine 和 selfCheck
+  adminConfig = refineConfig(adminConfig);
   adminConfig = configSelfCheck(adminConfig);
+  
   cachedConfig = adminConfig;
-  db.saveAdminConfig(cachedConfig);
+  // 每次获取配置后都保存一次，确保 refineConfig 的结果被持久化
+  await db.saveAdminConfig(cachedConfig);
   return cachedConfig;
 }
 
