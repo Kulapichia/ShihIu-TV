@@ -88,6 +88,7 @@ export const UserMenu: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState<string>('');
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const isAdmin = authInfo?.role === 'owner' || authInfo?.role === 'admin';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 裁剪相关状态
@@ -2881,13 +2882,15 @@ export const UserMenu: React.FC = () => {
           {/* 添加/编辑/管理按钮区域 */}
           {!editingSource && (
             <div className='space-y-2.5 mb-4'>
-              <button
-                onClick={handleAddSource}
-                className='w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-sm hover:shadow-md'
-              >
-                <span className='text-lg'>+</span>
-                <span>添加新视频源</span>
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={handleAddSource}
+                  className='w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-sm hover:shadow-md'
+                >
+                  <span className='text-lg'>+</span>
+                  <span>添加新视频源</span>
+                </button>
+              )}
               <button
                 onClick={handleManualSpeedTest}
                 disabled={isSpeedTesting}
@@ -2924,7 +2927,7 @@ export const UserMenu: React.FC = () => {
           )}
 
           {/* 编辑/添加表单 */}
-          {editingSource && (
+          {isAdmin && editingSource && (
             <div className='p-4 mb-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3 bg-gray-50 dark:bg-gray-800'>
               <h4 className='font-semibold text-gray-700 dark:text-gray-300'>{isAddingSource ? '添加视频源' : '编辑视频源'}</h4>
               <input
