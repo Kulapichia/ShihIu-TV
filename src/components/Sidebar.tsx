@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Cat, Clover, ExternalLink, Film, Home, Menu, PlaySquare, Radio, Search, Send, Star, Tv } from 'lucide-react';
+import { Cat, Clover, ExternalLink, FileSearch, Film, Home, Menu, PlaySquare, Radio, Search, Send, Star, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -62,6 +62,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { authInfo } = useSite();
   // 若同一次 SPA 会话中已经读取过折叠状态，则直接复用，避免闪烁
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     if (
@@ -280,6 +281,27 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                 {/* 激活状态的左侧边框指示器 */}
                 <div className='absolute left-0 top-1/2 -translate-y-1/2 w-1 h-0 bg-gradient-to-b from-blue-500 to-cyan-500 rounded-r-full transition-all duration-200 data-[active=true]:h-8 opacity-0 data-[active=true]:opacity-100' data-active={active === '/search'}></div>
               </Link>
+              {/* 源浏览器 - 仅管理员和站长可见 */}
+              {(authInfo?.role === 'owner' || authInfo?.role === 'admin') && (
+                <Link
+                  href='/source-browser'
+                  onClick={() => setActive('/source-browser')}
+                  data-active={active === '/source-browser'}
+                  className={`group relative flex items-center rounded-lg px-2 py-2 pl-4 text-gray-700 hover:bg-gradient-to-r hover:from-yellow-50 hover:to-amber-50 hover:text-yellow-600 data-[active=true]:bg-gradient-to-r data-[active=true]:from-yellow-500/20 data-[active=true]:to-amber-500/20 data-[active=true]:text-yellow-700 font-medium transition-all duration-200 min-h-[40px] dark:text-gray-300 dark:hover:from-yellow-500/10 dark:hover:to-amber-500/10 dark:hover:text-yellow-400 dark:data-[active=true]:from-yellow-500/15 dark:data-[active=true]:to-amber-500/15 dark:data-[active=true]:text-yellow-400 ${isCollapsed ? 'w-full max-w-none mx-0' : 'mx-0'
+                    } gap-3 justify-start hover:shadow-md hover:shadow-yellow-500/10 data-[active=true]:shadow-lg data-[active=true]:shadow-yellow-500/20`}
+                >
+                  <div className='w-4 h-4 flex items-center justify-center relative z-10'>
+                    <FileSearch className='h-4 w-4 text-gray-500 group-hover:text-yellow-600 data-[active=true]:text-yellow-700 dark:text-gray-400 dark:group-hover:text-yellow-400 dark:data-[active=true]:text-yellow-400 transition-all duration-200 group-hover:scale-110' />
+                  </div>
+                  {!isCollapsed && (
+                    <span className='whitespace-nowrap transition-opacity duration-200 opacity-100 relative z-10'>
+                      源浏览器
+                    </span>
+                  )}
+                  {/* 激活状态的左侧边框指示器 */}
+                  <div className='absolute left-0 top-1/2 -translate-y-1/2 w-1 h-0 bg-gradient-to-b from-yellow-500 to-amber-500 rounded-r-full transition-all duration-200 data-[active=true]:h-8 opacity-0 data-[active=true]:opacity-100' data-active={active === '/source-browser'}></div>
+                </Link>
+              )}
             </nav>
 
             {/* 菜单项 */}
