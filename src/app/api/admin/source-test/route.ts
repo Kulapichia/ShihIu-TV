@@ -56,57 +56,75 @@ export async function GET(request: NextRequest) {
     // 直接请求源接口，不使用缓存
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const startedAt = Date.now();
 
     try {
-      const startedAt = Date.now();
       const response = await fetch(searchUrl, {
         headers: API_CONFIG.search.headers,
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
+      const durationMs = Date.now() - startedAt;
 
       if (!response.ok) {
-        return NextResponse.json(
-          {
-            error: `源接口返回错误: HTTP ${response.status}`,
-            sourceError: `${response.status} ${response.statusText}`,
-            sourceUrl: searchUrl,
-          },
-          { status: response.status }
-        );
+        return NextResponse.json({
+          success: false,
+          source: sourceKey,
+          sourceName: targetSource.name || sourceKey,
+          error: `源接口返回错误: HTTP ${response.status}`,
+          sourceError: `${response.status} ${response.statusText}`,
+          sourceUrl: searchUrl,
+          durationMs,
+          results: [],
+          total: 0,
+          resultCount: 0,
+          matchRate: 0,
+          topMatches: [],
+        });
       }
 
       const data = await response.json();
 
       // 检查接口返回的数据格式
       if (!data || typeof data !== 'object') {
-        return NextResponse.json(
-          {
-            error: '源接口返回数据格式错误',
-            sourceError: '返回数据不是有效的JSON对象',
-            sourceUrl: searchUrl,
-          },
-          { status: 502 }
-        );
+        return NextResponse.json({
+          success: false,
+          source: sourceKey,
+          sourceName: targetSource.name || sourceKey,
+          error: '源接口返回数据格式错误',
+          sourceError: '返回数据不是有效的JSON对象',
+          sourceUrl: searchUrl,
+          durationMs,
+          results: [],
+          total: 0,
+          resultCount: 0,
+          matchRate: 0,
+          topMatches: [],
+        });
       }
 
       // 检查是否有错误信息
       if (data.code && data.code !== 1) {
-        return NextResponse.json(
-          {
-            error: `源接口返回错误: ${data.msg || '未知错误'}`,
-            sourceError: data.msg || `错误代码: ${data.code}`,
-            sourceUrl: searchUrl,
-          },
-          { status: 502 }
-        );
+        return NextResponse.json({
+          success: false,
+          source: sourceKey,
+          sourceName: targetSource.name || sourceKey,
+          error: `源接口返回错误: ${data.msg || '未知错误'}`,
+          sourceError: data.msg || `错误代码: ${data.code}`,
+          sourceUrl: searchUrl,
+          durationMs,
+          results: [],
+          total: 0,
+          resultCount: 0,
+          matchRate: 0,
+          topMatches: [],
+        });
       }
 
       // 提取搜索结果
       const results = data.list || data.data || [];
       // 质量与性能指标
-      const durationMs = Date.now() - startedAt;
       const resultCount = Array.isArray(results) ? results.length : 0;
       const lowerQ = (query || '').toLowerCase();
       const matched = Array.isArray(results)
@@ -136,16 +154,37 @@ export async function GET(request: NextRequest) {
       });
     } catch (fetchError: any) {
       clearTimeout(timeoutId);
+      const durationMs = Date.now() - startedAt;
       if (fetchError.name === 'AbortError') {
-        return NextResponse.json(
-          { error: '请求超时 (15秒)', sourceError: '连接超时', sourceUrl: searchUrl },
-          { status: 408 }
-        );
+        return NextResponse.json({
+          success: false,
+          source: sourceKey,
+          sourceName: targetSource.name || sourceKey,
+          error: '请求超时 (15秒)',
+          sourceError: '连接超时',
+          sourceUrl: searchUrl,
+          durationMs,
+          results: [],
+          total: 0,
+          resultCount: 0,
+          matchRate: 0,
+          topMatches: [],
+        });
       }
-      return NextResponse.json(
-        { error: `网络请求失败: ${fetchError.message}`, sourceError: fetchError.message, sourceUrl: searchUrl },
-        { status: 502 }
-      );
+      return NextResponse.json({
+        success: false,
+        source: sourceKey,
+        sourceName: targetSource.name || sourceKey,
+        error: `网络请求失败: ${fetchError.message}`,
+        sourceError: fetchError.message,
+        sourceUrl: searchUrl,
+        durationMs,
+        results: [],
+        total: 0,
+        resultCount: 0,
+        matchRate: 0,
+        topMatches: [],
+      });
     }
   } catch (error: any) {
     if (error instanceof Error && error.message === 'UNAUTHORIZED') {
