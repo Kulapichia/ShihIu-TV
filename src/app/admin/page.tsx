@@ -29,7 +29,6 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
-  ClipboardCheck,
   Database,
   Download,
   ExternalLink,
@@ -7645,7 +7644,7 @@ function AdminPageClient() {
             <CollapsibleTab
               title='源测试'
               icon={
-                <ClipboardCheck
+                <TestTube
                   size={20}
                   className='text-gray-600 dark:text-gray-400'
                 />
