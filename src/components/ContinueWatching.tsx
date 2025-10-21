@@ -114,15 +114,6 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
     // 初始加载
     updateWatchingUpdates();
 
-    // 🔧 优化：订阅播放记录更新事件，实时同步数据
-    const unsubscribePlayRecords = subscribeToDataUpdates(
-      'playRecordsUpdated',
-      (newRecords: Record<string, PlayRecord>) => {
-        console.log('ContinueWatching: 收到播放记录更新事件，立即同步数据');
-        updatePlayRecords(newRecords);
-      }
-    );
-
     // 订阅watching updates事件
     const unsubscribeWatchingUpdates = subscribeToWatchingUpdatesEvent(() => {
       console.log('ContinueWatching: 收到watching updates更新事件');
