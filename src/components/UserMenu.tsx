@@ -50,7 +50,6 @@ import type { Favorite } from '@/lib/types';
 import { VersionPanel } from './VersionPanel';
 import VideoCard from './VideoCard';
 import { useToast } from './Toast';
-import { showGlobalToast } from './GlobalToast';
 import { speedTestAllSources } from './SourceAvailabilityChecker';
 
 interface AuthInfo {
