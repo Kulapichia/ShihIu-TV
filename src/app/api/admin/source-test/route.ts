@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
     const sourceKey = searchParams.get('source');
+    // 从前端获取超时设置，并提供一个默认值
+    const timeout = parseInt(searchParams.get('timeout') || '15000', 10);
 
     if (!query || !sourceKey) {
       return NextResponse.json(
@@ -46,8 +48,14 @@ export async function GET(request: NextRequest) {
       (s: any) => s.key === sourceKey
     );
     if (!targetSource) {
+      // 如果找不到源，也返回一个符合前端期望的错误结构
       return NextResponse.json(
-        { error: `未找到源: ${sourceKey}` },
+        {
+          key: sourceKey,
+          name: `${sourceKey} (未找到)`,
+          status: 'error',
+          latency: -1,
+        },
         { status: 404 }
       );
     }
@@ -55,7 +63,7 @@ export async function GET(request: NextRequest) {
     const searchUrl = `${targetSource.api}?ac=videolist&wd=${encodeURIComponent(query)}`;
     // 直接请求源接口，不使用缓存
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     const startedAt = Date.now();
 
     try {
@@ -64,127 +72,60 @@ export async function GET(request: NextRequest) {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
       const durationMs = Date.now() - startedAt;
 
       if (!response.ok) {
         return NextResponse.json({
-          success: false,
-          source: sourceKey,
-          sourceName: targetSource.name || sourceKey,
-          error: `源接口返回错误: HTTP ${response.status}`,
-          sourceError: `${response.status} ${response.statusText}`,
-          sourceUrl: searchUrl,
-          durationMs,
-          results: [],
-          total: 0,
-          resultCount: 0,
-          matchRate: 0,
-          topMatches: [],
+          key: sourceKey,
+          name: targetSource.name,
+          status: 'error',
+          latency: durationMs,
         });
       }
 
       const data = await response.json();
 
-      // 检查接口返回的数据格式
-      if (!data || typeof data !== 'object') {
+      // 检查接口返回的数据格式或是否有错误信息
+      if (!data || typeof data !== 'object' || (data.code && data.code !== 1)) {
         return NextResponse.json({
-          success: false,
-          source: sourceKey,
-          sourceName: targetSource.name || sourceKey,
-          error: '源接口返回数据格式错误',
-          sourceError: '返回数据不是有效的JSON对象',
-          sourceUrl: searchUrl,
-          durationMs,
-          results: [],
-          total: 0,
-          resultCount: 0,
-          matchRate: 0,
-          topMatches: [],
-        });
-      }
-
-      // 检查是否有错误信息
-      if (data.code && data.code !== 1) {
-        return NextResponse.json({
-          success: false,
-          source: sourceKey,
-          sourceName: targetSource.name || sourceKey,
-          error: `源接口返回错误: ${data.msg || '未知错误'}`,
-          sourceError: data.msg || `错误代码: ${data.code}`,
-          sourceUrl: searchUrl,
-          durationMs,
-          results: [],
-          total: 0,
-          resultCount: 0,
-          matchRate: 0,
-          topMatches: [],
+          key: sourceKey,
+          name: targetSource.name,
+          status: 'error',
+          latency: durationMs,
         });
       }
 
       // 提取搜索结果
       const results = data.list || data.data || [];
-      // 质量与性能指标
-      const resultCount = Array.isArray(results) ? results.length : 0;
-      const lowerQ = (query || '').toLowerCase();
-      const matched = Array.isArray(results)
-        ? results.filter((item: any) =>
-            String(item.vod_name || item.title || '')
-              .toLowerCase()
-              .includes(lowerQ)
-          )
-        : [];
-      const matchRate = resultCount > 0 ? matched.length / resultCount : 0;
-      const topMatches = matched
-        .slice(0, 3)
-        .map((it: any) => it.vod_name || it.title || '');
+      
+      // 根据是否有结果来判断状态
+      const status = results.length > 0 ? 'valid' : 'no_results';
 
       return NextResponse.json({
-        success: true,
-        source: sourceKey,
-        sourceName: targetSource.name || sourceKey,
-        sourceUrl: searchUrl,
-        results: results,
-        total: resultCount,
-        disabled: targetSource.disabled || false,
-        durationMs,
-        resultCount,
-        matchRate,
-        topMatches,
+        key: sourceKey,
+        name: targetSource.name,
+        status: status,
+        latency: durationMs,
       });
     } catch (fetchError: any) {
-      clearTimeout(timeoutId);
       const durationMs = Date.now() - startedAt;
       if (fetchError.name === 'AbortError') {
         return NextResponse.json({
-          success: false,
-          source: sourceKey,
-          sourceName: targetSource.name || sourceKey,
-          error: '请求超时 (15秒)',
-          sourceError: '连接超时',
-          sourceUrl: searchUrl,
-          durationMs,
-          results: [],
-          total: 0,
-          resultCount: 0,
-          matchRate: 0,
-          topMatches: [],
+          key: sourceKey,
+          name: targetSource.name,
+          status: 'timeout',
+          latency: durationMs,
         });
       }
+      // 其他网络错误
       return NextResponse.json({
-        success: false,
-        source: sourceKey,
-        sourceName: targetSource.name || sourceKey,
-        error: `网络请求失败: ${fetchError.message}`,
-        sourceError: fetchError.message,
-        sourceUrl: searchUrl,
-        durationMs,
-        results: [],
-        total: 0,
-        resultCount: 0,
-        matchRate: 0,
-        topMatches: [],
+        key: sourceKey,
+        name: targetSource.name,
+        status: 'error',
+        latency: durationMs,
       });
+    } finally {
+      clearTimeout(timeoutId);
     }
   } catch (error: any) {
     if (error instanceof Error && error.message === 'UNAUTHORIZED') {
@@ -192,7 +133,7 @@ export async function GET(request: NextRequest) {
     }
     console.error('源测试API错误:', error);
     return NextResponse.json(
-      { error: `服务器内部错误: ${error.message}`, sourceError: error.message },
+      { error: `服务器内部错误: ${error.message}` },
       { status: 500 }
     );
   }
