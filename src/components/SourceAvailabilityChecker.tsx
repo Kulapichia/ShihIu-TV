@@ -193,8 +193,7 @@ export async function speedTestAllSources(): Promise<void> {
     }
 
     // 显示 Toast 通知
-    const toastMessage = `当前可用视频源 ${availableSources.length} 个，已启用速度最快的前 ${fastestSources.length} 个。如需启用所有可用视频源，请在设置→管理视频源中启用`;
-
+    const toastMessage = `测速完成：${availableSources.length}个源可用，已自动启用最快的 ${fastestSources.length} 个。`;
     showGlobalToast(toastMessage, 'success', 8000); // 显示8秒
   } catch (error) {
     console.error('视频源测速失败:', error);
