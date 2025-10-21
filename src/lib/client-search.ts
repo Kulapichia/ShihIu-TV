@@ -130,7 +130,7 @@ export async function searchFromAllEnabledSources(query: string): Promise<Search
   if (!query) return [];
 
   const sources = await getSources();
-  const blockedSourcesStr = localStorage.getItem('siffcity_blocked_sources');
+  const blockedSourcesStr = localStorage.getItem('danmutv_blocked_sources');
   const blockedSources = blockedSourcesStr ? JSON.parse(blockedSourcesStr) : [];
 
   const enabledSources = sources.filter(
@@ -167,7 +167,7 @@ export async function getVideoDetail(
   const sources = await getSources();
 
   // 获取被临时屏蔽的视频源列表
-  const blockedSourcesStr = localStorage.getItem('siffcity_blocked_sources');
+  const blockedSourcesStr = localStorage.getItem('danmutv_blocked_sources');
   if (blockedSourcesStr) {
     try {
       const blockedSources: string[] = JSON.parse(blockedSourcesStr);
