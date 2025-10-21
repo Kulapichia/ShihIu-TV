@@ -131,7 +131,7 @@ const SourceBrowser: React.FC = () => {
 
   return (
     <div className="p-4 bg-gray-800/50 rounded-lg text-white">
-      <h2 className="text-xl font-bold mb-4">源浏览器</h2>
+      <h2 className="text-xl font-bold mb-4">源浏览</h2>
       <div className="flex flex-wrap gap-2 mb-4">
         {sites.map((site) => (
           <button
