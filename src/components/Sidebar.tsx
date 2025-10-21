@@ -281,7 +281,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                 {/* 激活状态的左侧边框指示器 */}
                 <div className='absolute left-0 top-1/2 -translate-y-1/2 w-1 h-0 bg-gradient-to-b from-blue-500 to-cyan-500 rounded-r-full transition-all duration-200 data-[active=true]:h-8 opacity-0 data-[active=true]:opacity-100' data-active={active === '/search'}></div>
               </Link>
-              {/* 源浏览器 - 仅管理员和站长可见 */}
+              {/* 源浏览 - 仅管理员和站长可见 */}
               {(authInfo?.role === 'owner' || authInfo?.role === 'admin') && (
                 <Link
                   href='/source-browser'
@@ -295,7 +295,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                   </div>
                   {!isCollapsed && (
                     <span className='whitespace-nowrap transition-opacity duration-200 opacity-100 relative z-10'>
-                      源浏览器
+                      源浏览
                     </span>
                   )}
                   {/* 激活状态的左侧边框指示器 */}
