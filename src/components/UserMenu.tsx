@@ -187,13 +187,15 @@ export const UserMenu: React.FC = () => {
     api: string;
     detail?: string;
     disabled?: boolean;
+    from?: 'config' | 'custom'; // 添加 from 属性以区分来源
   }
   const [isVideoSourceOpen, setIsVideoSourceOpen] = useState(false);
   const [videoSources, setVideoSources] = useState<VideoSource[]>([]);
   const [editingSource, setEditingSource] = useState<VideoSource | null>(null);
   const [isAddingSource, setIsAddingSource] = useState(false);
   const [isSpeedTesting, setIsSpeedTesting] = useState(false);
-
+  const [isSourcesLoading, setIsSourcesLoading] = useState(false); // 新增加载状态
+  const [sourcesError, setSourcesError] = useState<string | null>(null); // 新增错误状态
   // 新增：弹幕下载相关状态
   const [isDanmakuDownloadOpen, setIsDanmakuDownloadOpen] = useState(false);
   const [danmakuInput, setDanmakuInput] = useState('');
@@ -364,24 +366,34 @@ export const UserMenu: React.FC = () => {
       if (savedEnableAutoNextEpisode !== null) {
         setEnableAutoNextEpisode(JSON.parse(savedEnableAutoNextEpisode));
       }
-      // 新增：加载视频源配置
-      const savedSources = localStorage.getItem('danmutv_video_sources');
-      if (savedSources) {
-        try {
-          const parsedSources = JSON.parse(savedSources);
-          setVideoSources(parsedSources);
-        } catch (e) {
-          console.error('解析视频源配置失败,使用默认配置:', e);
-          setVideoSources(DEFAULT_CMS_VIDEO_SOURCES);
-          localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_CMS_VIDEO_SOURCES));
-        }
-      } else {
-        // 首次使用,初始化默认视频源
-        setVideoSources(DEFAULT_CMS_VIDEO_SOURCES);
-        localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_CMS_VIDEO_SOURCES));
-      }
     }
   }, []);
+
+  // 新增：从API获取视频源
+  const fetchSources = useCallback(async () => {
+    setIsSourcesLoading(true);
+    setSourcesError(null);
+    try {
+      const response = await fetch('/api/sources');
+      if (!response.ok) {
+        throw new Error('获取视频源失败');
+      }
+      const data = await response.json();
+      setVideoSources(data.sources || []);
+    } catch (error: any) {
+      setSourcesError(error.message);
+      showError('加载视频源列表失败', error.message);
+    } finally {
+      setIsSourcesLoading(false);
+    }
+  }, [showError]);
+
+  // 当视频源管理面板打开时获取数据
+  useEffect(() => {
+    if (isVideoSourceOpen) {
+      fetchSources();
+    }
+  }, [isVideoSourceOpen, fetchSources]);
 
   // 版本检查
   useEffect(() => {
@@ -1137,37 +1149,66 @@ export const UserMenu: React.FC = () => {
     setIsAddingSource(false);
   };
 
-  const handleDeleteSource = (key: string) => {
-    const newSources = videoSources.filter(s => s.key !== key);
-    setVideoSources(newSources);
-    localStorage.setItem('danmutv_video_sources', JSON.stringify(newSources));
+  const handleDeleteSource = async (key: string) => {
+    if (!window.confirm(`确定要删除视频源 [${videoSources.find(s => s.key === key)?.name}] 吗？`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', key }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '删除失败');
+      }
+
+      showSuccess('视频源删除成功');
+      await fetchSources(); // 重新获取列表
+    } catch (error: any) {
+      showError('删除视频源失败', error.message);
+    }
   };
 
-  const handleSaveSource = () => {
+  const handleSaveSource = async () => {
     if (!editingSource) return;
-    
+
     if (!editingSource.key || !editingSource.name || !editingSource.api) {
       showError('请填写完整的视频源信息(key、名称、API地址为必填项)');
       return;
     }
 
-    let newSources: VideoSource[];
-    if (isAddingSource) {
-      if (videoSources.some(s => s.key === editingSource.key)) {
-        showError('该Key已存在,请使用其他Key');
-        return;
+    const action = isAddingSource ? 'add' : 'edit';
+    const payload = {
+      action,
+      key: editingSource.key,
+      name: editingSource.name,
+      api: editingSource.api,
+      detail: editingSource.detail || '',
+    };
+
+    try {
+      const response = await fetch('/api/admin/source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '保存失败');
       }
-      newSources = [...videoSources, editingSource];
-    } else {
-      newSources = videoSources.map(s => 
-        s.key === editingSource.key ? editingSource : s
-      );
+
+      showSuccess(`视频源${isAddingSource ? '添加' : '编辑'}成功`);
+      setEditingSource(null);
+      setIsAddingSource(false);
+      await fetchSources(); // 重新获取列表
+    } catch (error: any) {
+      showError(`保存视频源失败`, error.message);
     }
-    
-    setVideoSources(newSources);
-    localStorage.setItem('danmutv_video_sources', JSON.stringify(newSources));
-    setEditingSource(null);
-    setIsAddingSource(false);
   };
 
   const handleCancelEditSource = () => {
@@ -1175,12 +1216,29 @@ export const UserMenu: React.FC = () => {
     setIsAddingSource(false);
   };
 
-  const handleToggleSourceStatus = (key: string) => {
-    const newSources = videoSources.map(s => 
-      s.key === key ? { ...s, disabled: !s.disabled } : s
-    );
-    setVideoSources(newSources);
-    localStorage.setItem('danmutv_video_sources', JSON.stringify(newSources));
+  const handleToggleSourceStatus = async (key: string, currentDisabled: boolean) => {
+    const action = currentDisabled ? 'enable' : 'disable';
+    try {
+      const response = await fetch('/api/admin/source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, key }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '操作失败');
+      }
+
+      // 乐观更新UI
+      setVideoSources(prevSources =>
+        prevSources.map(s =>
+          s.key === key ? { ...s, disabled: !s.disabled } : s
+        )
+      );
+    } catch (error: any) {
+      showError('切换状态失败', error.message);
+    }
   };
 
   const handleEnableAllAvailableSources = () => {
@@ -2911,19 +2969,33 @@ export const UserMenu: React.FC = () => {
                 <span className='text-lg'>🚀</span>
                 <span>启用所有可用视频源</span>
               </button>
-              <button
-                onClick={() => {
-                  if (confirm(`确定要重置为默认视频源吗?\n\n这将清除所有自定义配置,恢复 ${DEFAULT_CMS_VIDEO_SOURCES.length} 个默认视频源。`)) {
-                    setVideoSources(DEFAULT_CMS_VIDEO_SOURCES);
-                    localStorage.setItem('danmutv_video_sources', JSON.stringify(DEFAULT_CMS_VIDEO_SOURCES));
-                    showToast({title: '已重置为默认视频源', type: 'success', duration: 3000});
-                  }
-                }}
-                className='w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 dark:from-gray-600 dark:to-gray-700 dark:hover:from-gray-700 dark:hover:to-gray-800 text-white shadow-sm hover:shadow-md'
-              >
-                <span className='text-lg'>🔄</span>
-                <span>重置为默认视频源</span>
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={async () => {
+                    if (confirm(`确定要重置为默认视频源吗?\n\n这将清除所有自定义配置,并从服务器导入默认视频源。`)) {
+                      try {
+                        const response = await fetch('/api/admin/source', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'import_defaults' }),
+                        });
+                        const result = await response.json();
+                        if (!response.ok) {
+                          throw new Error(result.error || '重置失败');
+                        }
+                        showToast({ title: result.message || '已重置为默认视频源', type: 'success', duration: 3000 });
+                        await fetchSources(); // 重新获取列表
+                      } catch (error: any) {
+                        showError('重置失败', error.message);
+                      }
+                    }
+                  }}
+                  className='w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 dark:from-gray-600 dark:to-gray-700 dark:hover:from-gray-700 dark:hover:to-gray-800 text-white shadow-sm hover:shadow-md'
+                >
+                  <span className='text-lg'>🔄</span>
+                  <span>重置为默认视频源</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -2969,29 +3041,39 @@ export const UserMenu: React.FC = () => {
 
           {/* 视频源列表 */}
           <div className='space-y-2'>
-            {videoSources.map(source => (
-              <div key={source.key} className='flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:shadow-sm transition-shadow'>
-                <div className='flex-1 min-w-0'>
-                  <div className='font-medium text-gray-800 dark:text-gray-200 text-sm'>{source.name}</div>
-                  <div className='text-xs text-gray-500 dark:text-gray-400 truncate'>{source.api}</div>
+            {isSourcesLoading ? (
+              <div className="text-center py-4 text-gray-500 dark:text-gray-400">加载中...</div>
+            ) : sourcesError ? (
+              <div className="text-center py-4 text-red-500 dark:text-red-500">{sourcesError}</div>
+            ) : (
+              videoSources.map(source => (
+                <div key={source.key} className='flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:shadow-sm transition-shadow'>
+                  <div className='flex-1 min-w-0'>
+                    <div className='font-medium text-gray-800 dark:text-gray-200 text-sm'>{source.name}</div>
+                    <div className='text-xs text-gray-500 dark:text-gray-400 truncate'>{source.api}</div>
+                  </div>
+                  <div className='flex items-center gap-2 ml-4'>
+                    {isAdmin && source.from === 'custom' && (
+                      <>
+                        <button onClick={() => handleEditSource(source)} className='p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-full' title='编辑'>
+                          <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z' /></svg>
+                        </button>
+                        <button onClick={() => handleDeleteSource(source.key)} className='p-1.5 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full' title='删除'>
+                          <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' /></svg>
+                        </button>
+                      </>
+                    )}
+                    <label className='flex items-center cursor-pointer'>
+                      <div className='relative'>
+                        <input type='checkbox' className='sr-only peer' checked={!source.disabled} onChange={() => handleToggleSourceStatus(source.key, !!source.disabled)} disabled={!isAdmin} />
+                        <div className={`w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600 ${!isAdmin ? 'cursor-not-allowed opacity-50' : ''}`}></div>
+                        <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5 ${!isAdmin ? 'cursor-not-allowed' : ''}`}></div>
+                      </div>
+                    </label>
+                  </div>
                 </div>
-                <div className='flex items-center gap-2 ml-4'>
-                  <button onClick={() => handleEditSource(source)} className='p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-full' title='编辑'>
-                    <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z' /></svg>
-                  </button>
-                  <button onClick={() => handleDeleteSource(source.key)} className='p-1.5 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full' title='删除'>
-                    <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' /></svg>
-                  </button>
-                  <label className='flex items-center cursor-pointer'>
-                    <div className='relative'>
-                      <input type='checkbox' className='sr-only peer' checked={!source.disabled} onChange={() => handleToggleSourceStatus(source.key)} />
-                      <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
-                      <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
