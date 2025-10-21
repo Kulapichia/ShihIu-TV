@@ -6,7 +6,7 @@ import { ExternalLink, Layers, Server, Tv } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { getAuthInfoFromBrowserCookie } from '@/lib/auth'; // 引入项目A的认证工具
+import { getAuthInfoFromBrowserCookie } from '@/lib/auth'; // 引入认证工具
 import { ClientCache } from '@/lib/client-cache';
 import PageLayout from '@/components/PageLayout';
 import type { DoubanItem, SearchResult as GlobalSearchResult } from '@/lib/types';
@@ -595,7 +595,7 @@ export default function SourceBrowserPage() {
             </div>
             <div className='flex-1'>
               <h1 className='text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 dark:from-emerald-400 dark:via-green-400 dark:to-teal-400 bg-clip-text text-transparent'>
-                源浏览器
+                源浏览
               </h1>
               <p className='text-sm text-gray-600 dark:text-gray-400 mt-1'>
                 按来源站与分类浏览内容，探索海量影视资源
