@@ -158,9 +158,9 @@ const SourceBrowser: React.FC = () => {
             <button
               key={site.url}
               onClick={() => fetchCategories(site)}
-              className={`${buttonStyles.secondary} ${selectedSite?.url === site.url
-                ? 'bg-blue-600 dark:bg-blue-600 ring-2 ring-offset-2 ring-blue-500 ring-offset-white dark:ring-offset-gray-800'
-                : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
+              className={`${selectedSite?.url === site.url
+                ? buttonStyles.primary
+                : buttonStyles.secondary
                 }`}
             >
               {site.name}
@@ -194,10 +194,10 @@ const SourceBrowser: React.FC = () => {
                 <button
                   key={cat.type_id}
                   onClick={() => handleCategorySelect(cat)}
-                  className={`${buttonStyles.secondary} text-sm ${selectedCategory?.type_id === cat.type_id
-                    ? 'bg-indigo-600 dark:bg-indigo-600 ring-2 ring-offset-2 ring-indigo-500 ring-offset-white dark:ring-offset-gray-800'
-                    : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
-                    }`}
+                  className={`${selectedCategory?.type_id === cat.type_id
+                    ? buttonStyles.primary
+                    : buttonStyles.secondary
+                    } text-sm`}
                 >
                   {cat.type_name}
                 </button>
@@ -239,7 +239,7 @@ const SourceBrowser: React.FC = () => {
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage <= 1}
-                  className={`${buttonStyles.secondary} disabled:opacity-50 disabled:cursor-not-allowed`}
+                  className={`${currentPage <= 1 ? buttonStyles.disabled : buttonStyles.secondary}`}
                 >
                   上一页
                 </button>
@@ -249,7 +249,7 @@ const SourceBrowser: React.FC = () => {
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage >= totalPages}
-                  className={`${buttonStyles.secondary} disabled:opacity-50 disabled:cursor-not-allowed`}
+                  className={`${currentPage >= totalPages ? buttonStyles.disabled : buttonStyles.secondary}`}
                 >
                   下一页
                 </button>
