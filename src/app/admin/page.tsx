@@ -7626,9 +7626,9 @@ function AdminPageClient() {
               <LiveSourceConfig config={config} refreshConfig={fetchConfig} />
             </CollapsibleTab>
 
-            {/* 源浏览器标签 - 新增 */}
+            {/* 源浏览标签 - 新增 */}
             <CollapsibleTab
-              title='源浏览器'
+              title='源浏览'
               icon={
                 <FileSearch
                   size={20}
