@@ -31,7 +31,7 @@ const SourceBrowser: React.FC = () => {
         const response = await fetch('/api/admin/source-browser/sites');
         if (response.ok) {
           const data = await response.json();
-          setSites(data);
+          setSites(data.sources || []);
         }
       } catch (error) {
         console.error('Failed to fetch sites:', error);
