@@ -24,10 +24,30 @@ const SourceTestModule: React.FC = () => {
 
   useEffect(() => {
     const fetchSources = async () => {
-      const res = await fetch('/api/admin/source-test/sources');
-      const data = await res.json();
-      setSources(data);
-      setSelectedSources(data.map((s: Source) => s.key));
+      try {
+        const res = await fetch('/api/admin/source-test/sources');
+        if (!res.ok) {
+          // 如果请求失败，则不尝试解析和设置源，避免 .map 错误
+          console.error('Failed to fetch sources:', res.status, res.statusText);
+          setSources([]);
+          setSelectedSources([]);
+          return;
+        }
+        const data = await res.json();
+        // 确保 data 是一个数组
+        if (Array.isArray(data)) {
+          setSources(data);
+          setSelectedSources(data.map((s: Source) => s.key));
+        } else {
+          console.error('Fetched sources data is not an array:', data);
+          setSources([]);
+          setSelectedSources([]);
+        }
+      } catch (error) {
+        console.error('Error fetching sources:', error);
+        setSources([]);
+        setSelectedSources([]);
+      }
     };
     fetchSources();
   }, []);
