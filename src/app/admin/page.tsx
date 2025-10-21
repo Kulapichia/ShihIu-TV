@@ -7626,24 +7626,9 @@ function AdminPageClient() {
               <LiveSourceConfig config={config} refreshConfig={fetchConfig} />
             </CollapsibleTab>
 
-            {/* 源浏览标签 - 新增 */}
+            {/* 源检测标签 - 新增 */}
             <CollapsibleTab
-              title='源浏览'
-              icon={
-                <FileSearch
-                  size={20}
-                  className='text-gray-600 dark:text-gray-400'
-                />
-              }
-              isExpanded={expandedTabs.sourceBrowser}
-              onToggle={() => toggleTab('sourceBrowser')}
-            >
-              <SourceBrowser />
-            </CollapsibleTab>
-
-            {/* 源测试标签 - 新增 */}
-            <CollapsibleTab
-              title='源测试'
+              title='源检测'
               icon={
                 <TestTube
                   size={20}
