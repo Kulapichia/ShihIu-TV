@@ -511,6 +511,18 @@ function PlayPageClient() {
   const [videoDoubanId, setVideoDoubanId] = useState(
     parseInt(searchParams.get('douban_id') || '0') || 0
   );
+
+  // 短剧相关参数
+  const [shortdramaId, setShortdramaId] = useState(
+    searchParams.get('shortdrama_id') || ''
+  );
+  const [vodClass, setVodClass] = useState(
+    searchParams.get('vod_class') || ''
+  );
+  const [vodTag, setVodTag] = useState(
+    searchParams.get('vod_tag') || ''
+  );
+
   // 当前源和ID
   const [currentSource, setCurrentSource] = useState(
     searchParams.get('source') || ''
@@ -543,6 +555,9 @@ function PlayPageClient() {
   const videoDoubanIdRef = useRef(videoDoubanId);
   const detailRef = useRef<SearchResult | null>(detail);
   const currentEpisodeIndexRef = useRef(currentEpisodeIndex);
+  const shortdramaIdRef = useRef(shortdramaId);
+  const vodClassRef = useRef(vodClass);
+  const vodTagRef = useRef(vodTag);
 
   // 同步最新值到 refs
   useEffect(() => {
@@ -554,6 +569,9 @@ function PlayPageClient() {
     videoYearRef.current = videoYear;
     videoDoubanIdRef.current = videoDoubanId;
     availableSourcesRef.current = availableSources;
+    shortdramaIdRef.current = shortdramaId;
+    vodClassRef.current = vodClass;
+    vodTagRef.current = vodTag;
   }, [
     currentSource,
     currentId,
@@ -563,6 +581,9 @@ function PlayPageClient() {
     videoYear,
     videoDoubanId,
     availableSources,
+    shortdramaId,
+    vodClass,
+    vodTag,
   ]);
 
   // 加载详情（豆瓣或bangumi）
@@ -771,6 +792,109 @@ function PlayPageClient() {
 
     // 工具函数（Utils）
   // -----------------------------------------------------------------------------
+
+  // 短剧标签处理函数
+  const parseVodTags = (vodTagString: string): string[] => {
+    if (!vodTagString) return [];
+    return vodTagString.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+  };
+
+  // 为标签生成颜色的函数
+  const getTagColor = (tag: string, isClass: boolean = false) => {
+    if (isClass) {
+      // vod_class 使用更显眼的颜色
+      const classColors = [
+        'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+        'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+        'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+        'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
+        'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
+      ];
+      const hash = tag.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+      return classColors[hash % classColors.length];
+    } else {
+      // vod_tag 使用较为柔和的颜色
+      const tagColors = [
+        'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+        'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+        'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
+        'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300',
+        'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300',
+        'bg-amber-100 text-amber-700 dark:bg-amber-800 dark:text-amber-300',
+        'bg-orange-100 text-orange-700 dark:bg-orange-800 dark:text-orange-300',
+        'bg-red-100 text-red-700 dark:bg-red-800 dark:text-red-300',
+        'bg-pink-100 text-pink-700 dark:bg-pink-800 dark:text-pink-300',
+        'bg-rose-100 text-rose-700 dark:bg-rose-800 dark:text-rose-300'
+      ];
+      const hash = tag.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+      return tagColors[hash % tagColors.length];
+    }
+  };
+
+  // 短剧播放地址处理函数
+  const processShortDramaUrl = (originalUrl: string): string => {
+    if (!originalUrl) {
+      return originalUrl;
+    }
+    const needsProxy = [
+      'quark.cn', 'drive.quark.cn', 'dl-c-zb-', 'dl-c-',
+      'ffzy-online', 'bfikuncdn.com', 'vip.', 'm3u8'
+    ].some(keyword => originalUrl.includes(keyword)) ||
+      !!originalUrl.match(/https?:\/\/[^/]*\.drive\./) &&
+      !originalUrl.includes('localhost') && !originalUrl.includes('127.0.0.1');
+
+    if (needsProxy) {
+      return `/api/proxy/video?url=${encodeURIComponent(originalUrl)}`;
+    }
+    return originalUrl;
+  };
+
+  // 短剧数据获取和转换函数
+  const fetchShortDramaData = async (shortdramaId: string): Promise<SearchResult> => {
+    try {
+      const response = await fetch(`/api/shortdrama/parse/all?id=${encodeURIComponent(shortdramaId)}`);
+      if (!response.ok) {
+        throw new Error(`获取短剧数据失败: ${response.statusText}`);
+      }
+      const data = await response.json();
+      if (!data || !data.results || data.results.length === 0) {
+        throw new Error('未找到可播放的短剧视频源');
+      }
+
+      const episodes: string[] = [];
+      const episodesTitles: string[] = [];
+
+      const sortedResults = data.results.sort((a: any, b: any) => (a.index || 0) - (b.index || 0));
+
+      sortedResults.forEach((item: any) => {
+        if (item.status === 'success' && item.parsedUrl) {
+          episodes.push(processShortDramaUrl(item.parsedUrl));
+          episodesTitles.push(item.label || `第${item.index + 1}集`);
+        }
+      });
+      if (episodes.length === 0) {
+        throw new Error('解析后未找到有效的短剧播放地址');
+      }
+      const searchResult: SearchResult = {
+        source: 'shortdrama',
+        id: shortdramaId,
+        title: data.videoName || videoTitle || '短剧播放',
+        poster: data.cover || '',
+        year: videoYear || new Date().getFullYear().toString(),
+        source_name: '短剧',
+        type_name: '短剧',
+        class: '短剧',
+        episodes: episodes,
+        episodes_titles: episodesTitles,
+        desc: data.description || '精彩短剧，为您呈现优质内容',
+        douban_id: 0
+      };
+      return searchResult;
+    } catch (error) {
+      console.error('获取短剧数据失败:', error);
+      throw error;
+    }
+  };
 
   // 获取当前剧集的唯一标识（用于剧集弹幕配置）
   const getSeriesKey = (): string | null => {
@@ -3070,6 +3194,40 @@ function PlayPageClient() {
     };
 
     const initAll = async () => {
+      if (shortdramaId) {
+        try {
+          setLoading(true);
+          setLoadingStage('fetching');
+          setLoadingMessage('🎬 正在获取短剧播放信息...');
+          const shortDramaData = await fetchShortDramaData(shortdramaId);
+          setCurrentSource(shortDramaData.source);
+          setCurrentId(shortDramaData.id);
+          setVideoTitle(shortDramaData.title);
+          setVideoYear(shortDramaData.year);
+          setVideoCover(shortDramaData.poster);
+          setVideoDoubanId(shortDramaData.douban_id || 0);
+          setDetail(shortDramaData);
+          setAvailableSources([shortDramaData]);
+          if (currentEpisodeIndex >= shortDramaData.episodes.length) {
+            setCurrentEpisodeIndex(0);
+          }
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.set('source', shortDramaData.source);
+          newUrl.searchParams.set('id', shortDramaData.id);
+          newUrl.searchParams.set('title', shortDramaData.title);
+          newUrl.searchParams.set('year', shortDramaData.year);
+          window.history.replaceState({}, '', newUrl.toString());
+          setLoadingStage('ready');
+          setLoadingMessage('✨ 短剧准备就绪，即将开始播放...');
+          setTimeout(() => setLoading(false), 1000);
+          return;
+        } catch (error) {
+          setError(error instanceof Error ? error.message : '短剧加载失败');
+          setLoading(false);
+          return;
+        }
+      }
+
       if (!currentSource && !currentId && !videoTitle && !searchTitle) {
         setError('缺少必要参数');
         setLoading(false);
@@ -6288,6 +6446,45 @@ function PlayPageClient() {
                 )}
                 {detail?.type_name && <span>{detail.type_name}</span>}
               </div>
+              </div>
+
+              {/* 短剧专用标签展示 */}
+              {shortdramaId && (vodClass || vodTag) && (
+                <div className='mb-4 flex-shrink-0'>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    {/* vod_class 标签 - 分类标签 */}
+                    {vodClass && (
+                      <div className='flex items-center gap-1'>
+                        <span className='text-xs text-gray-500 dark:text-gray-400 font-medium'>
+                          分类:
+                        </span>
+                        <span
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getTagColor(vodClass, true)}`}
+                        >
+                          📂 {vodClass}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* vod_tag 标签 - 内容标签 */}
+                    {vodTag && parseVodTags(vodTag).length > 0 && (
+                      <div className='flex items-center gap-1 flex-wrap'>
+                        <span className='text-xs text-gray-500 dark:text-gray-400 font-medium'>
+                          标签:
+                        </span>
+                        {parseVodTags(vodTag).map((tag, index) => (
+                          <span
+                            key={index}
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getTagColor(tag, false)}`}
+                          >
+                            🏷️ {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* 详细信息（豆瓣或bangumi） */}
               {currentSource !== 'shortdrama' && videoDoubanId && videoDoubanId !== 0 && detail && detail.source !== 'shortdrama' && (
