@@ -29,7 +29,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '你没有权限访问源检测功能' }, { status: 401 });
   }
   try {
-    await ensureAdmin(request);
     const config = await getConfig();
     const sources = (config.SourceConfig || []).map((s: any) => ({
       key: s.key,
