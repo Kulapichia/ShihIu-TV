@@ -55,7 +55,7 @@ function computeTopMatches(results: SearchResult[], q: string) {
 // 获取所有源信息（包括禁用的）
 async function getAllApiSites(): Promise<ApiSite[]> {
   try {
-    const response = await fetch('/api/source-test/sources');
+    const response = await fetch('/api/admin/source-test/sources');
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -98,7 +98,7 @@ async function testSource(
 
   try {
     const response = await fetch(
-      `/api/source-test?q=${encodeURIComponent(query)}&source=${sourceKey}`
+      `/api/admin/source-test?q=${encodeURIComponent(query)}&source=${sourceKey}`
     );
     const responseTime = Date.now() - startTime;
 
