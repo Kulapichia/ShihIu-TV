@@ -6446,7 +6446,6 @@ function PlayPageClient() {
                 )}
                 {detail?.type_name && <span>{detail.type_name}</span>}
               </div>
-              </div>
 
               {/* 短剧专用标签展示 */}
               {shortdramaId && (vodClass || vodTag) && (
