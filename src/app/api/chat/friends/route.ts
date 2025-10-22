@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // 检查是否已经是好友
     const friends = await db.getFriends(authInfo.username);
-    const isAlreadyFriend = friends.some((friend: Friend) => friend.username === username);
+    const isAlreadyFriend = friends.some(friend => friend.username === username);
     if (isAlreadyFriend) {
       return NextResponse.json({ error: '已经是好友' }, { status: 400 });
     }
