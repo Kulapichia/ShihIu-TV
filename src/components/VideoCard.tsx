@@ -12,6 +12,7 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import { motion } from 'framer-motion';
 
 import {
   deleteFavorite,
@@ -581,8 +582,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
 
   return (
     <>
-      <div
-        className='group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-in-out hover:scale-[1.05] hover:z-[500] hover:drop-shadow-2xl'
+      <motion.div
+        className='group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-in-out hover:z-10'
         onClick={handleClick}
         {...longPressProps}
         style={{
@@ -616,10 +617,12 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
           e.preventDefault();
           return false;
         }}
+        whileHover={{ y: -8 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       >
         {/* 海报容器 */}
-        <div
-          className={`relative aspect-[2/3] overflow-hidden rounded-lg ${origin === 'live' ? 'ring-1 ring-gray-300/80 dark:ring-gray-600/80' : ''}`}
+        <motion.div
+          className={`relative aspect-[2/3] overflow-hidden rounded-lg shadow-lg group-hover:shadow-2xl transition-shadow duration-300 ${origin === 'live' ? 'ring-1 ring-gray-300/80 dark:ring-gray-600/80' : ''}`}
           style={{
             WebkitUserSelect: 'none',
             userSelect: 'none',
@@ -647,7 +650,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
             src={processImageUrl(actualPoster)}
             alt={actualTitle}
             fill
-            className={`${origin === 'live' ? 'object-contain' : 'object-cover'} transition-all duration-700 ease-out ${
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            className={`${origin === 'live' ? 'object-contain' : 'object-cover'} transition-all duration-700 ease-out group-hover:scale-110 ${
               imageLoaded ? 'opacity-100 blur-0 scale-100' : 'opacity-0 blur-md scale-105'
             }`}
             referrerPolicy='no-referrer'
@@ -685,7 +689,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
 
           {/* 悬浮遮罩 - 玻璃态效果 */}
           <div
-            className='absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-all duration-300 ease-in-out opacity-0 group-hover:opacity-100 backdrop-blur-[2px]'
+            className='absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-all duration-300 ease-in-out'
             style={{
               WebkitUserSelect: 'none',
               userSelect: 'none',
@@ -712,20 +716,22 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
                 return false;
               }}
             >
-              <PlayCircleIcon
-                size={50}
-                strokeWidth={0.8}
-                className='text-white fill-transparent transition-all duration-300 ease-out hover:fill-green-500 hover:scale-[1.1]'
-                style={{
-                  WebkitUserSelect: 'none',
-                  userSelect: 'none',
-                  WebkitTouchCallout: 'none',
-                } as React.CSSProperties}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  return false;
-                }}
-              />
+              <div className="p-3 bg-black/40 backdrop-blur-sm rounded-full">
+                <PlayCircleIcon
+                  size={50}
+                  strokeWidth={0.8}
+                  className='text-white fill-transparent transition-all duration-300 ease-out hover:fill-green-500/50 hover:scale-110'
+                  style={{
+                    WebkitUserSelect: 'none',
+                    userSelect: 'none',
+                    WebkitTouchCallout: 'none',
+                  } as React.CSSProperties}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    return false;
+                  }}
+                />
+              </div>
             </div>
           )}
 
@@ -745,39 +751,43 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
               }}
             >
               {config.showCheckCircle && (
-                <Trash2
-                  onClick={handleDeleteRecord}
-                  size={20}
-                  className='text-white transition-all duration-300 ease-out hover:stroke-red-500 hover:scale-[1.1]'
-                  style={{
-                    WebkitUserSelect: 'none',
-                    userSelect: 'none',
-                    WebkitTouchCallout: 'none',
-                  } as React.CSSProperties}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    return false;
-                  }}
-                />
+                <div className="p-1.5 bg-black/40 backdrop-blur-sm rounded-full">
+                  <Trash2
+                    onClick={handleDeleteRecord}
+                    size={20}
+                    className='text-white transition-all duration-300 ease-out hover:stroke-red-500 hover:scale-110'
+                    style={{
+                      WebkitUserSelect: 'none',
+                      userSelect: 'none',
+                      WebkitTouchCallout: 'none',
+                    } as React.CSSProperties}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      return false;
+                    }}
+                  />
+                </div>
               )}
               {config.showHeart && from !== 'search' && (
-                <Heart
-                  onClick={handleToggleFavorite}
-                  size={20}
-                  className={`transition-all duration-300 ease-out ${favorited
-                    ? 'fill-red-600 stroke-red-600'
-                    : 'fill-transparent stroke-white hover:stroke-red-400'
-                    } hover:scale-[1.1]`}
-                  style={{
-                    WebkitUserSelect: 'none',
-                    userSelect: 'none',
-                    WebkitTouchCallout: 'none',
-                  } as React.CSSProperties}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    return false;
-                  }}
-                />
+                <div className="p-1.5 bg-black/40 backdrop-blur-sm rounded-full">
+                  <Heart
+                    onClick={handleToggleFavorite}
+                    size={20}
+                    className={`transition-all duration-300 ease-out ${favorited
+                      ? 'fill-red-600 stroke-red-600'
+                      : 'fill-transparent stroke-white hover:stroke-red-400'
+                      } hover:scale-110`}
+                    style={{
+                      WebkitUserSelect: 'none',
+                      userSelect: 'none',
+                      WebkitTouchCallout: 'none',
+                    } as React.CSSProperties}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      return false;
+                    }}
+                  />
+                </div>
               )}
             </div>
           )}
@@ -871,28 +881,6 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
             );
           })()}
 
-          {actualEpisodes && actualEpisodes > 1 && (
-            <div
-              className='absolute top-2 right-2 bg-gradient-to-br from-emerald-500/90 via-teal-500/90 to-cyan-500/90 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg ring-2 ring-white/30 transition-all duration-300 ease-out group-hover:scale-110 group-hover:shadow-emerald-500/50'
-              style={{
-                WebkitUserSelect: 'none',
-                userSelect: 'none',
-                WebkitTouchCallout: 'none',
-              } as React.CSSProperties}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                return false;
-              }}
-            >
-              <span className="flex items-center gap-1">
-                <span className="text-[10px]">🎬</span>
-                {currentEpisode
-                  ? `${currentEpisode}/${actualEpisodes}`
-                  : `${actualEpisodes}集`}
-              </span>
-            </div>
-          )}
-
           {/* 豆瓣链接 */}
           {config.showDoubanLink && actualDoubanId && actualDoubanId !== 0 && (
             <a
@@ -916,7 +904,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
               }}
             >
               <div
-                className='bg-green-500 text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shadow-md hover:bg-green-600 hover:scale-[1.1] transition-all duration-300 ease-out'
+                className='bg-green-500/80 backdrop-blur-sm text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shadow-md hover:bg-green-600 hover:scale-110 transition-all duration-300 ease-out'
                 style={{
                   WebkitUserSelect: 'none',
                   userSelect: 'none',
@@ -967,7 +955,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
                   } as React.CSSProperties}
                 >
                   <div
-                    className='bg-gradient-to-br from-orange-500/95 via-amber-500/95 to-yellow-500/95 backdrop-blur-md text-white text-xs font-bold w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shadow-lg ring-2 ring-white/30 hover:scale-[1.15] transition-all duration-300 ease-out cursor-pointer hover:shadow-orange-500/50'
+                    className='bg-gradient-to-br from-orange-500/95 via-amber-500/95 to-yellow-500/95 backdrop-blur-md text-white text-xs font-bold w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shadow-lg ring-2 ring-white/30 hover:scale-115 transition-all duration-300 ease-out cursor-pointer hover:shadow-orange-500/50'
                     style={{
                       WebkitUserSelect: 'none',
                       userSelect: 'none',
@@ -1060,12 +1048,12 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
               </div>
             );
           })()}
-        </div>
+        </motion.div>
 
         {/* 进度条 */}
         {config.showProgress && progress !== undefined && (
           <div
-            className='mt-1 h-1 w-full bg-gray-200 rounded-full overflow-hidden'
+            className='mt-2 h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden'
             style={{
               WebkitUserSelect: 'none',
               userSelect: 'none',
@@ -1117,7 +1105,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
             <div className='absolute inset-0 bg-gradient-to-r from-transparent via-green-50/0 to-transparent dark:via-green-900/0 group-hover:via-green-50/50 dark:group-hover:via-green-900/30 transition-all duration-300 rounded-md'></div>
 
             <span
-              className='block text-sm font-bold line-clamp-2 text-gray-900 dark:text-gray-100 transition-all duration-300 ease-in-out group-hover:scale-[1.02] peer relative z-10 group-hover:bg-gradient-to-r group-hover:from-green-600 group-hover:via-emerald-600 group-hover:to-teal-600 dark:group-hover:from-green-400 dark:group-hover:via-emerald-400 dark:group-hover:to-teal-400 group-hover:bg-clip-text group-hover:text-transparent group-hover:drop-shadow-[0_2px_8px_rgba(16,185,129,0.3)]'
+              className='block text-sm font-bold line-clamp-2 text-gray-900 dark:text-gray-100 transition-all duration-300 ease-in-out group-hover:scale-102 peer relative z-10 group-hover:bg-gradient-to-r group-hover:from-green-600 group-hover:via-emerald-600 group-hover:to-teal-600 dark:group-hover:from-green-400 dark:group-hover:via-emerald-400 dark:group-hover:to-teal-400 group-hover:bg-clip-text group-hover:text-transparent group-hover:drop-shadow-[0_2px_8px_rgba(16,185,129,0.3)]'
               style={{
                 WebkitUserSelect: 'none',
                 userSelect: 'none',
@@ -1208,7 +1196,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* 操作菜单 - 支持右键和长按触发 */}
       <MobileActionSheet
