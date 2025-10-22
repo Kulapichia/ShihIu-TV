@@ -455,7 +455,7 @@ function _moderateContentLogic(
     weights: typeof weightSystem;
     thresholds: typeof decisionThresholds;
   },
-  context = {}
+  _context = {}
 ) {
   let totalScore = 0;
   const flags: string[] = [];
@@ -479,7 +479,7 @@ function _moderateContentLogic(
     if (Array.isArray(words)) {
       words.forEach(word => {
         if (lowerCaseText.includes(word.toLowerCase())) {
-          const weight = (config.weights as any)[category] || 10;
+          const weight = config.weights[category as keyof Omit<typeof weightSystem, 'international'>] || 10;
           totalScore += weight;
           matchedWords.push({ word, category, weight });
         }
@@ -489,7 +489,7 @@ function _moderateContentLogic(
       Object.entries(words).forEach(([lang, langWords]) => {
         (langWords as string[]).forEach(word => {
           if (lowerCaseText.includes(word.toLowerCase())) {
-            const weight = (config.weights.international as any)[lang] || 10;
+            const weight = config.weights.international[lang as keyof typeof weightSystem.international] || 10;
             totalScore += weight;
             matchedWords.push({ word, category: `international_${lang}`, weight });
           }
@@ -527,7 +527,7 @@ function _moderateContentLogic(
   });
 
   // 内部辅助函数，解决了未导出的问题
-  function getRecommendation(decision: string, score: number): string {
+  function getRecommendation(decision: string, _score: number): string {
     switch (decision) {
       case 'BLOCK':
         return '内容包含严重违规词汇，建议立即拦截';
@@ -581,18 +581,17 @@ export function moderateContent(text: string, context = {}) {
 // ===== 持续优化机制=====
 export const optimizationSystem = {
   // 反馈学习
-  addFeedback: function(content: string, humanDecision: string, systemDecision: string) {
+  addFeedback: function(_content: string, _humanDecision: string, _systemDecision: string) {
     // 记录人工审核与系统判断的差异，用于优化权重
   },
   
   // 新词汇发现
-  discoverNewTerms: function(flaggedContent: string) {
+  discoverNewTerms: function(_flaggedContent: string) {
     // 通过聚类分析发现新的规避词汇
   },
   
   // 动态权重调整
-  adjustWeights: function(category: string, adjustment: number) {
+  adjustWeights: function(_category: string, _adjustment: number) {
     // 根据误报率和漏报率动态调整权重
   }
 };
-
