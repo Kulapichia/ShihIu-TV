@@ -1,27 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getShortDramaCategories, ShortDramaCategory } from '@/lib/shortdrama.client';
 
 interface ShortDramaSelectorProps {
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
+  totalCategories?: number;
 }
 
 const ShortDramaSelector = ({
   selectedCategory,
   onCategoryChange,
+  totalCategories,
 }: ShortDramaSelectorProps) => {
   const [categories, setCategories] = useState<ShortDramaCategory[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // 胶囊选择器相关状态
-  const containerRef = useRef<HTMLDivElement>(null);
-  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [indicatorStyle, setIndicatorStyle] = useState<{
-    left: number;
-    width: number;
-  }>({ left: 0, width: 0 });
 
   // 获取分类数据
   useEffect(() => {
@@ -52,107 +46,68 @@ const ShortDramaSelector = ({
     fetchCategories();
   }, []);
 
-  // 更新指示器位置
-  const updateIndicatorPosition = () => {
-    const activeIndex = categories.findIndex(
-      (cat) => cat.type_id.toString() === selectedCategory
-    );
-
-    if (
-      activeIndex >= 0 &&
-      buttonRefs.current[activeIndex] &&
-      containerRef.current
-    ) {
-      const timeoutId = setTimeout(() => {
-        const button = buttonRefs.current[activeIndex];
-        const container = containerRef.current;
-        if (button && container) {
-          const buttonRect = button.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
-
-          if (buttonRect.width > 0) {
-            setIndicatorStyle({
-              left: buttonRect.left - containerRect.left,
-              width: buttonRect.width,
-            });
-          }
-        }
-      }, 0);
-      return () => clearTimeout(timeoutId);
-    }
-  };
-
-  // 当分类数据加载完成或选中项变化时更新指示器位置
-  useEffect(() => {
-    if (!loading && categories.length > 0) {
-      updateIndicatorPosition();
-    }
-  }, [loading, categories, selectedCategory]);
-
-  // 渲染胶囊式选择器 (样式已主题化)
-  const renderThemedCapsuleSelector = () => {
-    if (loading) {
-      // 加载骨架屏也应用主题色
-      return (
-        <div className='flex flex-wrap gap-2'>
-          {Array.from({ length: 8 }).map((_, index) => (
-            <div
-              key={index}
-              className='h-9 w-20 bg-purple-500/10 dark:bg-gray-800 rounded-full animate-pulse'
-            />
-          ))}
-        </div>
-      );
-    }
-
+  if (loading) {
+    // 加载骨架屏
     return (
-      <div
-        ref={containerRef}
-        // 容器应用了与页面主题一致的、更精致的背景色和内阴影
-        className='relative inline-flex bg-purple-500/10 rounded-full p-1 dark:bg-gray-800 backdrop-blur-sm shadow-inner'
-      >
-        {/* 滑动的渐变背景指示器 */}
-        {indicatorStyle.width > 0 && (
+      <div className="flex flex-wrap gap-2.5">
+        {Array.from({ length: 8 }).map((_, index) => (
           <div
-            // 滑动指示器现在是醒目的紫粉色渐变，完美融入主题
-            className='absolute top-1 bottom-1 bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 rounded-full shadow-lg transition-all duration-300 ease-out'
-            style={{
-              left: `${indicatorStyle.left}px`,
-              width: `${indicatorStyle.width}px`,
-            }}
+            key={index}
+            className="h-10 w-24 rounded-xl bg-gray-200 dark:bg-gray-800 animate-pulse"
           />
-        )}
+        ))}
+      </div>
+    );
+  }
 
+  // 组件主体渲染逻辑
+  return (
+    <div>
+      {/* 标题和总数显示区域 */}
+      <div className="flex items-center space-x-2.5 mb-4">
+        <div className="flex-1"></div> {/* 占位符，保持与page.tsx布局一致的可能性 */}
+        {totalCategories && totalCategories > 0 && (
+          <span className="text-xs px-2.5 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium">
+            {totalCategories} 个分类
+          </span>
+        )}
+      </div>
+
+      {/* 分类按钮列表 */}
+      <div className="flex flex-wrap gap-2.5">
         {categories.map((category, index) => {
           const isActive = selectedCategory === category.type_id.toString();
           return (
             <button
               key={category.type_id}
-              ref={(el) => {
-                buttonRefs.current[index] = el;
-              }}
               onClick={() => onCategoryChange(category.type_id.toString())}
-              // 文本颜色和交互效果也已主题化
-              className={`relative z-10 px-4 py-1.5 text-sm font-medium rounded-full transition-colors duration-300 whitespace-nowrap ${isActive
-                ? 'text-white' // 激活状态文本为白色，以在渐变背景上清晰显示
-                : 'text-gray-700 hover:text-purple-600 dark:text-gray-300 dark:hover:text-purple-400'
-                }`}
+              className={`group relative overflow-hidden rounded-xl px-5 py-2.5 text-sm font-medium transition-all duration-300 transform hover:scale-105 ${
+                isActive
+                  ? 'bg-gradient-to-r from-purple-500 via-purple-600 to-pink-500 text-white shadow-lg shadow-purple-500/40'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-2 border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 hover:shadow-md'
+              }`}
+              style={{
+                // 关键：实现交错动画效果
+                animation: `fadeInUp 0.3s ease-out ${index * 0.03}s both`,
+              }}
             >
-              {category.type_name}
+              {/* 激活状态的光泽效果 */}
+              {isActive && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+              )}
+
+              {/* 未激活状态的悬停背景 */}
+              {!isActive && (
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-50 via-pink-50 to-purple-50 dark:from-purple-900/20 dark:via-pink-900/20 dark:to-purple-900/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              )}
+
+              <span className="relative z-10">{category.type_name}</span>
             </button>
           );
         })}
       </div>
-    );
-  };
-
-  // 移除外层 wrapper 和多余的标题，使其成为一个纯粹的选择器组件
-  return (
-    <div className='overflow-x-auto pb-2 -mb-2'>
-      {renderThemedCapsuleSelector()}
     </div>
   );
 };
 
 export default ShortDramaSelector;
-
