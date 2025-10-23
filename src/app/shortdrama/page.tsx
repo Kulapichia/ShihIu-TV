@@ -198,11 +198,11 @@ export default function ShortDramaPage() {
           {/* 搜索栏 */}
           <div className="mb-6">
             <div className="relative group">
-              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-gray-500 transition-all duration-300 group-focus-within:text-purple-500 dark:group-focus-within:text-purple-400 group-focus-within:scale-110" />
+              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-gray-500 transition-all duration-300 group-focus-within:text-theme-accent group-focus-within:scale-110" />
               <input
                 type="text"
                 placeholder="搜索短剧名称..."
-                className="w-full rounded-xl border border-gray-200 bg-white/80 pl-11 pr-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent focus:bg-white shadow-sm hover:shadow-md focus:shadow-lg dark:bg-gray-800/80 dark:text-white dark:placeholder-gray-500 dark:border-gray-700 dark:focus:bg-gray-800 dark:focus:ring-purple-500 transition-all duration-300"
+                className="w-full rounded-xl border border-gray-200 bg-white/80 pl-11 pr-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-theme-accent/50 focus:border-transparent focus:bg-white shadow-sm hover:shadow-md focus:shadow-lg dark:bg-gray-800/80 dark:text-white dark:placeholder-gray-500 dark:border-gray-700 dark:focus:bg-gray-800 transition-all duration-300"
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
               />
@@ -213,7 +213,7 @@ export default function ShortDramaPage() {
           {!isSearchMode && categories.length > 0 && (
             <div className="mb-6">
               <div className="flex items-center space-x-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-md">
+                <div className="w-8 h-8 rounded-lg bg-theme-accent flex items-center justify-center shadow-md">
                   <Filter className="h-4 w-4 text-white" />
                 </div>
                 <span className="text-base font-semibold text-gray-800 dark:text-gray-200">
