@@ -1718,7 +1718,7 @@ div[data-media-provider] video {
 }
 
 /* ======================================================================== */
-/* 紫/粉色主题 (Purple Theme) -  */
+/* 紫/粉色主题 (Purple Theme) - */
 /* ======================================================================== */
 
 [data-theme="purple"] {
@@ -1735,8 +1735,8 @@ div[data-media-provider] video {
   --color-primary-900: 76, 29, 149;
 
   /* 定义紫粉色系的主题语义化颜色 */
-  --color-theme-bg: 249, 250, 251; /* 浅灰色背景 */
-  --color-theme-surface: 255, 255, 255; /* 白色卡片表面 */
+  --color-theme-bg: 253, 252, 255;
+  --color-theme-surface: 255, 255, 255;
   --color-theme-accent: 124, 58, 237; /* 主色调：紫色 */
   --color-theme-text: 31, 41, 55;
   --color-theme-text-secondary: 107, 114, 128;
@@ -1744,12 +1744,12 @@ div[data-media-provider] video {
   --color-theme-success: 22, 163, 74;
   --color-theme-warning: 245, 158, 11;
   --color-theme-error: 239, 68, 68;
-  --color-theme-info: 59, 130, 246;
+  --color-theme-info: 109, 40, 217;
 }
 
 [data-theme="purple"].dark {
-  --color-theme-bg: 17, 24, 39; /* 深蓝黑背景 */
-  --color-theme-surface: 31, 41, 55; /* 深灰卡片表面 */
+  --color-theme-bg: 24, 24, 29;
+  --color-theme-surface: 30, 30, 37;
   --color-theme-accent: 167, 139, 250; /* 亮紫色 */
   --color-theme-text: 243, 244, 246;
   --color-theme-text-secondary: 156, 163, 175;
@@ -1757,10 +1757,107 @@ div[data-media-provider] video {
   --color-theme-success: 74, 222, 128;
   --color-theme-warning: 251, 191, 36;
   --color-theme-error: 248, 113, 113;
-  --color-theme-info: 96, 165, 250;
+  --color-theme-info: 139, 92, 246;
 }
 
 /* 覆盖原有蓝色硬编码样式，使其适应紫粉色主题 */
-[data-theme="purple"] .text-blue-600 { color: rgb(109 40 217) !important; }
-[data-theme="purple"].dark .text-blue-400 { color: rgb(167 139 250) !important; }
-/* ... 此处可以根据需要添加更多对 'blue' 的覆盖 ... */
+/* 文本颜色 */
+[data-theme="purple"] .text-blue-300 { color: rgb(196, 181, 253) !important; }
+[data-theme="purple"] .text-blue-500 { color: rgb(139, 92, 246) !important; }
+[data-theme="purple"] .text-blue-600 { color: rgb(124, 58, 237) !important; }
+[data-theme="purple"] .text-blue-700 { color: rgb(109, 40, 217) !important; }
+[data-theme="purple"] .text-blue-800 { color: rgb(91, 33, 182) !important; }
+[data-theme="purple"] .text-blue-900 { color: rgb(76, 29, 149) !important; }
+
+/* 背景颜色 */
+[data-theme="purple"] .bg-blue-50 { background-color: rgb(245, 243, 255) !important; }
+[data-theme="purple"] .bg-blue-100 { background-color: rgb(237, 233, 254) !important; }
+[data-theme="purple"] .bg-blue-200 { background-color: rgb(221, 214, 254) !important; }
+[data-theme="purple"] .bg-blue-400 { background-color: rgb(167, 139, 250) !important; }
+[data-theme="purple"] .bg-blue-500 { background-color: rgb(139, 92, 246) !important; }
+[data-theme="purple"] .bg-blue-600 { background-color: rgb(124, 58, 237) !important; }
+[data-theme="purple"] .bg-blue-500\/10 { background-color: rgba(139, 92, 246, 0.1) !important; }
+[data-theme="purple"] .bg-blue-500\/20 { background-color: rgba(139, 92, 246, 0.2) !important; }
+
+/* 边框颜色 */
+[data-theme="purple"] .border-blue-200 { border-color: rgb(221, 214, 254) !important; }
+[data-theme="purple"] .border-blue-300 { border-color: rgb(196, 181, 253) !important; }
+[data-theme="purple"] .border-blue-500 { border-color: rgb(139, 92, 246) !important; }
+[data-theme="purple"] .border-t-blue-500 { border-top-color: rgb(139, 92, 246) !important; }
+[data-theme="purple"] .border-b-2.border-blue-500 { border-bottom-color: rgb(139, 92, 246) !important; }
+[data-theme="purple"] .border-blue-500\/30 { border-color: rgba(139, 92, 246, 0.3) !important; }
+[data-theme="purple"] .group-hover\:border-blue-500\/60:hover,
+[data-theme="purple"] .group:hover .group-hover\:border-blue-500\/60 { border-color: rgba(139, 92, 246, 0.6) !important; }
+
+/* 交互状态 (hover, focus, etc.) */
+[data-theme="purple"] .hover\:bg-blue-50:hover { background-color: rgb(245, 243, 255) !important; }
+[data-theme="purple"] .hover\:bg-blue-200:hover { background-color: rgb(221, 214, 254) !important; }
+[data-theme="purple"] .hover\:bg-blue-600:hover { background-color: rgb(109, 40, 217) !important; }
+[data-theme="purple"] .hover\:bg-blue-700:hover { background-color: rgb(109, 40, 217) !important; }
+[data-theme="purple"] .hover\:text-blue-500:hover { color: rgb(139, 92, 246) !important; }
+[data-theme="purple"] .hover\:text-blue-600:hover { color: rgb(124, 58, 237) !important; }
+[data-theme="purple"] .hover\:text-blue-700:hover { color: rgb(109, 40, 217) !important; }
+[data-theme="purple"] .peer-focus\:text-blue-600:focus,
+[data-theme="purple"] .peer:focus ~ .peer-focus\:text-blue-600 { color: rgb(124, 58, 237) !important; }
+[data-theme="purple"] .focus\:ring-blue-500:focus { --tw-ring-color: rgb(139, 92, 246) !important; box-shadow: 0 0 0 3px rgb(139, 92, 246, 0.5) !important; }
+[data-theme="purple"] .focus\:ring-blue-400:focus { box-shadow: 0 0 0 3px rgb(167, 139, 250, 0.5) !important; }
+[data-theme="purple"] .focus\:ring-blue-400\/50:focus { box-shadow: 0 0 0 3px rgb(167, 139, 250, 0.25) !important; }
+
+/* SVG 和其他 */
+[data-theme="purple"] .fill-blue-500,
+[data-theme="purple"] .hover\:fill-blue-500:hover { fill: rgb(124, 58, 237) !important; }
+[data-theme="purple"] .from-blue-500 { --tw-gradient-from: rgb(139, 92, 246) !important; }
+[data-theme="purple"] .to-blue-600 { --tw-gradient-to: rgb(124, 58, 237) !important; }
+[data-theme="purple"] .hover\:shadow-blue-500\/50:hover { box-shadow: 0 25px 50px -12px rgba(139, 92, 246, 0.5) !important; }
+
+
+/* 深色模式覆盖 */
+[data-theme="purple"].dark .text-blue-200 { color: rgb(221, 214, 254) !important; }
+[data-theme="purple"].dark .text-blue-300 { color: rgb(196, 181, 253) !important; }
+[data-theme="purple"].dark .text-blue-400 { color: rgb(167, 139, 250) !important; }
+[data-theme="purple"].dark .text-blue-600 { color: rgb(167, 139, 250) !important; }
+[data-theme="purple"].dark .text-blue-700 { color: rgb(196, 181, 253) !important; }
+
+[data-theme="purple"].dark .bg-blue-500 { background-color: rgb(167, 139, 250) !important; }
+[data-theme="purple"].dark .bg-blue-600 { background-color: rgb(139, 92, 246) !important; }
+[data-theme="purple"].dark .bg-blue-500\/10 { background-color: rgba(167, 139, 250, 0.1) !important; }
+[data-theme="purple"].dark .bg-blue-500\/20 { background-color: rgba(167, 139, 250, 0.2) !important; }
+[data-theme="purple"].dark .bg-blue-800\/40 { background-color: rgba(91, 33, 182, 0.4) !important; }
+[data-theme="purple"].dark .bg-blue-900\/20 { background-color: rgba(76, 29, 149, 0.2) !important; }
+[data-theme="purple"].dark .bg-blue-900\/30 { background-color: rgba(76, 29, 149, 0.3) !important; }
+[data-theme="purple"].dark .bg-blue-900\/40 { background-color: rgba(76, 29, 149, 0.4) !important; }
+
+[data-theme="purple"].dark .border-blue-500 { border-color: rgb(167, 139, 250) !important; }
+[data-theme="purple"].dark .border-blue-800 { border-color: rgb(91, 33, 182) !important; }
+[data-theme="purple"].dark .border-t-blue-500 { border-top-color: rgb(167, 139, 250) !important; }
+[data-theme="purple"].dark .border-b-2.border-blue-500 { border-bottom-color: rgb(167, 139, 250) !important; }
+
+[data-theme="purple"].dark .hover\:text-blue-300:hover { color: rgb(196, 181, 253) !important; }
+[data-theme="purple"].dark .hover\:text-blue-400:hover { color: rgb(167, 139, 250) !important; }
+[data-theme="purple"].dark .hover\:text-blue-500:hover { color: rgb(167, 139, 250) !important; }
+[data-theme="purple"].dark .peer-focus\:dark\:text-blue-400:focus,
+[data-theme="purple"].dark .peer:focus ~ .peer-focus\:dark\:text-blue-400 { color: rgb(167, 139, 250) !important; }
+[data-theme="purple"].dark .hover\:bg-blue-600:hover { background-color: rgb(196, 181, 253) !important; }
+[data-theme="purple"].dark .hover\:bg-blue-700:hover { background-color: rgb(196, 181, 253) !important; }
+[data-theme="purple"].dark .hover\:bg-blue-900\/60:hover { background-color: rgba(76, 29, 149, 0.6) !important; }
+
+[data-theme="purple"].dark .fill-blue-500,
+[data-theme="purple"].dark .hover\:fill-blue-500:hover { fill: rgb(167, 139, 250) !important; }
+[data-theme="purple"].dark .from-blue-500 { --tw-gradient-from: rgb(167, 139, 250) !important; }
+[data-theme="purple"].dark .to-blue-600 { --tw-gradient-to: rgb(196, 181, 253) !important; }
+
+/* 导航激活状态适配 */
+[data-theme="purple"] *[data-active="true"] {
+  background-color: rgba(124, 58, 237, 0.1) !important;
+  color: rgb(109, 40, 217) !important;
+}
+[data-theme="purple"].dark *[data-active="true"] {
+  background-color: rgba(167, 139, 250, 0.1) !important;
+  color: rgb(167, 139, 250) !important;
+}
+[data-theme="purple"] .group[data-active="true"] svg {
+  color: rgb(109, 40, 217) !important;
+}
+[data-theme="purple"].dark .group[data-active="true"] svg {
+  color: rgb(167, 139, 250) !important;
+}
