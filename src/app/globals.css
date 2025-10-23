@@ -32,6 +32,18 @@
   .slide-in-from-right-2 {
     animation-name: slide-in-from-right;
   }
+
+  /* *** 为 ShortDramaSelector 和其他组件提供优雅的进入动画 *** */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 :root {
@@ -1704,3 +1716,51 @@ div[data-media-provider] video {
     transition: none !important;
   }
 }
+
+/* ======================================================================== */
+/* 紫/粉色主题 (Purple Theme) -  */
+/* ======================================================================== */
+
+[data-theme="purple"] {
+  /* 定义紫粉色系的基础色板 */
+  --color-primary-50: 245, 243, 255;
+  --color-primary-100: 237, 233, 254;
+  --color-primary-200: 221, 214, 254;
+  --color-primary-300: 196, 181, 253;
+  --color-primary-400: 167, 139, 250;
+  --color-primary-500: 139, 92, 246;
+  --color-primary-600: 124, 58, 237;
+  --color-primary-700: 109, 40, 217;
+  --color-primary-800: 91, 33, 182;
+  --color-primary-900: 76, 29, 149;
+
+  /* 定义紫粉色系的主题语义化颜色 */
+  --color-theme-bg: 249, 250, 251; /* 浅灰色背景 */
+  --color-theme-surface: 255, 255, 255; /* 白色卡片表面 */
+  --color-theme-accent: 124, 58, 237; /* 主色调：紫色 */
+  --color-theme-text: 31, 41, 55;
+  --color-theme-text-secondary: 107, 114, 128;
+  --color-theme-border: 229, 231, 235;
+  --color-theme-success: 22, 163, 74;
+  --color-theme-warning: 245, 158, 11;
+  --color-theme-error: 239, 68, 68;
+  --color-theme-info: 59, 130, 246;
+}
+
+[data-theme="purple"].dark {
+  --color-theme-bg: 17, 24, 39; /* 深蓝黑背景 */
+  --color-theme-surface: 31, 41, 55; /* 深灰卡片表面 */
+  --color-theme-accent: 167, 139, 250; /* 亮紫色 */
+  --color-theme-text: 243, 244, 246;
+  --color-theme-text-secondary: 156, 163, 175;
+  --color-theme-border: 55, 65, 81;
+  --color-theme-success: 74, 222, 128;
+  --color-theme-warning: 251, 191, 36;
+  --color-theme-error: 248, 113, 113;
+  --color-theme-info: 96, 165, 250;
+}
+
+/* 覆盖原有蓝色硬编码样式，使其适应紫粉色主题 */
+[data-theme="purple"] .text-blue-600 { color: rgb(109 40 217) !important; }
+[data-theme="purple"].dark .text-blue-400 { color: rgb(167 139 250) !important; }
+/* ... 此处可以根据需要添加更多对 'blue' 的覆盖 ... */
