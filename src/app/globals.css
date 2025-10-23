@@ -1861,3 +1861,8 @@ div[data-media-provider] video {
 [data-theme="purple"].dark .group[data-active="true"] svg {
   color: rgb(167, 139, 250) !important;
 }
+
+html,
+body {
+  height: 100%;
+  overflow-x: hidden;
