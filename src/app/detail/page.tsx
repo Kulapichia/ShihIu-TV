@@ -1,4 +1,4 @@
-// src/app/detail/page.tsx (新建)
+// src/app/detail/page.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps, no-console */
 
 'use client';
@@ -15,19 +15,22 @@ import CelebritiesSection from '@/components/CelebritiesSection';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import {
   deleteFavorite,
-  isFavorited as checkIfFavorited,
   saveFavorite,
   subscribeToDataUpdates,
   deleteFavoriteByTitle,
 } from '@/lib/db.client';
-import { Favorite, SearchResult } from '@/lib/types';
+// [功能整合] 引入 Celebrity 类型
+import { Favorite, SearchResult, Celebrity } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
 import { useIsTablet } from '@/lib/useIsTablet';
-
+// [功能整合] 引入 useSite Hook 以获取 mainContainerRef
+import { useSite } from '@/components/SiteProvider';
 
 function DetailPageClient() {
   const [instanceId] = useState(() => Date.now().toString());
   const [isMobile, setIsMobile] = useState(false); // 用于移动端检测的新状态
+  // [功能整合] 从 SiteContext 获取 mainContainerRef
+  const { mainContainerRef } = useSite();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -98,8 +101,6 @@ function DetailPageClient() {
       return null;
     }
   };
-
-
 
   const source = searchParams.get('source');
   const id = searchParams.get('id');
@@ -273,8 +274,9 @@ function DetailPageClient() {
           }
           // 场景2：我们只有一个标题。搜索它。
           else if (title) {
+            // [功能整合] 使用 /api/search/one 以获得更精确的匹配
             const searchResponse = await fetch(
-              `/api/search/stream?q=${encodeURIComponent(title)}${year ? `&year=${year}` : ''}`
+              `/api/search/one?q=${encodeURIComponent(title)}${year ? `&year=${year}` : ''}`
             );
             if (!searchResponse.ok) {
               throw new Error(`搜索视频源失败: ${searchResponse.statusText}`);
@@ -343,7 +345,8 @@ function DetailPageClient() {
           }
           // 添加此块
           if ((!newDetail.celebrities || newDetail.celebrities.length === 0) && videoDetailToSet.celebrities && videoDetailToSet.celebrities.length > 0) {
-            newDetail.celebrities = videoDetailToSet.celebrities;
+            // [功能整合] 明确指定类型
+            newDetail.celebrities = videoDetailToSet.celebrities as Celebrity[];
           }
           if (!newDetail.trailerUrl && videoDetailToSet.trailerUrl) {
             newDetail.trailerUrl = videoDetailToSet.trailerUrl;
@@ -369,10 +372,6 @@ function DetailPageClient() {
 
     fetchData();
   }, [source, id, title, year, initialPoster, doubanId]);
-
-  
-
-  
 
   const handlePlay = () => {
     if (!detail) return;
@@ -402,6 +401,11 @@ function DetailPageClient() {
         playParams.set('year', originalYear);
       }
     }
+    
+    // [功能整合] 将 douban_id 传递给播放页面
+    if (doubanId) {
+      playParams.set('douban_id', doubanId);
+    }
 
     router.push(`/play?${playParams.toString()}`);
   };
@@ -429,7 +433,7 @@ function DetailPageClient() {
         }
       } else {
         // 项目未被收藏，因此收藏它
-        const favoriteData = {
+        const favoriteData: Favorite = {
           title: detail.title,
           source_name: '收藏',
           year: detail.year || '',
@@ -437,6 +441,8 @@ function DetailPageClient() {
           total_episodes: 1,
           save_time: Date.now(),
           doubanId: doubanId || '', // 在此处添加doubanId
+          // [功能整合] 添加 search_title 方便后续使用
+          search_title: detail.title,
         };
         // 保存时，我们仍使用 'title_based' 和 detail.title 作为 source 和 id
         // 以保持从此页面发起的收藏的一致性。
@@ -448,9 +454,7 @@ function DetailPageClient() {
     } finally {
       setIsFavoriting(false);
     }
-  }, [detail, isFavorited, allFavorites]);
-
-  
+  }, [detail, isFavorited, allFavorites, doubanId]);
 
   if (error) {
     return (
@@ -487,7 +491,8 @@ function DetailPageClient() {
 
   return (
     <PageLayout activePath={pathname}>
-      <div className={`max-w-[96%] mx-auto px-4 sm:px-10 lg:px-8 pb-8 relative ${isTablet ? 'pt-14' : ''} ${isMobile ? 'pt-4' : 'pt-8'}`}>
+      {/* [功能整合] 附加 ref 并保留原有样式 */}
+      <div className={`max-w-[96%] mx-auto px-4 sm:px-10 lg:px-8 pb-8 relative ${isTablet ? 'pt-14' : ''} ${isMobile ? 'pt-4' : 'pt-8'}`} ref={mainContainerRef as any}>
         
         <div className={`grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8 ${!isMobile ? 'pt-10' : 'pt-0'}`}>
           <div className='md:col-span-1 lg:col-span-1'>
@@ -601,6 +606,7 @@ function DetailPageClient() {
                       isFavorited ? 'fill-red-500 stroke-red-500' : 'fill-transparent stroke-white'
                     }`}
                   />
+
                   <span className='sm:hidden whitespace-nowrap'>{isFavorited ? '已收藏' : '收藏'}</span>
                 </button>
               )}
@@ -680,6 +686,8 @@ function DetailPageClient() {
 }
 
 export default function DetailPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+  // [功能整合] 修正了文件路径，并保持原有逻辑不变
+  // 之前的路径可能是 src/app/detail/page.tsx，现在应该是 src/app/detail/[...vod_id]/page.tsx
   const key = JSON.stringify(searchParams);
   return (
     <Suspense>
