@@ -15,12 +15,12 @@
  */
 
 import { getAuthInfoFromBrowserCookie } from './auth';
-import { UserPlayStat, SkipSegment, EpisodeSkipConfig } from './types';
+import { UserPlayStat, SkipSegment, EpisodeSkipConfig, Favorite } from './types'; // 1. 在这里导入 Favorite
 import type { PlayRecord } from './types';
 import { forceClearWatchingUpdatesCache } from './watching-updates';
 
 // 重新导出类型以保持API兼容性
-export type { PlayRecord, SkipSegment, EpisodeSkipConfig } from './types';
+export type { PlayRecord, SkipSegment, EpisodeSkipConfig, Favorite } from './types'; // 2. 在这里也重新导出
 
 // 全局错误触发函数
 function triggerGlobalError(message: string) {
@@ -35,18 +35,6 @@ function triggerGlobalError(message: string) {
 
 // 为了向后兼容，保留UserStats类型别名
 export type UserStats = UserPlayStat;
-
-// ---- 收藏类型 ----
-export interface Favorite {
-  title: string;
-  source_name: string;
-  year: string;
-  cover: string;
-  total_episodes: number;
-  save_time: number;
-  search_title?: string;
-  origin?: 'vod' | 'live';
-}
 
 // ---- 缓存数据结构 ----
 interface CacheData<T> {
