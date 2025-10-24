@@ -224,7 +224,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
+          logout: true
       # 在原有的标签规则基础上，增加一条基于 package.json 的规则
       - name: 🏷️ Extract intelligent Docker metadata
         id: meta
