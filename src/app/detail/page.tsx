@@ -28,22 +28,24 @@ import { useSite } from '@/components/SiteProvider';
 
 function DetailPageClient() {
   const [instanceId] = useState(() => Date.now().toString());
-  const [isMobile, setIsMobile] = useState(false); // 用于移动端检测的新状态
+  // [代码整合]: 移除重复的 isMobile 状态及其 useEffect，统一使用 useIsTablet hook
+  // const [isMobile, setIsMobile] = useState(false); 
   // [功能整合] 从 SiteContext 获取 mainContainerRef
   const { mainContainerRef } = useSite();
 
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(typeof window !== 'undefined' && window.innerWidth < 768);
-    };
-
-    checkMobile(); // 组件挂载时检查
-    window.addEventListener('resize', checkMobile); // 窗口大小改变时更新
-
-    return () => {
-      window.removeEventListener('resize', checkMobile); // 清理
-    };
-  }, []); // 组件挂载时仅运行一次
+  // [代码整合]: 以下 useEffect 逻辑已被 useIsTablet hook 替代，故删除
+  // useEffect(() => {
+  //   const checkMobile = () => {
+  //     setIsMobile(typeof window !== 'undefined' && window.innerWidth < 768);
+  //   };
+  // 
+  //   checkMobile(); // 组件挂载时检查
+  //   window.addEventListener('resize', checkMobile); // 窗口大小改变时更新
+  // 
+  //   return () => {
+  //     window.removeEventListener('resize', checkMobile); // 清理
+  //   };
+  // }, []); 
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -488,13 +490,13 @@ function DetailPageClient() {
       </PageLayout>
     );
   }
-
+  // [代码整合]: isMobile 的逻辑现在由 isTablet 统一处理 (isTablet 在移动端也为 true)
   return (
     <PageLayout activePath={pathname}>
       {/* [功能整合] 附加 ref 并保留原有样式 */}
-      <div className={`max-w-[96%] mx-auto px-4 sm:px-10 lg:px-8 pb-8 relative ${isTablet ? 'pt-14' : ''} ${isMobile ? 'pt-4' : 'pt-8'}`} ref={mainContainerRef as any}>
+      <div className={`max-w-[96%] mx-auto px-4 sm:px-10 lg:px-8 pb-8 relative ${isTablet ? 'pt-4' : 'pt-8'}`} ref={mainContainerRef as any}>
         
-        <div className={`grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8 ${!isMobile ? 'pt-10' : 'pt-0'}`}>
+        <div className={`grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8 ${isTablet ? 'pt-0' : 'pt-10'}`}>
           <div className='md:col-span-1 lg:col-span-1'>
             <div className='relative aspect-[2/3] w-full rounded-lg overflow-hidden shadow-2xl'>
               {initialPoster || detail?.poster ? (
