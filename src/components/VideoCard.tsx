@@ -448,6 +448,16 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
         showRating: !!rate,
         showYear: true,
       },
+      recommendation: { // 添加 recommendation 配置
+        showSourceName: false,
+        showProgress: false,
+        showPlayButton: true,
+        showHeart: false,
+        showCheckCircle: false,
+        showDoubanLink: true,
+        showRating: !!rate,
+        showYear: false,
+      },
     };
     return configs[from] || configs.search;
   }, [from, isAggregate, douban_id, rate]);
