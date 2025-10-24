@@ -6407,7 +6407,7 @@ function PlayPageClient() {
                 episodes_titles={detail?.episodes_titles || []}
                 value={currentEpisodeIndex + 1}
                 onChange={handleEpisodeChange}
-                onLongPress={handleLongPress}
+                // onLongPress={handleLongPress}
                 onSourceChange={handleSourceChange}
                 currentSource={currentSource}
                 currentId={currentId}
