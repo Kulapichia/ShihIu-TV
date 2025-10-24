@@ -251,15 +251,18 @@ function LoginPageClient() {
   // 新增：Telegram 登录按钮组件
   const TelegramLoginButton = ({ botName }: { botName: string }) => {
     useEffect(() => {
-
       // 创建并注入 Telegram 的官方 widget 脚本
       const script = document.createElement('script');
       script.src = 'https://telegram.org/js/telegram-widget.js?22';
       script.async = true;
       script.setAttribute('data-telegram-login', botName);
       script.setAttribute('data-size', 'large'); // 按钮大小: small, medium, large
+      
       // 这会告诉 Telegram 登录成功后，将浏览器重定向到我们的后端 API
-      const callbackUrl = new URL('/api/oauth/telegram/callback', window.location.origin).toString();
+      const callbackUrl = new URL(
+        '/api/oauth/telegram/callback',
+        window.location.origin,
+      ).toString();
       script.setAttribute('data-auth-url', callbackUrl);
       script.setAttribute('data-request-access', 'write'); // 请求写入权限
 
@@ -275,7 +278,7 @@ function LoginPageClient() {
     }, [botName]);
 
     // 这是 Telegram widget 脚本将要挂载的 DOM 节点
-    return <div id="telegram-login-container"></div>;
+    return <div id='telegram-login-container'></div>;
   };
 
   return (
@@ -284,33 +287,50 @@ function LoginPageClient() {
         {/* Bing 每日壁纸背景 */}
         {bingWallpaper && (
           <div
-          className='absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 animate-ken-burns'
-          style={{ backgroundImage: `url(${bingWallpaper})` }}
-        />
-      )}
+            className='absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 animate-ken-burns'
+            style={{ backgroundImage: `url(${bingWallpaper})` }}
+          />
+        )}
 
-      {/* 渐变叠加层 */}
-      <div className='absolute inset-0 bg-gradient-to-br from-purple-600/40 via-blue-600/30 to-pink-500/40 dark:from-purple-900/50 dark:via-blue-900/40 dark:to-pink-900/50' />
-      <div className='absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/30' />
+        {/* 渐变叠加层 */}
+        <div className='absolute inset-0 bg-gradient-to-br from-purple-600/40 via-blue-600/30 to-pink-500/40 dark:from-purple-900/50 dark:via-blue-900/40 dark:to-pink-900/50' />
+        <div className='absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/30' />
 
-      <div className='absolute top-4 right-4 z-20'>
-        <ThemeToggle />
-      </div>
-      <div className='relative z-10 w-full max-w-md rounded-3xl bg-gradient-to-br from-white/95 via-white/85 to-white/75 dark:from-zinc-900/95 dark:via-zinc-900/85 dark:to-zinc-900/75 backdrop-blur-2xl shadow-[0_20px_80px_rgba(0,0,0,0.3)] dark:shadow-[0_20px_80px_rgba(0,0,0,0.6)] p-10 border border-white/50 dark:border-zinc-700/50 animate-fade-in hover:shadow-[0_25px_100px_rgba(0,0,0,0.4)] transition-shadow duration-500'>
-        {/* 装饰性光效 */}
-        <div className='absolute -top-20 -left-20 w-40 h-40 bg-gradient-to-br from-purple-400/30 to-pink-400/30 rounded-full blur-3xl animate-pulse' />
-        <div className='absolute -bottom-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-400/30 to-cyan-400/30 rounded-full blur-3xl animate-pulse' style={{ animationDelay: '1s' }} />
-
-        {/* 标题区域 */}
-        <div className='text-center mb-8'>
-          <div className='inline-flex items-center justify-center w-16 h-16 mb-4 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/50 dark:shadow-green-500/30'>
-            <Sparkles className='w-8 h-8 text-white' />
-          </div>
-          <h1 className='text-transparent bg-clip-text bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 dark:from-green-400 dark:via-emerald-400 dark:to-teal-400 tracking-tight text-4xl font-extrabold mb-2 drop-shadow-sm'>
-            {siteName}
-          </h1>
-          <p className='text-gray-600 dark:text-gray-400 text-sm font-medium'>欢迎回来，请登录您的账户</p>
+        <div className='absolute top-4 right-4 z-20'>
+          <ThemeToggle />
         </div>
+
+        {/* 主要登录卡片 */}
+        <div
+          className='
+            relative z-10 w-full max-w-md rounded-3xl 
+            bg-gradient-to-br from-white/95 via-white/85 to-white/75 
+            dark:from-zinc-900/95 dark:via-zinc-900/85 dark:to-zinc-900/75 
+            backdrop-blur-2xl shadow-[0_20px_80px_rgba(0,0,0,0.3)] 
+            dark:shadow-[0_20px_80px_rgba(0,0,0,0.6)] 
+            p-10 border border-white/50 dark:border-zinc-700/50 
+            animate-fade-in hover:shadow-[0_25px_100px_rgba(0,0,0,0.4)] 
+            transition-shadow duration-500'
+        >
+          {/* 装饰性光效 */}
+          <div className='absolute -top-20 -left-20 w-40 h-40 bg-gradient-to-br from-purple-400/30 to-pink-400/30 rounded-full blur-3xl animate-pulse' />
+          <div
+            className='absolute -bottom-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-400/30 to-cyan-400/30 rounded-full blur-3xl animate-pulse'
+            style={{ animationDelay: '1s' }}
+          />
+
+          {/* 标题区域 */}
+          <div className='text-center mb-8'>
+            <div className='inline-flex items-center justify-center w-16 h-16 mb-4 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/50 dark:shadow-green-500/30'>
+              <Sparkles className='w-8 h-8 text-white' />
+            </div>
+            <h1 className='text-transparent bg-clip-text bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 dark:from-green-400 dark:via-emerald-400 dark:to-teal-400 tracking-tight text-4xl font-extrabold mb-2 drop-shadow-sm'>
+              {siteName}
+            </h1>
+            <p className='text-gray-600 dark:text-gray-400 text-sm font-medium'>
+              欢迎回来，请登录您的账户
+            </p>
+          </div>
 
         <form onSubmit={handleSubmit} className='space-y-6'>
           {shouldAskUsername && (
