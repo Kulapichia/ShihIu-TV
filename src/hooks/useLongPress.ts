@@ -106,6 +106,7 @@ export const useLongPress = <T = unknown>({
     [clearTimer, onClick]
   );
 
+  // 触摸事件处理器
   const onTouchStart = useCallback(
     (e: React.TouchEvent, context: T) => {
       // 检查是否触摸的是按钮或其他交互元素
