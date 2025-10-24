@@ -459,8 +459,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
         showYear: false,
       },
     };
-    return configs[from] || configs.search;
-  }, [from, isAggregate, douban_id, rate]);
+    const configsTyped = configs as Record<typeof from, typeof configs.search>;
+    return configsTyped[from] || configs.search;
 
   // 移动端操作菜单配置
   const mobileActions = useMemo(() => {
