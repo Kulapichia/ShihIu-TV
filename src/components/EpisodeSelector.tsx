@@ -355,11 +355,11 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   );
 
   // 4. 新增：调用 useLongPress Hook 来获取长按事件处理器
-  const longPressEvents = useLongPress({
-    onLongPress: (e, { context }) => {
-      const { title } = context as { title: string };
-      onLongPress?.(title); // 触发从父组件传入的回调
-    },
+  const longPressEvents = useLongPress<{ title: string }>({
+    onLongPress: (e, context) => {
+      if (context?.title) {
+        onLongPress?.(context.title); // 触发从父组件传入的回调
+      }
     longPressDelay: 300,
   });
 
