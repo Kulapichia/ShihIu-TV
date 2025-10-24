@@ -2,7 +2,7 @@
 
 'use client';
 
-import { AlertCircle, CheckCircle, User, Lock, Sparkles, UserPlus, Shield } from 'lucide-react';
+import { AlertCircle, CheckCircle, User, Lock, Sparkles, UserPlus, Shield, Eye, EyeOff } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 
@@ -571,7 +571,7 @@ function LoginPageClient() {
 
       {/* 版本信息显示 */}
       <VersionDisplay />
-    </div>
+    </>
   );
 }
 
