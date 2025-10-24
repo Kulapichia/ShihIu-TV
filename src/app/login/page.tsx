@@ -279,10 +279,11 @@ function LoginPageClient() {
   };
 
   return (
-    <div className='relative min-h-screen flex items-center justify-center px-4 overflow-hidden'>
-      {/* Bing 每日壁纸背景 */}
-      {bingWallpaper && (
-        <div
+    <>
+      <div className='relative min-h-screen flex items-center justify-center px-4 overflow-hidden'>
+        {/* Bing 每日壁纸背景 */}
+        {bingWallpaper && (
+          <div
           className='absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 animate-ken-burns'
           style={{ backgroundImage: `url(${bingWallpaper})` }}
         />
