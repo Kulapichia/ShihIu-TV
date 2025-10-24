@@ -233,6 +233,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
   );
 
   const handleClick = useCallback(() => {
+    // 在导航前调用回调以保存滚动状态
+    onNavigate?.();
     // 如果从搜索页面点击，设置标记以便返回时使用缓存
     if (from === 'search' && typeof window !== 'undefined') {
       sessionStorage.setItem('fromPlayPage', 'true');
