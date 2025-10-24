@@ -484,6 +484,12 @@ function HomeClient() {
   const dataRef = useRef<RestorableHomeData>({
     activeTab: 'home',
     favoriteItems: [],
+    items: [], // 添加缺失的属性
+    hasNextPage: true, // 添加缺失的属性
+    primarySelection: '', // 添加缺失的属性
+    secondarySelection: '', // 添加缺失的属性
+    multiLevelValues: {}, // 添加缺失的属性
+    selectedWeekday: '', // 添加缺失的属性
   });
 
   // [滚动恢复整合] 实例化 Hook
@@ -502,6 +508,12 @@ function HomeClient() {
     dataRef.current = {
       activeTab,
       favoriteItems,
+      items: [], // 添加缺失的属性
+      hasNextPage: true, // 添加缺失的属性
+      primarySelection: '', // 添加缺失的属性
+      secondarySelection: '', // 添加缺失的属性
+      multiLevelValues: {}, // 添加缺失的属性
+      selectedWeekday: '', // 添加缺失的属性
     };
   }, [activeTab, favoriteItems]);
 
