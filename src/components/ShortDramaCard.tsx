@@ -18,12 +18,14 @@ interface ShortDramaCardProps {
   drama: ShortDramaItem;
   showDescription?: boolean;
   className?: string;
+  onNavigate?: () => void; // [滚动恢复整合] 新增 onNavigate 属性
 }
 
 export default function ShortDramaCard({
   drama,
   showDescription = false,
   className = '',
+  onNavigate, // [滚动恢复整合] 从 props 中解构 onNavigate
 }: ShortDramaCardProps) {
   const [realEpisodeCount, setRealEpisodeCount] = useState<number>(drama.episode_count);
   const [imageLoaded, setImageLoaded] = useState(false); // 图片加载状态
@@ -96,6 +98,7 @@ export default function ShortDramaCard({
       <Link
         href={`/play?source=shortdrama&id=${drama.id}&title=${encodeURIComponent(drama.name)}`}
         className="block"
+        onClick={onNavigate} // [滚动恢复整合] 在 Link 组件上添加 onClick 事件以在导航前保存状态
       >
         {/* 封面图片 */}
         <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-800">
