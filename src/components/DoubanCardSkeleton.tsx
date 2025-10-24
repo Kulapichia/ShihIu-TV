@@ -10,7 +10,10 @@ const DoubanCardSkeleton = () => {
         {/* 信息层骨架 */}
         <div className='absolute top-[calc(100%+0.5rem)] left-0 right-0'>
           <div className='flex flex-col items-center justify-center'>
-            <div className='h-4 w-24 sm:w-32 bg-gray-200 rounded animate-pulse mb-2'></div>
+            {/* 标题占位符 */}
+            <div className='h-4 w-24 sm:w-32 bg-gray-300 dark:bg-gray-700 rounded animate-pulse'></div>
+            {/* 年份占位符 */}
+            <div className='h-3 mt-1 bg-gray-300 dark:bg-gray-700 rounded w-12 animate-pulse'></div>
           </div>
         </div>
       </div>
