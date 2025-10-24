@@ -461,7 +461,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     };
     const configsTyped = configs as Record<typeof from, typeof configs.search>;
     return configsTyped[from] || configs.search;
-
+  }, [from, rate]);
   // 移动端操作菜单配置
   const mobileActions = useMemo(() => {
     const actions = [];
