@@ -293,22 +293,18 @@ export async function parseShortDramaEpisode(
     }
 
     const timestamp = Date.now();
-    const apiUrl = isMobile()
-      ? `/api/shortdrama/parse?${params.toString()}&_t=${timestamp}`
-      // MODIFIED: Use baseUrl from API_CONFIG
-      : `${API_CONFIG.shortdrama.baseUrl}/vod/parse/single?${params.toString()}`;
+    // 统一API路径：所有客户端（桌面/移动）都请求后端的 /api/shortdrama/parse/single 路由
+    // 这确保了行为一致性，并利用后端代理解决潜在的CORS问题。
+    const apiUrl = `/api/shortdrama/parse/single?${params.toString()}&_t=${timestamp}`;
 
-    const fetchOptions: RequestInit = isMobile() ? {
+    // 统一 fetch 选项，因为现在总是请求内部API，不再需要处理跨域
+    const fetchOptions: RequestInit = {
       cache: 'no-store',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0'
       }
-    } : {
-      // MODIFIED: Use headers from API_CONFIG
-      headers: API_CONFIG.shortdrama.headers,
-      mode: 'cors',
     };
 
     const response = await fetch(apiUrl, fetchOptions);
@@ -369,7 +365,7 @@ export async function parseShortDramaBatch(
 
     const timestamp = Date.now();
     const apiUrl = isMobile()
-      ? `/api/shortdrama/parse?${params.toString()}&_t=${timestamp}`
+      ? `/api/shortdrama/parse/batch?${params.toString()}&_t=${timestamp}`
       // MODIFIED: Use baseUrl from API_CONFIG
       : `${API_CONFIG.shortdrama.baseUrl}/vod/parse/batch?${params.toString()}`;
 
@@ -468,11 +464,11 @@ export async function getShortDramaLatest(
         return cached;
       }
     }
-    
+
     const apiUrl = isMobile()
       ? `/api/shortdrama/latest?page=${page}&size=${size}`
       : `${API_CONFIG.shortdrama.baseUrl}/vod/latest?page=${page}&size=${size}`;
-      
+
     const fetchOptions: RequestInit = isMobile() ? {} : {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -487,7 +483,7 @@ export async function getShortDramaLatest(
     }
 
     const data = await response.json();
-    
+
     let result: { list: ShortDramaItem[]; hasMore: boolean };
     if (isMobile()) {
       result = data;
