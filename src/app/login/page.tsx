@@ -69,10 +69,12 @@ function LoginPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [shouldAskUsername, setShouldAskUsername] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [bingWallpaper, setBingWallpaper] = useState<string>('');
   const [registrationEnabled, setRegistrationEnabled] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -110,6 +112,18 @@ function LoginPageClient() {
 
   // 在客户端挂载后设置配置
   useEffect(() => {
+    // Load remembered username
+    if (typeof window !== 'undefined') {
+      const rememberedUsername = localStorage.getItem('rememberedUsername');
+      const rememberedPassword = localStorage.getItem('rememberedPassword'); // New line
+      if (rememberedUsername) {
+        setUsername(rememberedUsername);
+        if (rememberedPassword) { // New line
+          setPassword(rememberedPassword); // New line
+        } // New line
+        setRememberMe(true); // Check remember me if username is found
+      }
+    }
     // 获取服务器配置
     fetch('/api/server-config')
       .then((res) => res.json())
@@ -182,6 +196,14 @@ function LoginPageClient() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
+        // Save/clear remembered username and password
+        if (rememberMe && username) {
+          localStorage.setItem('rememberedUsername', username);
+          localStorage.setItem('rememberedPassword', password); // New line
+        } else {
+          localStorage.removeItem('rememberedUsername');
+          localStorage.removeItem('rememberedPassword'); // New line
+        }
         if (deviceCodeEnabled && bindMachineCode && machineCode && shouldAskUsername) {
           try {
             await fetch('/api/machine-code', {
@@ -322,13 +344,46 @@ function LoginPageClient() {
               </div>
               <input
                 id='password'
-                type='password'
+                type={showPassword ? 'text' : 'password'}
                 autoComplete='current-password'
-                className='block w-full pl-12 pr-4 py-3.5 rounded-xl border-0 text-gray-900 dark:text-gray-100 shadow-sm ring-2 ring-white/60 dark:ring-white/10 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:outline-none sm:text-base bg-white/80 dark:bg-zinc-800/80 backdrop-blur transition-all duration-300 hover:shadow-md'
+                className='block w-full pl-12 pr-12 py-3.5 rounded-xl border-0 text-gray-900 dark:text-gray-100 shadow-sm ring-2 ring-white/60 dark:ring-white/10 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:outline-none sm:text-base bg-white/80 dark:bg-zinc-800/80 backdrop-blur transition-all duration-300 hover:shadow-md'
                 placeholder='请输入访问密码'
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <div className="absolute inset-y-0 right-0 pr-4 flex items-center text-sm leading-5">
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 focus:outline-none"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : ( <Eye className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+          {/* Remember Me Checkbox */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <input
+                id="remember-me"
+                name="remember-me"
+                type="checkbox"
+                className="hidden peer"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <label htmlFor="remember-me" className="flex items-center cursor-pointer">
+                <div className="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 rounded flex items-center justify-center peer-checked:bg-green-500 peer-checked:border-green-500 transition-all duration-200">
+                  {rememberMe && (
+                    <span className="text-white text-xs">✓</span>
+                  )}
+                </div>
+                <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">记住我</span>
+              </label>
             </div>
           </div>
 
