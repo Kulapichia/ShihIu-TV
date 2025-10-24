@@ -2,10 +2,9 @@
 
 'use client';
 
-import { ChevronUp } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronUp, Loader2 } from 'lucide-react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 import { GetBangumiCalendarData } from '@/lib/bangumi.client';
 import {
@@ -20,9 +19,26 @@ import DoubanCardSkeleton from '@/components/DoubanCardSkeleton';
 import DoubanCustomSelector from '@/components/DoubanCustomSelector';
 import DoubanSelector from '@/components/DoubanSelector';
 import PageLayout from '@/components/PageLayout';
+import { useSite } from '@/components/SiteProvider'; // [滚动恢复整合] 引入 useSite
 import VideoCard from '@/components/VideoCard';
 import VirtualDoubanGrid from '@/components/VirtualDoubanGrid';
 import { useVirtualScroll } from '@/components/VirtualScrollProvider';
+import { clearScrollCache } from '@/lib/scrollCache'; // [滚动恢复整合] 引入 clearScrollCache
+import {
+  RestorableData,
+  useScrollRestoration,
+} from '@/lib/useScrollRestoration'; // [滚动恢复整合] 引入核心Hook
+
+// [滚动恢复整合] 定义需要缓存的状态接口，确保类型安全
+interface RestorableDoubanData extends RestorableData {
+  items: DoubanItem[];
+  currentPage: number;
+  hasNextPage: boolean; // 对应原 hasMore
+  primarySelection: string;
+  secondarySelection: string;
+  multiLevelValues: Record<string, string>;
+  selectedWeekday: string;
+}
 
 function DoubanPageClient() {
   const searchParams = useSearchParams();
@@ -37,6 +53,10 @@ function DoubanPageClient() {
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // 返回顶部按钮显示状态
   const [showBackToTop, setShowBackToTop] = useState(false);
+
+  // [滚动恢复整合] 引入 pathname 和 mainContainerRef
+  const pathname = usePathname();
+  const { mainContainerRef } = useSite();
 
   // 虚拟化开关状态 (从全局上下文获取)
   const { virtualScrollEnabled: useVirtualization, setVirtualScrollEnabled } =
@@ -87,6 +107,54 @@ function DoubanPageClient() {
 
   // 星期选择器状态
   const [selectedWeekday, setSelectedWeekday] = useState<string>('');
+
+  // [滚动恢复整合] 创建 Ref 保存所有需要缓存的数据
+  const dataRef = useRef<RestorableDoubanData>({
+    items: [],
+    currentPage: 0,
+    hasNextPage: true,
+    primarySelection: '',
+    secondarySelection: '',
+    multiLevelValues: {},
+    selectedWeekday: '',
+  });
+
+  // [滚动恢复整合] 实例化 Hook
+  const { saveScrollState, isRestoring } = useScrollRestoration({
+    dataRef,
+    mainContainerRef,
+    restoreState: (cachedData: RestorableDoubanData) => {
+      // 当检测到缓存时，此函数会被调用以恢复所有相关的状态
+      setDoubanData(cachedData.items);
+      setCurrentPage(cachedData.currentPage);
+      setHasMore(cachedData.hasNextPage);
+      setPrimarySelection(cachedData.primarySelection);
+      setSecondarySelection(cachedData.secondarySelection);
+      setMultiLevelValues(cachedData.multiLevelValues);
+      setSelectedWeekday(cachedData.selectedWeekday);
+    },
+  });
+
+  // [滚动恢复整合] 监听所有相关状态，并实时更新 dataRef
+  useEffect(() => {
+    dataRef.current = {
+      items: doubanData,
+      currentPage,
+      hasNextPage: hasMore,
+      primarySelection,
+      secondarySelection,
+      multiLevelValues,
+      selectedWeekday,
+    };
+  }, [
+    doubanData,
+    currentPage,
+    hasMore,
+    primarySelection,
+    secondarySelection,
+    multiLevelValues,
+    selectedWeekday,
+  ]);
 
   // 保存虚拟化设置
   const toggleVirtualization = () => {
@@ -142,40 +210,20 @@ function DoubanPageClient() {
 
   // 监听滚动位置，控制返回顶部按钮显示
   useEffect(() => {
-    // 获取滚动位置的函数 - 专门针对 body 滚动
-    const getScrollTop = () => {
-      return document.body.scrollTop || 0;
-    };
+    // [滚动恢复整合] 适配滚动容器，不再监听 document.body
+    const container = mainContainerRef.current;
+    if (!container) return;
 
-    // 使用 requestAnimationFrame 持续检测滚动位置
-    let isRunning = false;
-    const checkScrollPosition = () => {
-      if (!isRunning) return;
-
-      const scrollTop = getScrollTop();
-      const shouldShow = scrollTop > 300;
-      setShowBackToTop(shouldShow);
-
-      requestAnimationFrame(checkScrollPosition);
-    };
-
-    // 启动持续检测
-    isRunning = true;
-    checkScrollPosition();
-
-    // 监听 body 元素的滚动事件
     const handleScroll = () => {
-      const scrollTop = getScrollTop();
-      setShowBackToTop(scrollTop > 300);
+      setShowBackToTop(container.scrollTop > 300);
     };
 
-    document.body.addEventListener('scroll', handleScroll, { passive: true });
+    container.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
-      isRunning = false;
-      document.body.removeEventListener('scroll', handleScroll);
+      container.removeEventListener('scroll', handleScroll);
     };
-  }, []);
+  }, [mainContainerRef]);
 
   // type变化时立即重置selectorsReady（最高优先级）
   useEffect(() => {
@@ -185,6 +233,9 @@ function DoubanPageClient() {
 
   // 当type变化时重置选择器状态
   useEffect(() => {
+    // [滚动恢复整合] type 改变，清除缓存
+    clearScrollCache(pathname);
+
     if (type === 'custom' && customCategories.length > 0) {
       // 自定义分类模式：优先选择 movie，如果没有 movie 则选择 tv
       const types = Array.from(
@@ -244,7 +295,7 @@ function DoubanPageClient() {
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [type, customCategories]);
+  }, [type, customCategories, pathname]);
 
   // 生成骨架屏数据
   const skeletonData = Array.from({ length: 25 }, (_, index) => index);
@@ -383,6 +434,7 @@ function DoubanPageClient() {
               rate: item.rating?.score?.toFixed(1) || '',
               year: item.air_date?.split('-')?.[0] || '',
             })),
+            hasNextPage: false, // 每日放送数据一次性加载完
           };
         } else {
           throw new Error('没有找到对应的日期');
@@ -431,7 +483,8 @@ function DoubanPageClient() {
         data = await getDoubanCategories(getRequestParams(0));
       }
 
-      if (data.code === 200) {
+      // @ts-ignore
+      if (data.code === 200 || data.list) {
         // 更宽松的参数检查：只检查关键参数，忽略currentPage的差异
         const currentSnapshot = { ...currentParamsRef.current };
         const keyParamsMatch =
@@ -445,7 +498,8 @@ function DoubanPageClient() {
 
         if (keyParamsMatch) {
           setDoubanData(data.list);
-          setHasMore(data.list.length !== 0);
+          const hasNext = data.hasNextPage ?? data.list.length > 0;
+          setHasMore(hasNext);
           setLoading(false);
         } else {
           console.log('关键参数不一致，不执行任何操作，避免设置过期数据');
@@ -471,7 +525,8 @@ function DoubanPageClient() {
   // 只在选择器准备好后才加载数据
   useEffect(() => {
     // 只有在选择器准备好时才开始加载
-    if (!selectorsReady) {
+    // [滚动恢复整合] 如果正在恢复状态，则不加载初始数据
+    if (!selectorsReady || isRestoring) {
       return;
     }
 
@@ -493,6 +548,7 @@ function DoubanPageClient() {
     };
   }, [
     selectorsReady,
+    isRestoring, // [滚动恢复整合] 添加依赖
     type,
     primarySelection,
     secondarySelection,
@@ -546,6 +602,7 @@ function DoubanPageClient() {
               code: 200,
               message: 'success',
               list: [],
+              hasNextPage: false,
             };
           } else if (type === 'anime') {
             data = await getDoubanRecommends({
@@ -600,8 +657,8 @@ function DoubanPageClient() {
               getRequestParams(currentPage * 25)
             );
           }
-
-          if (data.code === 200) {
+          // @ts-ignore
+          if (data.code === 200 || data.list) {
             // 更宽松的参数检查：只检查关键参数，忽略currentPage的差异
             const currentSnapshot = { ...currentParamsRef.current };
             const keyParamsMatch =
@@ -617,7 +674,8 @@ function DoubanPageClient() {
 
             if (keyParamsMatch) {
               setDoubanData((prev) => [...prev, ...data.list]);
-              setHasMore(data.list.length !== 0);
+              const hasNext = data.hasNextPage ?? data.list.length > 0;
+              setHasMore(hasNext);
             } else {
               console.log('关键参数不一致，不执行任何操作，避免设置过期数据');
             }
@@ -641,6 +699,7 @@ function DoubanPageClient() {
     customCategories,
     multiLevelValues,
     selectedWeekday,
+    getRequestParams, // getRequestParams added as dependency
   ]);
 
   // 设置滚动监听（只在非虚拟化模式下启用）
@@ -669,7 +728,7 @@ function DoubanPageClient() {
           setCurrentPage((prev) => prev + 1);
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1, root: mainContainerRef.current } // [滚动恢复整合] 指定滚动容器
     );
 
     observer.observe(loadingRef.current);
@@ -680,13 +739,15 @@ function DoubanPageClient() {
         observerRef.current.disconnect();
       }
     };
-  }, [hasMore, isLoadingMore, loading, useVirtualization]);
+  }, [hasMore, isLoadingMore, loading, useVirtualization, mainContainerRef]);
 
   // 处理选择器变化
   const handlePrimaryChange = useCallback(
     (value: string) => {
       // 只有当值真正改变时才设置loading状态
       if (value !== primarySelection) {
+        // [滚动恢复整合] 用户主动改变筛选，清除旧缓存
+        clearScrollCache(pathname);
         setLoading(true);
         // 立即重置页面状态，防止基于旧状态的请求
         setCurrentPage(0);
@@ -731,13 +792,15 @@ function DoubanPageClient() {
         }
       }
     },
-    [primarySelection, type, customCategories]
+    [primarySelection, type, customCategories, pathname]
   );
 
   const handleSecondaryChange = useCallback(
     (value: string) => {
       // 只有当值真正改变时才设置loading状态
       if (value !== secondarySelection) {
+        // [滚动恢复整合] 用户主动改变筛选，清除旧缓存
+        clearScrollCache(pathname);
         setLoading(true);
         // 立即重置页面状态，防止基于旧状态的请求
         setCurrentPage(0);
@@ -747,7 +810,7 @@ function DoubanPageClient() {
         setSecondarySelection(value);
       }
     },
-    [secondarySelection]
+    [secondarySelection, pathname]
   );
 
   const handleMultiLevelChange = useCallback(
@@ -769,7 +832,8 @@ function DoubanPageClient() {
       if (isEqual(values, multiLevelValues)) {
         return;
       }
-
+      // [滚动恢复整合] 用户主动改变筛选，清除旧缓存
+      clearScrollCache(pathname);
       setLoading(true);
       // 立即重置页面状态，防止基于旧状态的请求
       setCurrentPage(0);
@@ -778,12 +842,17 @@ function DoubanPageClient() {
       setIsLoadingMore(false);
       setMultiLevelValues(values);
     },
-    [multiLevelValues]
+    [multiLevelValues, pathname]
   );
 
-  const handleWeekdayChange = useCallback((weekday: string) => {
-    setSelectedWeekday(weekday);
-  }, []);
+  const handleWeekdayChange = useCallback(
+    (weekday: string) => {
+      // [滚动恢复整合] 用户主动改变筛选，清除旧缓存
+      clearScrollCache(pathname);
+      setSelectedWeekday(weekday);
+    },
+    [pathname]
+  );
 
   // 处理虚拟化组件的加载更多请求
   const handleVirtualLoadMore = useCallback(() => {
@@ -813,7 +882,7 @@ function DoubanPageClient() {
   };
 
   const getActivePath = () => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(searchParams.toString());
     if (type) params.set('type', type);
 
     const queryString = params.toString();
@@ -823,289 +892,293 @@ function DoubanPageClient() {
 
   // 返回顶部功能
   const scrollToTop = () => {
-    try {
-      // 根据调试结果，真正的滚动容器是 document.body
-      document.body.scrollTo({
-        top: 0,
-        behavior: 'smooth',
-      });
-    } catch (error) {
-      // 如果平滑滚动完全失败，使用立即滚动
-      document.body.scrollTop = 0;
-    }
+    // [滚动恢复整合] 适配滚动容器
+    mainContainerRef.current?.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
   };
 
   return (
     <PageLayout activePath={getActivePath()}>
-      <div className='px-4 sm:px-10 py-4 sm:py-8 overflow-visible'>
-        {/* 页面标题和选择器 */}
-        <div className='mb-6 sm:mb-8 space-y-4 sm:space-y-6'>
-          {/* 页面标题 */}
-          <div>
-            <h1 className='text-2xl sm:text-3xl font-bold text-gray-800 mb-1 sm:mb-2 dark:text-gray-200'>
-              {getPageTitle()}
-            </h1>
-            <p className='text-sm sm:text-base text-gray-600 dark:text-gray-400'>
-              {getPageDescription()}
-            </p>
-          </div>
-
-          {/* 选择器组件 */}
-          {type !== 'custom' ? (
-            <div className='relative bg-gradient-to-br from-white/80 via-blue-50/30 to-purple-50/30 dark:from-gray-800/60 dark:via-blue-900/20 dark:to-purple-900/20 rounded-2xl p-4 sm:p-6 border border-blue-200/40 dark:border-blue-700/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300'>
-              {/* 装饰性光晕 */}
-              <div className='absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-300/20 to-purple-300/20 rounded-full blur-3xl pointer-events-none'></div>
-              <div className='absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-green-300/20 to-teal-300/20 rounded-full blur-3xl pointer-events-none'></div>
-
-              <div className='relative'>
-                <DoubanSelector
-                  type={type as 'movie' | 'tv' | 'show' | 'anime'}
-                  primarySelection={primarySelection}
-                  secondarySelection={secondarySelection}
-                  onPrimaryChange={handlePrimaryChange}
-                  onSecondaryChange={handleSecondaryChange}
-                  onMultiLevelChange={handleMultiLevelChange}
-                  onWeekdayChange={handleWeekdayChange}
-                />
-              </div>
+      {/* [滚动恢复整合] 将主内容包裹在由 mainContainerRef 引用的可滚动 div 中 */}
+      <div
+        className='flex-grow overflow-y-auto'
+        ref={mainContainerRef as React.RefObject<HTMLDivElement>}
+      >
+        <div className='px-4 sm:px-10 py-4 sm:py-8 overflow-visible'>
+          {/* 页面标题和选择器 */}
+          <div className='mb-6 sm:mb-8 space-y-4 sm:space-y-6'>
+            {/* 页面标题 */}
+            <div>
+              <h1 className='text-2xl sm:text-3xl font-bold text-gray-800 mb-1 sm:mb-2 dark:text-gray-200'>
+                {getPageTitle()}
+              </h1>
+              <p className='text-sm sm:text-base text-gray-600 dark:text-gray-400'>
+                {getPageDescription()}
+              </p>
             </div>
-          ) : (
-            <div className='relative bg-gradient-to-br from-white/80 via-blue-50/30 to-purple-50/30 dark:from-gray-800/60 dark:via-blue-900/20 dark:to-purple-900/20 rounded-2xl p-4 sm:p-6 border border-blue-200/40 dark:border-blue-700/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300'>
-              {/* 装饰性光晕 */}
-              <div className='absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-300/20 to-purple-300/20 rounded-full blur-3xl pointer-events-none'></div>
-              <div className='absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-green-300/20 to-teal-300/20 rounded-full blur-3xl pointer-events-none'></div>
 
-              <div className='relative'>
-                <DoubanCustomSelector
-                  customCategories={customCategories}
-                  primarySelection={primarySelection}
-                  secondarySelection={secondarySelection}
-                  onPrimaryChange={handlePrimaryChange}
-                  onSecondaryChange={handleSecondaryChange}
-                />
-              </div>
-            </div>
-          )}
+            {/* 选择器组件 */}
+            {type !== 'custom' ? (
+              <div className='relative bg-gradient-to-br from-white/80 via-blue-50/30 to-purple-50/30 dark:from-gray-800/60 dark:via-blue-900/20 dark:to-purple-900/20 rounded-2xl p-4 sm:p-6 border border-blue-200/40 dark:border-blue-700/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300'>
+                {/* 装饰性光晕 */}
+                <div className='absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-300/20 to-purple-300/20 rounded-full blur-3xl pointer-events-none'></div>
+                <div className='absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-green-300/20 to-teal-300/20 rounded-full blur-3xl pointer-events-none'></div>
 
-          {/* 虚拟化开关 */}
-          <div className='flex justify-end'>
-            <label className='flex items-center gap-3 cursor-pointer select-none group'>
-              <span className='text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors'>
-                ⚡ 虚拟滑动
-              </span>
-              <div className='relative'>
-                <input
-                  type='checkbox'
-                  className='sr-only peer'
-                  checked={useVirtualization}
-                  onChange={toggleVirtualization}
-                />
-                <div className='w-11 h-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded-full peer-checked:from-blue-400 peer-checked:to-purple-500 transition-all duration-300 dark:from-gray-600 dark:to-gray-700 dark:peer-checked:from-blue-500 dark:peer-checked:to-purple-600 shadow-inner'></div>
-                <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-all duration-300 peer-checked:translate-x-5 shadow-lg peer-checked:shadow-blue-300 dark:peer-checked:shadow-blue-500/50 peer-checked:scale-105'></div>
-                {/* 开关内图标 */}
-                <div className='absolute top-1.5 left-1.5 w-3 h-3 flex items-center justify-center pointer-events-none transition-all duration-300 peer-checked:translate-x-5'>
-                  <span className='text-[10px] peer-checked:text-white text-gray-500'>
-                    {useVirtualization ? '✨' : '○'}
-                  </span>
+                <div className='relative'>
+                  <DoubanSelector
+                    type={type as 'movie' | 'tv' | 'show' | 'anime'}
+                    primarySelection={primarySelection}
+                    secondarySelection={secondarySelection}
+                    onPrimaryChange={handlePrimaryChange}
+                    onSecondaryChange={handleSecondaryChange}
+                    onMultiLevelChange={handleMultiLevelChange}
+                    onWeekdayChange={handleWeekdayChange}
+                  />
                 </div>
               </div>
-            </label>
-          </div>
-        </div>
+            ) : (
+              <div className='relative bg-gradient-to-br from-white/80 via-blue-50/30 to-purple-50/30 dark:from-gray-800/60 dark:via-blue-900/20 dark:to-purple-900/20 rounded-2xl p-4 sm:p-6 border border-blue-200/40 dark:border-blue-700/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300'>
+                {/* 装饰性光晕 */}
+                <div className='absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-300/20 to-purple-300/20 rounded-full blur-3xl pointer-events-none'></div>
+                <div className='absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-green-300/20 to-teal-300/20 rounded-full blur-3xl pointer-events-none'></div>
 
-        {/* 内容展示区域 */}
-        <div className='max-w-[95%] mx-auto mt-8 overflow-visible'>
-          {/* 条件渲染：虚拟化 vs 传统网格 */}
-          {useVirtualization ? (
-            <VirtualDoubanGrid
-              doubanData={doubanData}
-              hasMore={hasMore}
-              isLoadingMore={isLoadingMore}
-              onLoadMore={handleVirtualLoadMore}
-              type={type}
-              loading={loading || !selectorsReady}
-              primarySelection={primarySelection}
-              isBangumi={type === 'anime' && primarySelection === '每日放送'}
-            />
-          ) : (
-            <>
-              {/* 传统网格渲染 */}
-              <div className='justify-start grid grid-cols-3 gap-x-2 gap-y-12 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-x-8 sm:gap-y-20'>
-                {loading || !selectorsReady
-                  ? // 显示骨架屏
-                    skeletonData.map((index) => (
-                      <DoubanCardSkeleton key={index} />
-                    ))
-                  : // 显示实际数据
-                    doubanData.map((item, index) => (
-                      <div key={`${item.title}-${index}`} className='w-full'>
-                        <VideoCard
-                          from='douban'
-                          title={item.title}
-                          poster={item.poster}
-                          douban_id={Number(item.id)}
-                          rate={item.rate}
-                          year={item.year}
-                          type={type === 'movie' ? 'movie' : ''} // 电影类型严格控制，tv 不控
-                          isBangumi={
-                            type === 'anime' && primarySelection === '每日放送'
-                          }
-                        />
-                      </div>
-                    ))}
+                <div className='relative'>
+                  <DoubanCustomSelector
+                    customCategories={customCategories}
+                    primarySelection={primarySelection}
+                    secondarySelection={secondarySelection}
+                    onPrimaryChange={handlePrimaryChange}
+                    onSecondaryChange={handleSecondaryChange}
+                  />
+                </div>
               </div>
+            )}
 
-              {/* 加载更多指示器 */}
-              {hasMore && !loading && (
-                <div
-                  ref={(el) => {
-                    if (el && el.offsetParent !== null) {
-                      (
-                        loadingRef as React.MutableRefObject<HTMLDivElement | null>
-                      ).current = el;
-                    }
-                  }}
-                  className='flex justify-center mt-12 py-8'
-                >
-                  {isLoadingMore && (
-                    <div className='relative px-8 py-4 rounded-2xl bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 border border-green-200/50 dark:border-green-700/50 shadow-lg backdrop-blur-sm overflow-hidden'>
-                      {/* 动画背景 */}
-                      <div className='absolute inset-0 bg-gradient-to-r from-green-400/10 via-emerald-400/10 to-teal-400/10 animate-pulse'></div>
+            {/* 虚拟化开关 */}
+            <div className='flex justify-end'>
+              <label className='flex items-center gap-3 cursor-pointer select-none group'>
+                <span className='text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors'>
+                  ⚡ 虚拟滑动
+                </span>
+                <div className='relative'>
+                  <input
+                    type='checkbox'
+                    className='sr-only peer'
+                    checked={useVirtualization}
+                    onChange={toggleVirtualization}
+                  />
+                  <div className='w-11 h-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded-full peer-checked:from-blue-400 peer-checked:to-purple-500 transition-all duration-300 dark:from-gray-600 dark:to-gray-700 dark:peer-checked:from-blue-500 dark:peer-checked:to-purple-600 shadow-inner'></div>
+                  <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-all duration-300 peer-checked:translate-x-5 shadow-lg peer-checked:shadow-blue-300 dark:peer-checked:shadow-blue-500/50 peer-checked:scale-105'></div>
+                  {/* 开关内图标 */}
+                  <div className='absolute top-1.5 left-1.5 w-3 h-3 flex items-center justify-center pointer-events-none transition-all duration-300 peer-checked:translate-x-5'>
+                    <span className='text-[10px] peer-checked:text-white text-gray-500'>
+                      {useVirtualization ? '✨' : '○'}
+                    </span>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* 内容展示区域 */}
+          <div className='max-w-[95%] mx-auto mt-8 overflow-visible'>
+            {/* [滚动恢复整合] 如果正在恢复状态，则不渲染列表，避免闪烁 */}
+            {isRestoring ? (
+              <div className='flex justify-center py-20'>
+                <Loader2 className='animate-spin text-gray-400' size={48} />
+              </div>
+            ) : useVirtualization ? (
+              <VirtualDoubanGrid
+                doubanData={doubanData}
+                hasMore={hasMore}
+                isLoadingMore={isLoadingMore}
+                onLoadMore={handleVirtualLoadMore}
+                type={type}
+                loading={loading || !selectorsReady}
+                primarySelection={primarySelection}
+                isBangumi={type === 'anime' && primarySelection === '每日放送'}
+                // [滚动恢复整合] 传递保存状态的回调函数
+                onNavigate={saveScrollState}
+              />
+            ) : (
+              <>
+                {/* 传统网格渲染 */}
+                <div className='justify-start grid grid-cols-3 gap-x-2 gap-y-12 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-x-8 sm:gap-y-20'>
+                  {loading || !selectorsReady
+                    ? // 显示骨架屏
+                      skeletonData.map((index) => (
+                        <DoubanCardSkeleton key={index} />
+                      ))
+                    : // 显示实际数据
+                      doubanData.map((item, index) => (
+                        <div
+                          key={`${item.title}-${item.id}-${index}`}
+                          className='w-full'
+                        >
+                          <VideoCard
+                            from='douban'
+                            title={item.title}
+                            poster={item.poster}
+                            douban_id={Number(item.id)}
+                            rate={item.rate}
+                            year={item.year}
+                            type={type === 'movie' ? 'movie' : ''} // 电影类型严格控制，tv 不控
+                            isBangumi={
+                              type === 'anime' &&
+                              primarySelection === '每日放送'
+                            }
+                            // [滚动恢复整合] 传递保存状态的回调函数
+                            onNavigate={saveScrollState}
+                          />
+                        </div>
+                      ))}
+                </div>
+
+                {/* 加载更多指示器 */}
+                {hasMore && !loading && (
+                  <div ref={loadingRef} className='flex justify-center mt-12 py-8'>
+                    {isLoadingMore && (
+                      <div className='relative px-8 py-4 rounded-2xl bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 border border-green-200/50 dark:border-green-700/50 shadow-lg backdrop-blur-sm overflow-hidden'>
+                        {/* 动画背景 */}
+                        <div className='absolute inset-0 bg-gradient-to-r from-green-400/10 via-emerald-400/10 to-teal-400/10 animate-pulse'></div>
+
+                        {/* 内容 */}
+                        <div className='relative flex items-center gap-3'>
+                          {/* 旋转圈 */}
+                          <div className='relative'>
+                            <div className='animate-spin rounded-full h-8 w-8 border-[3px] border-green-200 dark:border-green-800'></div>
+                            <div className='absolute inset-0 animate-spin rounded-full h-8 w-8 border-[3px] border-transparent border-t-green-500 dark:border-t-green-400'></div>
+                          </div>
+
+                          {/* 文字和点动画 */}
+                          <div className='flex items-center gap-1'>
+                            <span className='text-sm font-medium text-gray-700 dark:text-gray-300'>
+                              加载中
+                            </span>
+                            <span className='flex gap-0.5'>
+                              <span
+                                className='animate-bounce'
+                                style={{ animationDelay: '0ms' }}
+                              >
+                                .
+                              </span>
+                              <span
+                                className='animate-bounce'
+                                style={{ animationDelay: '150ms' }}
+                              >
+                                .
+                              </span>
+                              <span
+                                className='animate-bounce'
+                                style={{ animationDelay: '300ms' }}
+                              >
+                                .
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 没有更多数据提示 */}
+                {!hasMore && doubanData.length > 0 && (
+                  <div className='flex justify-center mt-12 py-8'>
+                    <div className='relative px-8 py-5 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 border border-blue-200/50 dark:border-blue-700/50 shadow-lg backdrop-blur-sm overflow-hidden'>
+                      {/* 装饰性背景 */}
+                      <div className='absolute inset-0 bg-gradient-to-br from-blue-100/20 to-purple-100/20 dark:from-blue-800/10 dark:to-purple-800/10'></div>
 
                       {/* 内容 */}
-                      <div className='relative flex items-center gap-3'>
-                        {/* 旋转圈 */}
+                      <div className='relative flex flex-col items-center gap-2'>
+                        {/* 完成图标 */}
                         <div className='relative'>
-                          <div className='animate-spin rounded-full h-8 w-8 border-[3px] border-green-200 dark:border-green-800'></div>
-                          <div className='absolute inset-0 animate-spin rounded-full h-8 w-8 border-[3px] border-transparent border-t-green-500 dark:border-t-green-400'></div>
+                          <div className='w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg'>
+                            <svg
+                              className='w-7 h-7 text-white'
+                              fill='none'
+                              stroke='currentColor'
+                              viewBox='0 0 24 24'
+                            >
+                              <path
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                                strokeWidth='2.5'
+                                d='M5 13l4 4L19 7'
+                              ></path>
+                            </svg>
+                          </div>
+                          {/* 光圈效果 */}
+                          <div className='absolute inset-0 rounded-full bg-blue-400/30 animate-ping'></div>
                         </div>
 
-                        {/* 文字和点动画 */}
-                        <div className='flex items-center gap-1'>
-                          <span className='text-sm font-medium text-gray-700 dark:text-gray-300'>
-                            加载中
-                          </span>
-                          <span className='flex gap-0.5'>
-                            <span
-                              className='animate-bounce'
-                              style={{ animationDelay: '0ms' }}
-                            >
-                              .
-                            </span>
-                            <span
-                              className='animate-bounce'
-                              style={{ animationDelay: '150ms' }}
-                            >
-                              .
-                            </span>
-                            <span
-                              className='animate-bounce'
-                              style={{ animationDelay: '300ms' }}
-                            >
-                              .
-                            </span>
-                          </span>
+                        {/* 文字 */}
+                        <div className='text-center'>
+                          <p className='text-base font-semibold text-gray-800 dark:text-gray-200 mb-1'>
+                            已加载全部内容
+                          </p>
+                          <p className='text-xs text-gray-600 dark:text-gray-400'>
+                            共 {doubanData.length} 项
+                          </p>
                         </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 没有更多数据提示 */}
-              {!hasMore && doubanData.length > 0 && (
-                <div className='flex justify-center mt-12 py-8'>
-                  <div className='relative px-8 py-5 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 border border-blue-200/50 dark:border-blue-700/50 shadow-lg backdrop-blur-sm overflow-hidden'>
-                    {/* 装饰性背景 */}
-                    <div className='absolute inset-0 bg-gradient-to-br from-blue-100/20 to-purple-100/20 dark:from-blue-800/10 dark:to-purple-800/10'></div>
-
-                    {/* 内容 */}
-                    <div className='relative flex flex-col items-center gap-2'>
-                      {/* 完成图标 */}
-                      <div className='relative'>
-                        <div className='w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg'>
-                          <svg
-                            className='w-7 h-7 text-white'
-                            fill='none'
-                            stroke='currentColor'
-                            viewBox='0 0 24 24'
-                          >
-                            <path
-                              strokeLinecap='round'
-                              strokeLinejoin='round'
-                              strokeWidth='2.5'
-                              d='M5 13l4 4L19 7'
-                            ></path>
-                          </svg>
-                        </div>
-                        {/* 光圈效果 */}
-                        <div className='absolute inset-0 rounded-full bg-blue-400/30 animate-ping'></div>
-                      </div>
-
-                      {/* 文字 */}
-                      <div className='text-center'>
-                        <p className='text-base font-semibold text-gray-800 dark:text-gray-200 mb-1'>
-                          已加载全部内容
-                        </p>
-                        <p className='text-xs text-gray-600 dark:text-gray-400'>
-                          共 {doubanData.length} 项
-                        </p>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* 空状态 */}
-              {!loading && doubanData.length === 0 && (
-                <div className='flex justify-center py-16'>
-                  <div className='relative px-12 py-10 rounded-3xl bg-gradient-to-br from-gray-50 via-slate-50 to-gray-100 dark:from-gray-800/40 dark:via-slate-800/40 dark:to-gray-800/50 border border-gray-200/50 dark:border-gray-700/50 shadow-xl backdrop-blur-sm overflow-hidden max-w-md'>
-                    {/* 装饰性元素 */}
-                    <div className='absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-200/20 to-purple-200/20 rounded-full blur-3xl'></div>
-                    <div className='absolute bottom-0 right-0 w-32 h-32 bg-gradient-to-br from-pink-200/20 to-orange-200/20 rounded-full blur-3xl'></div>
+                {/* 空状态 */}
+                {!loading && !isRestoring && doubanData.length === 0 && (
+                  <div className='flex justify-center py-16'>
+                    <div className='relative px-12 py-10 rounded-3xl bg-gradient-to-br from-gray-50 via-slate-50 to-gray-100 dark:from-gray-800/40 dark:via-slate-800/40 dark:to-gray-800/50 border border-gray-200/50 dark:border-gray-700/50 shadow-xl backdrop-blur-sm overflow-hidden max-w-md'>
+                      {/* 装饰性元素 */}
+                      <div className='absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-200/20 to-purple-200/20 rounded-full blur-3xl'></div>
+                      <div className='absolute bottom-0 right-0 w-32 h-32 bg-gradient-to-br from-pink-200/20 to-orange-200/20 rounded-full blur-3xl'></div>
 
-                    {/* 内容 */}
-                    <div className='relative flex flex-col items-center gap-4'>
-                      {/* 插图图标 */}
-                      <div className='relative'>
-                        <div className='w-24 h-24 rounded-full bg-gradient-to-br from-gray-100 to-slate-200 dark:from-gray-700 dark:to-slate-700 flex items-center justify-center shadow-lg'>
-                          <svg
-                            className='w-12 h-12 text-gray-400 dark:text-gray-500'
-                            fill='none'
-                            stroke='currentColor'
-                            viewBox='0 0 24 24'
-                          >
-                            <path
-                              strokeLinecap='round'
-                              strokeLinejoin='round'
-                              strokeWidth='1.5'
-                              d='M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4'
-                            ></path>
-                          </svg>
+                      {/* 内容 */}
+                      <div className='relative flex flex-col items-center gap-4'>
+                        {/* 插图图标 */}
+                        <div className='relative'>
+                          <div className='w-24 h-24 rounded-full bg-gradient-to-br from-gray-100 to-slate-200 dark:from-gray-700 dark:to-slate-700 flex items-center justify-center shadow-lg'>
+                            <svg
+                              className='w-12 h-12 text-gray-400 dark:text-gray-500'
+                              fill='none'
+                              stroke='currentColor'
+                              viewBox='0 0 24 24'
+                            >
+                              <path
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                                strokeWidth='1.5'
+                                d='M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4'
+                              ></path>
+                            </svg>
+                          </div>
+                          {/* 浮动小点装饰 */}
+                          <div className='absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping'></div>
+                          <div className='absolute -bottom-1 -left-1 w-2 h-2 bg-purple-400 rounded-full animate-pulse'></div>
                         </div>
-                        {/* 浮动小点装饰 */}
-                        <div className='absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping'></div>
-                        <div className='absolute -bottom-1 -left-1 w-2 h-2 bg-purple-400 rounded-full animate-pulse'></div>
-                      </div>
 
-                      {/* 文字内容 */}
-                      <div className='text-center space-y-2'>
-                        <h3 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
-                          暂无相关内容
-                        </h3>
-                        <p className='text-sm text-gray-600 dark:text-gray-400 max-w-xs'>
-                          尝试调整筛选条件或切换其他分类查看更多内容
-                        </p>
-                      </div>
+                        {/* 文字内容 */}
+                        <div className='text-center space-y-2'>
+                          <h3 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
+                            暂无相关内容
+                          </h3>
+                          <p className='text-sm text-gray-600 dark:text-gray-400 max-w-xs'>
+                            尝试调整筛选条件或切换其他分类查看更多内容
+                          </p>
+                        </div>
 
-                      {/* 装饰线 */}
-                      <div className='w-16 h-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent dark:via-gray-600 rounded-full'></div>
+                        {/* 装饰线 */}
+                        <div className='w-16 h-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent dark:via-gray-600 rounded-full'></div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </>
-          )}
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
