@@ -17,6 +17,7 @@ import {
   deleteFavorite,
   saveFavorite,
   subscribeToDataUpdates,
+  deleteFavoriteByTitle,
 } from '@/lib/db.client';
 // [功能整合] 引入 Celebrity 类型
 import { Favorite, SearchResult, Celebrity } from '@/lib/types';
@@ -430,10 +431,7 @@ function DetailPageClient() {
         } else {
           // 后备方案：如果由于某种原因未找到键，请尝试按标题删除
           // 如果收藏是使用未使用source+id的另一种机制添加的，或者如果allFavorites状态未完全同步，则可能会发生这种情况。
-          // 注意：此处假设您的 deleteFavorite 也支持按标题删除，如果没有，您需要实现该逻辑
-          // 根据错误提示，您只有一个 deleteFavorite 函数，它需要 source 和 id
-          // 这里我们假设这是个逻辑疏忽，并且应该总是能找到 favoritedEntryKey
-          console.warn('无法找到收藏键来删除，可能存在数据不一致问题');
+          await deleteFavoriteByTitle(detail.title);
         }
       } else {
         // 项目未被收藏，因此收藏它
