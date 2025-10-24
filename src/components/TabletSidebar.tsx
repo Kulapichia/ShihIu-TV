@@ -57,7 +57,7 @@ export function TabletSidebar({ activePath, isOpen, setIsOpen, isFloatingHeaderV
       >
         {/* 我们渲染现有的 Sidebar 组件并强制其处于展开状态 */}
         <div className="h-full bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-r border-gray-200/20">
-            <Sidebar activePath={activePath} />
+            <Sidebar isTabletMode={true} activePath={activePath} onCategorySelect={() => setIsOpen(false)} />
         </div>
       </div>
     </>
