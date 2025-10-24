@@ -245,7 +245,10 @@ const Sidebar = ({ onToggle, activePath = '/', isTabletMode = false, onCategoryS
             <nav className='px-2 mt-4 space-y-1'>
               <Link
                 href='/'
-                onClick={() => setActive('/')}
+                onClick={() => {
+                  setActive('/');
+                  if (isTabletMode) onCategorySelect?.();
+                }}
                 data-active={active === '/'}
                 className={`group relative flex items-center rounded-lg px-2 py-2 pl-4 text-gray-700 hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 hover:text-green-600 data-[active=true]:bg-gradient-to-r data-[active=true]:from-green-500/20 data-[active=true]:to-emerald-500/20 data-[active=true]:text-green-700 font-medium transition-all duration-200 min-h-[40px] dark:text-gray-300 dark:hover:from-green-500/10 dark:hover:to-emerald-500/10 dark:hover:text-green-400 dark:data-[active=true]:from-green-500/15 dark:data-[active=true]:to-emerald-500/15 dark:data-[active=true]:text-green-400 ${isCollapsed ? 'w-full max-w-none mx-0' : 'mx-0'
                   } gap-3 justify-start hover:shadow-md hover:shadow-green-500/10 data-[active=true]:shadow-lg data-[active=true]:shadow-green-500/20`}
