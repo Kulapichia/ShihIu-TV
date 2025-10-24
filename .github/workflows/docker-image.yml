@@ -27,7 +27,7 @@ on:
       - '**.md'
 
 env:
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO_NAME }}
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME.toLowerCase() }}/${{ secrets.DOCKERHUB_REPO_NAME.toLowerCase() }}
   REGISTRY: docker.io
 
 concurrency:
