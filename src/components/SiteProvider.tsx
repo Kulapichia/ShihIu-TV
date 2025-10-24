@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, ReactNode, useContext } from 'react';
+import { createContext, ReactNode, useContext, useRef, MutableRefObject } from 'react';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 
 // 扩展 AuthInfo 类型以匹配 auth.ts 中的返回值
@@ -13,12 +13,18 @@ interface AuthInfo {
   role?: 'owner' | 'admin' | 'user';
 }
 
-const SiteContext = createContext<{ siteName: string; announcement?: string; authInfo: AuthInfo | null }>({
+const SiteContext = createContext<{
+  siteName: string;
+  announcement?: string;
+  authInfo: AuthInfo | null;
+  mainContainerRef?: MutableRefObject<HTMLDivElement | null>;
+}>({
   // 默认值
   siteName: 'MoonTV',
   announcement:
     '本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。',
   authInfo: null,
+  mainContainerRef: undefined,
 });
 
 export const useSite = () => useContext(SiteContext);
@@ -34,9 +40,10 @@ export function SiteProvider({
 }) {
   // 在客户端组件中安全地获取 authInfo
   const authInfo = typeof window !== 'undefined' ? getAuthInfoFromBrowserCookie() : null;
+  const mainContainerRef = useRef<HTMLDivElement | null>(null);
 
   return (
-    <SiteContext.Provider value={{ siteName, announcement, authInfo }}>
+    <SiteContext.Provider value={{ siteName, announcement, authInfo, mainContainerRef }}>
       {children}
     </SiteContext.Provider>
   );
