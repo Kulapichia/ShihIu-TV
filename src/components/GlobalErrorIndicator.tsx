@@ -13,6 +13,15 @@ export function GlobalErrorIndicator() {
   const [isVisible, setIsVisible] = useState(false);
   const [isReplacing, setIsReplacing] = useState(false);
 
+  const handleClose = () => {
+    setIsVisible(false);
+    // [功能融入] 动画结束后再清除错误内容，避免闪烁
+    setTimeout(() => {
+      setCurrentError(null);
+      setIsReplacing(false);
+    }, 300);
+  };
+
   useEffect(() => {
     // 监听自定义错误事件
     const handleError = (event: CustomEvent) => {
@@ -48,13 +57,18 @@ export function GlobalErrorIndicator() {
     };
   }, [currentError]);
 
-  const handleClose = () => {
-    setIsVisible(false);
-    setCurrentError(null);
-    setIsReplacing(false);
-  };
+  // [功能融入] 增加6秒后自动关闭的功能
+  useEffect(() => {
+    if (isVisible && currentError) {
+      const timer = setTimeout(() => {
+        handleClose();
+      }, 6000); // 6秒后自动关闭
 
-  if (!isVisible || !currentError) {
+      return () => clearTimeout(timer);
+    }
+  }, [isVisible, currentError]);
+
+  if (!currentError) {
     return null;
   }
 
@@ -64,7 +78,9 @@ export function GlobalErrorIndicator() {
       <div
         className={`bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg flex items-center justify-between min-w-[300px] max-w-[400px] transition-all duration-300 ${
           isReplacing ? 'scale-105 bg-red-400' : 'scale-100 bg-red-500'
-        } animate-fade-in`}
+        } ${
+          isVisible ? 'animate-fade-in' : 'animate-fade-out'
+        }`}
       >
         <span className='text-sm font-medium flex-1 mr-3'>
           {currentError.message}
