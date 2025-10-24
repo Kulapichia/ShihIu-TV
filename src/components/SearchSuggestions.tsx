@@ -24,6 +24,7 @@ export default function SearchSuggestions({
   onEnterKey,
 }: SearchSuggestionsProps) {
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 防抖定时器
@@ -55,7 +56,18 @@ export default function SearchSuggestions({
             type: 'related' as const,
           })
         );
-        setSuggestions(apiSuggestions);
+
+        // [功能融入] 关键词过滤逻辑
+        const filterKeywords = ['电影解说', '剧情解说', '预告片', '解说'];
+        const filteredSuggestions = apiSuggestions.filter(
+          (suggestion: SuggestionItem) =>
+            !filterKeywords.some((keyword) =>
+              suggestion.text.includes(keyword)
+            )
+        );
+
+        setSuggestions(filteredSuggestions);
+        setSelectedIndex(-1);
       }
     } catch (err: unknown) {
       // 类型保护判断 err 是否是 Error 类型
@@ -63,10 +75,12 @@ export default function SearchSuggestions({
         if (err.name !== 'AbortError') {
           // 不是取消请求导致的错误才清空
           setSuggestions([]);
+          setSelectedIndex(-1);
         }
       } else {
         // 如果 err 不是 Error 类型，也清空提示
         setSuggestions([]);
+        setSelectedIndex(-1);
       }
     }
   }, []);
@@ -82,6 +96,7 @@ export default function SearchSuggestions({
           fetchSuggestionsFromAPI(searchQuery);
         } else {
           setSuggestions([]);
+          setSelectedIndex(-1);
         }
       }, 300); //300ms
     },
@@ -91,6 +106,7 @@ export default function SearchSuggestions({
   useEffect(() => {
     if (!query.trim() || !isVisible) {
       setSuggestions([]);
+      setSelectedIndex(-1);
       return;
     }
     debouncedFetchSuggestions(query);
@@ -121,16 +137,38 @@ export default function SearchSuggestions({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isVisible, onClose]);
 
-  // 处理键盘事件，特别是回车键
+  // [功能融入] 键盘事件处理
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && isVisible) {
-        // 阻止默认行为，避免浏览器自动选择建议
-        e.preventDefault();
-        e.stopPropagation();
-        // 关闭搜索建议并触发搜索
-        onClose();
-        onEnterKey();
+      if (!isVisible || suggestions.length === 0) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex((prev) =>
+            prev < suggestions.length - 1 ? prev + 1 : 0
+          );
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex((prev) =>
+            prev > 0 ? prev - 1 : suggestions.length - 1
+          );
+          break;
+        case 'Enter':
+          e.preventDefault();
+          e.stopPropagation();
+          if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+            onSelect(suggestions[selectedIndex].text);
+          } else {
+            onEnterKey();
+          }
+          onClose();
+          break;
+        case 'Escape':
+          e.preventDefault();
+          onClose();
+          break;
       }
     };
 
@@ -139,7 +177,7 @@ export default function SearchSuggestions({
     }
 
     return () => document.removeEventListener('keydown', handleKeyDown, true);
-  }, [isVisible, onClose, onEnterKey]);
+  }, [isVisible, query, suggestions, selectedIndex, onSelect, onClose, onEnterKey]);
 
   if (!isVisible || suggestions.length === 0) {
     return null;
@@ -150,11 +188,14 @@ export default function SearchSuggestions({
       ref={containerRef}
       className='absolute top-full left-0 right-0 z-[600] mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-h-80 overflow-y-auto'
     >
-      {suggestions.map((suggestion) => (
+      {suggestions.map((suggestion, index) => (
         <button
           key={`related-${suggestion.text}`}
           onClick={() => onSelect(suggestion.text)}
-          className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150 flex items-center gap-3"
+          onMouseEnter={() => setSelectedIndex(index)}
+          className={`w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150 flex items-center gap-3 ${
+            selectedIndex === index ? 'bg-gray-100 dark:bg-gray-700' : ''
+          }`}
         >
           <span className='flex-1 text-sm text-gray-700 dark:text-gray-300 truncate'>
             {suggestion.text}
