@@ -236,6 +236,7 @@ export const VirtualDoubanGrid: React.FC<VirtualDoubanGridProps> = ({
             isBangumi,
             columnCount,
             displayItemCount,
+            onNavigate, // 传递 onNavigate
           }}
           columnCount={columnCount}
           columnWidth={itemWidth + 16}
