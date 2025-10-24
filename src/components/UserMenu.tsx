@@ -58,7 +58,7 @@ interface AuthInfo {
   avatar?: string;
 }
 
-export const UserMenu: React.FC = () => {
+export const UserMenu: React.FC<{ className?: string }> = ({ className }) => {
   const router = useRouter();
   const { showError, showSuccess, showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
@@ -3191,7 +3191,7 @@ export const UserMenu: React.FC = () => {
 
   return (
     <>
-      <div className='relative'>
+      <div className={`relative ${className || ''}`}>
         <button
           onClick={handleMenuClick}
           className={`relative ${isMobile ? 'w-8 h-8 p-0.5' : 'w-10 h-10 p-0.5'} rounded-full flex items-center justify-center text-gray-600 hover:scale-110 group transition-all duration-300 overflow-hidden hover:shadow-lg hover:shadow-blue-500/30 dark:hover:shadow-blue-400/30`}
