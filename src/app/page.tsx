@@ -3,17 +3,19 @@
 'use client';
 
 import {
+  AlertTriangle, // Icon for error messages
   Brain,
   Calendar,
   ChevronRight,
   Film,
+  Loader2, // [滚动恢复整合] 引入加载图标
   Play,
   Sparkles,
   Tv,
-  AlertTriangle, // Icon for error messages
 } from 'lucide-react';
 import Link from 'next/link';
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { usePathname } from 'next/navigation'; // [滚动恢复整合] 引入 usePathname
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   BangumiCalendarData,
@@ -33,6 +35,11 @@ import { BangumiItemSchema } from '@/lib/schemas';
 import { cleanExpiredCache } from '@/lib/shortdrama-cache';
 import { getRecommendedShortDramas } from '@/lib/shortdrama.client';
 import { DoubanItem, ShortDramaItem } from '@/lib/types';
+// [滚动恢复整合] 引入核心Hook
+import {
+  RestorableData,
+  useScrollRestoration,
+} from '@/lib/useScrollRestoration';
 
 import AIRecommendModal from '@/components/AIRecommendModal';
 import CapsuleSwitch from '@/components/CapsuleSwitch';
@@ -59,6 +66,12 @@ type FavoriteItem = {
   year?: string;
 };
 
+// [滚动恢复整合] 定义需要缓存的状态接口
+interface RestorableHomeData extends RestorableData {
+  activeTab: 'home' | 'favorites';
+  favoriteItems: FavoriteItem[];
+}
+
 // Constants for better maintainability
 const SKELETON_CARD_COUNT = 8;
 const TAB_OPTIONS = [
@@ -67,7 +80,13 @@ const TAB_OPTIONS = [
 ];
 
 // Sub-component for rendering the "Favorites" tab view
-const FavoritesView = ({ items }: { items: FavoriteItem[] }) => {
+const FavoritesView = ({
+  items,
+  onNavigate, // [滚动恢复整合] 接收 onNavigate 回调
+}: {
+  items: FavoriteItem[];
+  onNavigate: () => void; // [滚动恢复整合] 定义 onNavigate 类型
+}) => {
   const handleClearFavorites = useCallback(async () => {
     // A confirmation could be added here in a real app
     await clearAllFavorites();
@@ -98,6 +117,7 @@ const FavoritesView = ({ items }: { items: FavoriteItem[] }) => {
                 {...item}
                 from='favorite'
                 type={item.episodes > 1 ? 'tv' : ''}
+                onNavigate={onNavigate} // [滚动恢复整合] 传递 onNavigate
               />
             </div>
           ))
@@ -162,6 +182,7 @@ const HomeView = ({
   bangumiCalendarData,
   loadingStates,
   errorStates,
+  onNavigate, // [滚动恢复整合] 接收 onNavigate 回调
 }: {
   hotMovies: DoubanItem[];
   hotTvShows: DoubanItem[];
@@ -170,6 +191,7 @@ const HomeView = ({
   bangumiCalendarData: BangumiCalendarData[];
   loadingStates: Record<string, boolean>;
   errorStates: Record<string, boolean>;
+  onNavigate: () => void; // [滚动恢复整合] 定义 onNavigate 类型
 }) => {
   return (
     <>
@@ -209,6 +231,7 @@ const HomeView = ({
                   rate={movie.rate}
                   year={movie.year}
                   type='movie'
+                  onNavigate={onNavigate} // [滚动恢复整合] 传递 onNavigate
                 />
               </div>
             ))
@@ -248,6 +271,7 @@ const HomeView = ({
                   douban_id={Number(show.id)}
                   rate={show.rate}
                   year={show.year}
+                  onNavigate={onNavigate} // [滚动恢复整合] 传递 onNavigate
                 />
               </div>
             ))
@@ -326,6 +350,7 @@ const HomeView = ({
                       rate={anime.rating?.score?.toFixed(1) || ''}
                       year={anime.air_date?.split('-')?.[0] || ''}
                       isBangumi={true}
+                      onNavigate={onNavigate} // [滚动恢复整合] 传递 onNavigate
                     />
                   </div>
                 ))
@@ -375,6 +400,7 @@ const HomeView = ({
                   douban_id={Number(show.id)}
                   rate={show.rate}
                   year={show.year}
+                  onNavigate={onNavigate} // [滚动恢复整合] 传递 onNavigate
                 />
               </div>
             ))
@@ -411,7 +437,7 @@ const HomeView = ({
                 key={index}
                 className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
               >
-                <ShortDramaCard drama={drama} />
+                <ShortDramaCard drama={drama} onNavigate={onNavigate} />
               </div>
             ))
           )}
@@ -447,12 +473,37 @@ function HomeClient() {
     bangumi: false,
   });
 
-  const { announcement } = useSite();
+  const { announcement, mainContainerRef } = useSite(); // [滚动恢复整合] 获取 mainContainerRef
   const [username, setUsername] = useState<string>('');
   const [showAnnouncement, setShowAnnouncement] = useState(false);
   const [showAIRecommendModal, setShowAIRecommendModal] = useState(false);
   const [aiEnabled, setAiEnabled] = useState<boolean | null>(true); // 默认显示，检查后再决定
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
+
+  // [滚动恢复整合] 创建 Ref 保存所有需要缓存的数据
+  const dataRef = useRef<RestorableHomeData>({
+    activeTab: 'home',
+    favoriteItems: [],
+  });
+
+  // [滚动恢复整合] 实例化 Hook
+  const { saveScrollState, isRestoring } = useScrollRestoration({
+    dataRef,
+    mainContainerRef,
+    restoreState: (cachedData: RestorableHomeData) => {
+      // 当检测到缓存时，此函数会被调用以恢复所有相关的状态
+      setActiveTab(cachedData.activeTab);
+      setFavoriteItems(cachedData.favoriteItems);
+    },
+  });
+
+  // [滚动恢复整合] 监听所有相关状态，并实时更新 dataRef
+  useEffect(() => {
+    dataRef.current = {
+      activeTab,
+      favoriteItems,
+    };
+  }, [activeTab, favoriteItems]);
 
   // 获取用户名
   useEffect(() => {
@@ -498,6 +549,9 @@ function HomeClient() {
 
   // 主数据获取 effect
   useEffect(() => {
+    // [滚动恢复整合] 如果正在恢复状态，则不执行初始数据获取，避免不必要请求
+    if (isRestoring) return;
+
     // 清理过期缓存
     cleanExpiredCache().catch(console.error);
 
@@ -591,7 +645,7 @@ function HomeClient() {
     };
 
     fetchRecommendData();
-  }, []);
+  }, [isRestoring]); // [滚动恢复整合] 添加 isRestoring 作为依赖
 
   // 处理收藏数据更新的函数
   const updateFavoriteItems = useCallback(
@@ -627,6 +681,9 @@ function HomeClient() {
 
   // 当切换到收藏夹或收藏夹数据更新时加载收藏数据
   useEffect(() => {
+    // [滚动恢复整合] 如果正在恢复状态，则不执行，因为数据已由 restoreState 设置
+    if (isRestoring) return;
+
     const loadAndSubscribe = async () => {
       if (activeTab === 'favorites') {
         const allFavorites = await getAllFavorites();
@@ -645,7 +702,7 @@ function HomeClient() {
     return () => {
       unsubscribe.then((unsub) => unsub());
     };
-  }, [activeTab, updateFavoriteItems]);
+  }, [activeTab, updateFavoriteItems, isRestoring]); // [滚动恢复整合] 添加 isRestoring 作为依赖
 
   const handleCloseAnnouncement = useCallback((announcement: string) => {
     setShowAnnouncement(false);
@@ -723,21 +780,32 @@ function HomeClient() {
         </div>
 
         <div className='max-w-[95%] mx-auto'>
-          <div key={activeTab} className='animate-fadeIn'>
-            {activeTab === 'home' ? (
-              <HomeView
-                hotMovies={hotMovies}
-                hotTvShows={hotTvShows}
-                hotVarietyShows={hotVarietyShows}
-                hotShortDramas={hotShortDramas}
-                bangumiCalendarData={bangumiCalendarData}
-                loadingStates={loadingStates}
-                errorStates={errorStates}
-              />
-            ) : (
-              <FavoritesView items={favoriteItems} />
-            )}
-          </div>
+          {/* [滚动恢复整合] 如果正在恢复状态，则显示加载中，避免闪烁 */}
+          {isRestoring ? (
+            <div className='flex justify-center py-20'>
+              <Loader2 className='animate-spin text-gray-400' size={48} />
+            </div>
+          ) : (
+            <div key={activeTab} className='animate-fadeIn'>
+              {activeTab === 'home' ? (
+                <HomeView
+                  hotMovies={hotMovies}
+                  hotTvShows={hotTvShows}
+                  hotVarietyShows={hotVarietyShows}
+                  hotShortDramas={hotShortDramas}
+                  bangumiCalendarData={bangumiCalendarData}
+                  loadingStates={loadingStates}
+                  errorStates={errorStates}
+                  onNavigate={saveScrollState} // [滚动恢复整合] 传递 onNavigate
+                />
+              ) : (
+                <FavoritesView
+                  items={favoriteItems}
+                  onNavigate={saveScrollState} // [滚动恢复整合] 传递 onNavigate
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
       {announcement && showAnnouncement && (
