@@ -1000,7 +1000,7 @@ function DoubanPageClient() {
                 primarySelection={primarySelection}
                 isBangumi={type === 'anime' && primarySelection === '每日放送'}
                 // [滚动恢复整合] 传递保存状态的回调函数
-                onNavigate={saveScrollState}
+                // onNavigate={saveScrollState}
               />
             ) : (
               <>
