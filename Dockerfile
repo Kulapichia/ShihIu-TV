@@ -56,6 +56,12 @@ RUN rm -rf .git .github docs *.md .gitignore .env.example && \
 # 在构建阶段也显式设置 DOCKER_ENV
 ENV DOCKER_ENV=true
 
+# 确保 Next.js 在编译时选择 Node Runtime 而不是 Edge Runtime
+RUN find ./src -type f -name "route.ts" -print0 \
+  | xargs -0 sed -i "s/export const runtime = 'edge';/export const runtime = 'nodejs';/g"
+# 强制动态渲染以读取运行时环境变量
+RUN sed -i "/const inter = Inter({ subsets: \['latin'] });/a export const dynamic = 'force-dynamic';" src/app/layout.tsx
+
 # 添加 NEXT_PRIVATE_STANDALONE 环境变量以确保 standalone 输出正确生成
 ENV NEXT_PRIVATE_STANDALONE=true
 
