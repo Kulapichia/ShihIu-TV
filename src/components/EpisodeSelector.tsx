@@ -360,6 +360,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       if (context?.title) {
         onLongPress?.(context.title); // 触发从父组件传入的回调
       }
+    },
     longPressDelay: 300,
   });
 
