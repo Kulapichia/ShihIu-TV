@@ -43,7 +43,7 @@ export interface VideoCardProps {
   currentEpisode?: number;
   douban_id?: number;
   onDelete?: () => void;
-  onNavigate?: () => void;
+  onNavigate?: () => void; // [滚动恢复整合] 新增 onNavigate 属性
   rate?: string;
   type?: string;
   isBangumi?: boolean;
@@ -77,6 +77,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     currentEpisode,
     douban_id,
     onDelete,
+    onNavigate, // [滚动恢复整合] 从 props 中解构 onNavigate
     rate,
     type = '',
     isBangumi = false,
@@ -234,7 +235,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
   );
 
   const handleClick = useCallback(() => {
-    // 在导航前调用回调以保存滚动状态
+    // [滚动恢复整合] 在导航前调用回调以保存滚动状态
     onNavigate?.();
     // 如果从搜索页面点击，设置标记以便返回时使用缓存
     if (from === 'search' && typeof window !== 'undefined') {
@@ -284,6 +285,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     actualDoubanId,
     vod_class,
     vod_tag,
+    onNavigate, // [滚动恢复整合] 添加 onNavigate 作为依赖项
   ]);
 
   // 新标签页播放处理函数
@@ -347,10 +349,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
   // 长按手势hook
   const longPressProps = useLongPress({
     onLongPress: handleLongPress,
-    onClick: () => { // 修改为函数以调用 onNavigate
-      onNavigate?.();
-      handleClick();
-    },
+    onClick: handleClick, // [滚动恢复整合] 确保 onClick 调用的是我们包含了 onNavigate 的 handleClick
     longPressDelay: 500,
   });
 
@@ -590,7 +589,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     <>
       <motion.div
         className='group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-in-out hover:z-10'
-        onClick={handleClick}
+        // [滚动恢复整合] 移除独立的 onClick，因为 longPressProps 已经包含了 onClick: handleClick
         {...longPressProps}
         style={{
           // 禁用所有默认的长按和选择效果
