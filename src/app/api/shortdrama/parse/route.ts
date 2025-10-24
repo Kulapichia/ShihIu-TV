@@ -2,11 +2,66 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getCacheTime } from '@/lib/config';
-import { parseShortDramaEpisode } from '@/lib/shortdrama.client';
+import { getCacheTime, API_CONFIG } from '@/lib/config';
 
 // 标记为动态路由
 export const dynamic = 'force-dynamic';
+
+// 服务端专用函数，直接调用外部API
+async function parseShortDramaEpisodeInternal(
+  videoId: number,
+  episodeNum: number,
+  useProxy: boolean
+): Promise<any> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
+
+  try {
+    const apiUrl = new URL(`${API_CONFIG.shortdrama.baseUrl}/vod/parse/single`);
+    apiUrl.searchParams.set('id', videoId.toString());
+    apiUrl.searchParams.set('episode', episodeNum.toString());
+    if (useProxy) {
+      apiUrl.searchParams.set('proxy', 'true');
+    }
+
+    const response = await fetch(apiUrl.toString(), {
+      method: 'GET',
+      headers: API_CONFIG.shortdrama.headers,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return { code: -1, msg: `HTTP error! status: ${response.status}` };
+    }
+
+    const data = await response.json();
+
+    if (data.code === 1) {
+      return { code: data.code, msg: data.msg || 'API解析失败' };
+    }
+
+    return {
+      code: 0,
+      data: {
+        videoId: data.videoId || videoId,
+        videoName: data.videoName || '',
+        currentEpisode: data.episode?.index || episodeNum,
+        totalEpisodes: data.totalEpisodes || 1,
+        parsedUrl: data.episode?.parsedUrl || data.parsedUrl || '',
+        proxyUrl: data.episode?.proxyUrl || '',
+        cover: data.cover || '',
+        description: data.description || '',
+        episode: data.episode || null,
+      },
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error(`[Internal Fetch Error] ID: ${videoId}, Episode: ${episodeNum}`, error);
+    return { code: -1, msg: '服务器请求外部API失败' };
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,7 +87,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 解析视频，默认使用代理
-    const result = await parseShortDramaEpisode(videoId, episodeNum, true);
+    const result = await parseShortDramaEpisodeInternal(videoId, episodeNum, true);
 
     if (result.code !== 0) {
       return NextResponse.json(
