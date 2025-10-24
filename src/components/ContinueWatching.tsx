@@ -46,7 +46,17 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
       (a, b) => b.save_time - a.save_time
     );
 
-    setPlayRecords(sortedRecords);
+    // --- 添加去重逻辑 ---
+    const uniqueRecordsMap = new Map<string, PlayRecord & { key: string }>();
+    sortedRecords.forEach(record => {
+      const key = `${record.title}-${record.year}`;
+      if (!uniqueRecordsMap.has(key)) {
+        uniqueRecordsMap.set(key, record);
+      }
+    });
+    const deduplicatedAndSortedRecords = Array.from(uniqueRecordsMap.values());
+
+    setPlayRecords(deduplicatedAndSortedRecords);
   };
 
   useEffect(() => {
