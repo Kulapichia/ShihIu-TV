@@ -1,58 +1,135 @@
-import { useSite } from './SiteProvider'; // [滚动恢复整合] 导入 useSite
+// src/components/PageLayout.tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useSite } from './SiteProvider';
+import { useIsTablet } from '@/lib/useIsTablet';
+import { useFloatingHeaderVisibility } from '@/lib/useFloatingHeaderVisibility';
 import { BackButton } from './BackButton';
 import MobileBottomNav from './MobileBottomNav';
 import MobileHeader from './MobileHeader';
 import Sidebar from './Sidebar';
 import { ThemeToggle } from './ThemeToggle';
 import { UserMenu } from './UserMenu';
+import { TabletSidebar } from './TabletSidebar';
+import { BackToTopButton } from './BackToTopButton';
+import { FloatingHeader } from './FloatingHeader';
+import { TabletHeaderActions } from './TabletHeaderActions';
 
 interface PageLayoutProps {
   children: React.ReactNode;
   activePath?: string;
+  title?: string;
+  headerContent?: React.ReactNode;
 }
 
-const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
-  // [滚动恢复整合] 从 context 中获取 mainContainerRef
+const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLayoutProps) => {
   const { mainContainerRef } = useSite();
+  const [heightClass, setHeightClass] = useState('h-screen');
+  const [isTabletSidebarOpen, setIsTabletSidebarOpen] = useState(false);
+  const isTablet = useIsTablet();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const showAdminBackButton = pathname === '/admin';
+  const showAdminSubPageBackButton = pathname.startsWith('/admin/') && pathname !== '/admin';
+  const showTabletSidebar = pathname === '/' || pathname === '/douban' || pathname === '/search';
+  
+  const showFloatingHeader = pathname === '/' || pathname === '/douban' || pathname === '/search';
+  const floatingHeaderHeight = 56; // h-14 in tailwind css
+  const isFloatingHeaderVisible = useFloatingHeaderVisibility(mainContainerRef || null);
+
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const isMobile = /Mobi/i.test(ua) || window.innerWidth < 768;
+    const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+
+    if (isMobile && isSafari) {
+      setHeightClass('min-h-screen');
+    }
+  }, []);
 
   return (
-    <div className='w-full min-h-screen'>
+    <div className={`w-full ${heightClass}`}>
+      {/* 浮动头部 */}
+      {showFloatingHeader && <FloatingHeader title={title} setIsOpen={setIsTabletSidebarOpen} scrollContainerRef={mainContainerRef || null} isOpen={isTabletSidebarOpen} />}
+
       {/* 移动端头部 */}
-      <MobileHeader showBackButton={['/play', '/live'].includes(activePath)} />
+      <MobileHeader showBackButton={((isTablet ?? false) && (activePath || '').startsWith('/detail'))} />
 
       {/* 主要布局容器 */}
-      {/* [滚动恢复整合] 确保在桌面端时，网格布局占据整个视口高度 */}
-      <div className='flex md:grid md:grid-cols-[auto_1fr] w-full h-screen md:min-h-auto'>
-        {/* 侧边栏 - 桌面端显示，移动端隐藏 */}
+      <div
+        className={`flex w-full h-full md:min-h-auto md:grid md:grid-cols-[auto_1fr]`}
+      >
+        {/* 侧边栏 - 桌面端始终显示，平板端由按钮控制 */}
         <div className='hidden md:block'>
-          <Sidebar activePath={activePath} />
+          <TabletSidebar
+            isOpen={isTabletSidebarOpen}
+            setIsOpen={setIsTabletSidebarOpen}
+            activePath={activePath}
+            isFloatingHeaderVisible={isFloatingHeaderVisible}
+            floatingHeaderHeight={floatingHeaderHeight}
+          />
         </div>
-
-        {/* [滚动恢复整合] 主内容区域的容器，在桌面端它将是滚动的主体 */}
+        
+        {/* 主内容区域 */}
         <div
-          ref={mainContainerRef} // [滚动恢复整合] 将 ref 附加到此容器
-          className='relative min-w-0 flex-1 md:overflow-y-auto transition-all duration-300'
+          ref={mainContainerRef} // 将 ref 附加到这个容器
+          className='relative min-w-0 flex-1 transition-all duration-300 md:overflow-y-auto' // 添加 overflow-y-auto
         >
-          {/* 桌面端左上角返回按钮 */}
+          {/* 平板端管理员页返回按钮 */}
+          {showAdminBackButton && (
+            <div
+              onClick={() => router.push('/')}
+              className="absolute top-3 left-1 z-20 w-10 h-10 p-2 rounded-full hover:bg-gray-500/20 transition-colors hidden md:block"
+              aria-label="Back to home"
+            >
+              <button>
+                <BackButton />
+              </button>
+            </div>
+          )}
+          {/* 桌面端左上角返回按钮 - 管理子页面*/}
+          {showAdminSubPageBackButton && (
+            <div className='absolute top-3 left-1 z-20 hidden md:flex'>
+              <BackButton />
+            </div>
+          )}
+
+          {/* 平板端/桌面端 顶部按钮组 */}
+          {showTabletSidebar && (
+            <div className="absolute top-2 left-4 right-4 z-20 hidden md:flex items-center justify-between">
+              <TabletHeaderActions setIsOpen={setIsTabletSidebarOpen} isOpen={isTabletSidebarOpen} title={title} />
+            </div>
+          )}
+
+          {/* 桌面端左上角返回按钮 - 播放页 */}
           {['/play', '/live'].includes(activePath) && (
             <div className='absolute top-3 left-1 z-20 hidden md:flex'>
               <BackButton />
             </div>
           )}
 
-          {/* 桌面端顶部按钮 */}
-          <div className='absolute top-2 right-4 z-20 hidden md:flex items-center gap-2'>
-            <ThemeToggle />
-            <UserMenu />
-          </div>
+          {/* 桌面端左上角返回按钮 - 详细页和播放页 */}
+          {((activePath || '').startsWith('/detail') || activePath === '/play') && (
+            <div className='absolute top-3 left-1 right-4 z-20 hidden md:flex items-center justify-between'>
+              <div className='flex items-center gap-2'>
+                <BackButton />
+                {headerContent}
+              </div>
+              <div className='flex items-center gap-2'>
+                <TabletHeaderActions setIsOpen={setIsTabletSidebarOpen} isOpen={isTabletSidebarOpen} />
+              </div>
+            </div>
+          )}
 
           {/* 主内容 */}
           <main
-            className='flex-1 md:min-h-0 md:mb-0 md:mt-0 mt-12'
+            className='flex-1 md:min-h-0 md:mb-0 md:mt-12'
             style={{
-              // [滚动恢复整合] 在移动端，由于滚动主体是body，底部导航是fixed，所以需要这个padding
-              // 在桌面端，由于滚动主体是mainContainerRef，这个padding无害
               paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom))',
+              paddingTop: 'env(safe-area-inset-top)',
             }}
           >
             {children}
@@ -64,6 +141,9 @@ const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
       <div className='md:hidden'>
         <MobileBottomNav activePath={activePath} />
       </div>
+
+      {/* 返回顶部按钮 - 仅在特定平板页面显示 */}
+      {showTabletSidebar && <BackToTopButton />}
     </div>
   );
 };
