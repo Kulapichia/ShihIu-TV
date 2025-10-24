@@ -13,19 +13,11 @@
   <img src="public/logo.png" alt="ShihIüTV Logo" width="120">
 </div>
 
-> 🎬 **ShihIüTV Enhanced Edition** 是一个开箱即用的、跨平台的全功能影视聚合播放平台。它基于前沿技术栈深度开发，在基础功能之上新增了 **社交聊天**、**自定义主题**、**YouTube 集成**、**网盘搜索**、**AI 推荐**、**短剧功能**、**IPTV 直播**、**Bangumi 动漫**、**播放统计**、**弹幕系统**等 50+ 重大功能增强，打造极致的在线观影体验。
+> 🎬 **ShihIüTV Enhanced Edition** 是一个开箱即用的、跨平台的全功能影视聚合播放平台。它基于前沿技术栈深度开发，在基础功能之上新增了 **独立详情页**、**社交聊天**、**自定义主题**、**YouTube 集成**、**网盘搜索**、**AI 推荐**、**短剧功能**、**IPTV 直播**、**Bangumi 动漫**、**播放统计**、**弹幕系统**等 50+ 重大功能增强和架构优化，打造极致的在线观影体验。
 
 <div align="center">
 
-![Next.js](https://img.shields.io/badge/Next.js-14.2.23-000?logo=nextdotjs)
-![React](https://img.shields.io/badge/React-18.2.0-61dafb?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-4.9.5-3178c6?logo=typescript)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4.17-38bdf8?logo=tailwindcss)
-![ArtPlayer](https://img.shields.io/badge/ArtPlayer-5.3.0-ff6b6b)
-![HLS.js](https://img.shields.io/badge/HLS.js-1.6.13-ec407a)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Docker Ready](https://img.shields.io/badge/Docker-ready-blue?logo=docker)
-![Version](https://img.shields.io/badge/Version-5.5.7-orange)
+![Next.js](https://img.shields.io/badge/Next.js-14.2.23-000?logo=nextdotjs)![React](https://img.shields.io/badge/React-18.2.0-61dafb?logo=react)![TypeScript](https://img.shields.io/badge/TypeScript-4.9.5-3178c6?logo=typescript)![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4.17-38bdf8?logo=tailwindcss)![ArtPlayer](https://img.shields.io/badge/ArtPlayer-5.3.0-ff6b6b)![HLS.js](https://img.shields.io/badge/HLS.js-1.6.13-ec407a)![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey)![Docker Ready](https://img.shields.io/badge/Docker-ready-blue?logo=docker)![Version](https://img.shields.io/badge/Version-5.6.0-orange)
 
 </div>
 
@@ -33,9 +25,17 @@
 
 ## 📢 项目说明
 
-本项目是在 **MoonTV** 基础上进行的深度二次开发版本，从 **v4.3.1** 版本开始，持续迭代至当前 **v5.5.7**，累计新增 50+ 重大功能模块，300+ 细节优化。所有新增功能详见 [CHANGELOG](CHANGELOG)。
+本项目是在 **MoonTV** 基础上进行的深度二次开发版本，从 **v4.3.1** 版本开始，持续迭代至当前版本，累计新增 50+ 重大功能模块，并吸收了社区版本的优秀架构设计，进行了 300+ 细节优化。所有新增功能详见 [CHANGELOG](CHANGELOG)。
 
 ### 💡 核心增强亮点
+
+#### 🎭 全新详情页与UI/UX重构 (New)
+- **独立详情页**：新增独立的影视详情页，通过多种回退机制（豆瓣、WMDB、API爬取）聚合丰富的影视信息，包括简介、演职员表、预告片、相关推荐等。
+- **现代化登录页**：登录界面引入全屏动态背景、密码可见切换和“记住我”功能，提升美观度和易用性。
+- **交互逻辑优化**：全面重构UI和交互逻辑，播放页选集支持悬停查看完整信息，避免长标题遮挡；优化多端体验。
+- **浏览位置恢复**：支持从详情页返回后恢复上一页的滚动位置，提升浏览连贯性。
+- **内容预加载**: 实现智能内容预加载，提升加载效率，实现无感加载。
+- **返回顶部按钮**：在长列表页面（如豆瓣、搜索页）提供快捷返回顶部功能。
 
 #### 💬 社交与个性化 (New)
 - **实时聊天系统**：完整的社交功能，支持好友添加、私人对话、在线用户列表和用户搜索。
@@ -50,10 +50,11 @@
 - **IPTV 直播**：m3u/m3u8 订阅、EPG 节目单（支持多源和 url-tvg）、直播源聚合、台标代理、频道当前源内搜索
 - **Bangumi 动漫**：动漫信息智能检测、API 集成、缓存机制
 
-#### 🤖 智能推荐系统
+#### 🤖 智能推荐与搜索
 - **AI 内容推荐**：支持 GPT-5/o 系列模型，动态提示词管理
 - **多卡片类型**：影视推荐、YouTube 视频、视频链接解析
 - **TMDB 演员搜索**：完整的演员搜索、过滤和缓存
+- **流式搜索与热门推荐**：搜索结果流式输出，提高响应速度；搜索页新增热门推荐，结合数据库热更新。
 - **发布日历**：即将上线内容预览和跟踪
 
 #### 💬 弹幕生态系统
@@ -92,8 +93,7 @@
 - **响应式网格**：2-8 列自适应，自动计算最优布局
 - **豆瓣详情增强**：评分、演职人员、首播日期、时长、制作信息完整展示
 - **用户菜单增强**：更新提醒、继续观看（含新剧集徽章）、我的收藏快捷入口、TVBox设置集成
-- **登录界面现代化**：动态随机壁纸、渐变卡片、响应式设计
-- **返回顶部按钮**：发布日历等长页面快捷返回
+- **后台管理优化**：新增视频源有效性测试及自动排序功能。
 
 #### 🔐 安全与存储
 - **TVBox 安全集成**：IP 白名单、Token 认证、完整 API 兼容
