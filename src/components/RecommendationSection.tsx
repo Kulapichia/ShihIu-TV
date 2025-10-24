@@ -39,7 +39,7 @@ const RecommendationSection: React.FC<RecommendationSectionProps> = ({ recommend
         {recommendations.map((rec, index) => (
           <div key={index} className={`flex-none ${cardWidth}`}>
             <VideoCard
-              from="recommendation"
+              from="douban"
               title={rec.title}
               poster={rec.likeposter}
               douban_id={rec.doubanID ? Number(rec.doubanID) : undefined}
