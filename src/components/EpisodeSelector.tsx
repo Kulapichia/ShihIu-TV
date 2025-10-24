@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useLongPress } from '@/hooks/useLongPress'; // 1. 新增：导入 useLongPress Hook
 
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
@@ -31,6 +32,8 @@ interface EpisodeSelectorProps {
   value?: number;
   /** 用户点击选集后的回调 */
   onChange?: (episodeNumber: number) => void;
+  /** 新增：长按回调，用于显示完整标题 */
+  onLongPress?: (title: string) => void; // 2. 新增：onLongPress 属性定义
   /** 换源相关 */
   onSourceChange?: (source: string, id: string, title: string) => void;
   currentSource?: string;
@@ -53,6 +56,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   episodesPerPage = 50,
   value = 1,
   onChange,
+  onLongPress, // 3. 新增：从 props 中接收 onLongPress
   onSourceChange,
   currentSource,
   currentId,
@@ -350,6 +354,16 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     [onSourceChange]
   );
 
+  // 4. 新增：调用 useLongPress Hook 来获取长按事件处理器
+  const longPressEvents = useLongPress({
+    onLongPress: (e, { context }) => {
+      const { title } = context as { title: string };
+      onLongPress?.(title); // 触发从父组件传入的回调
+    },
+    longPressDelay: 300,
+  });
+
+
   const currentStart = currentPage * episodesPerPage + 1;
   const currentEnd = Math.min(
     currentStart + episodesPerPage - 1,
@@ -427,7 +441,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                         buttonRefs.current[idx] = el;
                       }}
                       onClick={() => handleCategoryClick(idx)}
-                      className={`w-20 relative py-2 text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 text-center 
+                      className={`w-20 relative py-2 text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 text-center
                         ${isActive
                           ? 'text-green-500 dark:text-green-400'
                           : 'text-gray-700 hover:text-green-600 dark:text-gray-300 dark:hover:text-green-400'
@@ -480,6 +494,8 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
               return (
                 <button
                   key={episodeNumber}
+                  // 5. 新增：将长按事件绑定到按钮上
+                  {...longPressEvents({ title: episodes_titles?.[episodeNumber - 1] || `第 ${episodeNumber} 集` })}
                   onClick={() => handleEpisodeClick(episodeNumber)}
                   className={`group h-10 min-w-10 px-3 py-2 flex items-center justify-center text-sm font-semibold rounded-lg transition-all duration-300 whitespace-nowrap font-mono relative overflow-hidden
                     ${isActive
