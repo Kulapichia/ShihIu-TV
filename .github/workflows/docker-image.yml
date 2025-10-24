@@ -26,9 +26,9 @@ on:
     paths-ignore:
       - '**.md'
 
-
+# 【修改】恢复原始定义，不在表达式中进行转换
 env:
-  IMAGE_NAME: ${{ toLowerCase(secrets.DOCKERHUB_USERNAME) }}/${{ toLowerCase(secrets.DOCKERHUB_REPO_NAME) }}
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO_NAME }}
   REGISTRY: docker.io
 
 concurrency:
@@ -158,6 +158,10 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      # 【新增】在 run 步骤中设置小写的镜像名称
+      - name: 📝 Set lowercase image name
+        run: echo "IMAGE_NAME_LC=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       # 核心构建步骤：只构建并推送摘要，不打最终标签
       - name: 🏗️ Build and push image by digest
@@ -169,8 +173,8 @@ jobs:
           platforms: ${{ matrix.platform }}
           # 仅在非 pull_request 事件时推送
           push: ${{ github.event_name != 'pull_request' }}
-          # 输出为 canonical OCI digest 格式
-          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true
+          # 【修改】使用新的小写环境变量 IMAGE_NAME_LC
+          outputs: type=image,name=${{ env.IMAGE_NAME_LC }},push-by-digest=true,name-canonical=true
           # 优化缓存策略，为每个 Git Ref (分支/标签) 创建独立的缓存，并回退到主分支缓存
           cache-from: |
             type=gha,scope=${{ github.workflow }}-${{ matrix.platform }}
@@ -229,12 +233,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           logout: true
+          
+      # 【新增】再次设置小写的镜像名称 (每个 job 都是独立环境)
+      - name: 📝 Set lowercase image name
+        run: echo "IMAGE_NAME_LC=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       # 在原有的标签规则基础上，增加一条基于 package.json 的规则
       - name: 🏷️ Extract intelligent Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_NAME }}
+          # 【修改】使用新的小写环境变量
+          images: ${{ env.IMAGE_NAME_LC }}
           tags: |
             # 规则一 (dev): 推送到默认分支时打 'dev' 标签 (保留您的逻辑)
             # 这用于 CI 检查，确保代码总是可构建和推送的。
@@ -258,8 +268,9 @@ jobs:
       - name: 📜 Create and push manifest list
         working-directory: /tmp/digests
         run: |
+          # 【修改】使用新的小写环境变量
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< '${{ steps.meta.outputs.json }}') \
-            $(printf '${{ env.IMAGE_NAME }}@sha256:%s ' *)
+            $(printf '${{ env.IMAGE_NAME_LC }}@sha256:%s ' *)
 
   # 清理任务
   cleanup:
