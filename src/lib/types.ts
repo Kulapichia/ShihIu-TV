@@ -27,6 +27,7 @@ export interface Favorite {
   save_time: number; // 记录保存时间（时间戳）
   search_title: string; // 搜索时使用的标题
   origin?: 'vod' | 'live' | 'shortdrama';
+  doubanId?: string; // 添加缺失的属性
 }
 
 // 短剧分类数据结构
@@ -201,6 +202,22 @@ export interface IStorage {
   searchUsers(query: string): Promise<Friend[]>;
 }
 
+// 新增 Celebrity 类型定义
+export interface Celebrity {
+  actorname: string;
+  actorposter: string;
+  role: string;
+  actorurl?: string;
+}
+
+// 新增 Recommendation 类型定义
+export interface Recommendation {
+  title: string;
+  likeposter: string;
+  doubanID?: string;
+  subjectRate?: string;
+}
+
 // 搜索结果数据结构
 export interface SearchResult {
   id: string;
@@ -218,7 +235,13 @@ export interface SearchResult {
   douban_id?: number;
   isYellow?: boolean;
   remarks?: string; // 备注信息（如"已完结"、"更新至20集"等）
+  // 添加缺失的属性
+  country?: string;
+  recommendations?: Recommendation[];
+  celebrities?: Celebrity[];
+  trailerUrl?: string;
 }
+
 
 // 豆瓣数据结构
 export interface DoubanItem {
@@ -245,6 +268,7 @@ export interface DoubanResult {
   code: number;
   message: string;
   list: DoubanItem[];
+  hasNextPage?: boolean; // 添加缺失的属性
 }
 
 // ---- 跳过配置（多片段支持）----
