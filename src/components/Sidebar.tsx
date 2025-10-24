@@ -49,6 +49,8 @@ const Logo = () => {
 interface SidebarProps {
   onToggle?: (collapsed: boolean) => void;
   activePath?: string;
+  isTabletMode?: boolean; // 新增属性
+  onCategorySelect?: () => void; // 新增属性
 }
 
 // 在浏览器环境下通过全局变量缓存折叠状态，避免组件重新挂载时出现初始值闪烁
@@ -58,7 +60,7 @@ declare global {
   }
 }
 
-const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
+const Sidebar = ({ onToggle, activePath = '/', isTabletMode = false, onCategorySelect }: SidebarProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
