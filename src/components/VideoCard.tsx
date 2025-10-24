@@ -43,6 +43,7 @@ export interface VideoCardProps {
   currentEpisode?: number;
   douban_id?: number;
   onDelete?: () => void;
+  onNavigate?: () => void;
   rate?: string;
   type?: string;
   isBangumi?: boolean;
@@ -346,7 +347,10 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
   // 长按手势hook
   const longPressProps = useLongPress({
     onLongPress: handleLongPress,
-    onClick: handleClick, // 保持点击播放功能
+    onClick: () => { // 修改为函数以调用 onNavigate
+      onNavigate?.();
+      handleClick();
+    },
     longPressDelay: 500,
   });
 
