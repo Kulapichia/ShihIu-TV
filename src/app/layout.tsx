@@ -163,6 +163,14 @@ export default async function RootLayout({
             content='width=device-width, initial-scale=1.0, viewport-fit=cover'
           />
           <link rel='apple-touch-icon' href='/icons/icon-192x192.png' />
+          {/* 
+            为移动端浏览器状态栏设置主题颜色。
+            浅色模式下，iOS 状态栏为白色背景、深色文字，Android 为浅灰色背景、深色文字。
+            深色模式下，状态栏统一为黑色背景、浅色文字。
+            这确保了应用在不同设备和主题下都有一致的视觉体验。
+          */}
+          <meta name="theme-color" content="#C5D8E2" media="(prefers-color-scheme: light)" />
+          <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
           {/* eslint-disable-next-line @next/next/no-sync-scripts */}
           <script
             dangerouslySetInnerHTML={{
