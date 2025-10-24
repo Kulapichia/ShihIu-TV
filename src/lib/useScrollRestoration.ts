@@ -59,7 +59,7 @@ export const useScrollRestoration = <T>({
       if (!container) return; // Add a guard for null container
 
       // [滚动恢复整合] 从 cachedData.data 中恢复状态
-      restoreState(cachedData.data);
+      restoreState(cachedData.data as T);
 
       // 应用滚动位置的函数
       const applyScroll = (scrollContainer: HTMLElement) => {
@@ -121,7 +121,7 @@ export const useScrollRestoration = <T>({
     const container = getScrollContainer();
     if (!container || !dataRef.current) return;
 
-    const cache: ScrollCacheData = {
+    const cache: ScrollCacheData<T> = {
       scrollPosition: container.scrollTop,
       // [滚动恢复整合] 将 dataRef.current 存入 data 属性
       data: dataRef.current,
