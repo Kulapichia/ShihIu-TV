@@ -26,8 +26,9 @@ on:
     paths-ignore:
       - '**.md'
 
+
 env:
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME.toLowerCase() }}/${{ secrets.DOCKERHUB_REPO_NAME.toLowerCase() }}
+  IMAGE_NAME: ${{ toLowerCase(secrets.DOCKERHUB_USERNAME) }}/${{ toLowerCase(secrets.DOCKERHUB_REPO_NAME) }}
   REGISTRY: docker.io
 
 concurrency:
