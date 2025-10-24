@@ -503,6 +503,11 @@ function PlayPageClient() {
     externalDanmuEnabledRef.current = externalDanmuEnabled;
   }, [externalDanmuEnabled]);
 
+  // 长按显示的剧集标题
+  const [longPressedTitle, setLongPressedTitle] = useState<string | null>(null);
+  const [isFadingOut, setIsFadingOut] = useState(false); // 新增状态，控制淡出动画
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const fadeOutTimerRef = useRef<NodeJS.Timeout | null>(null); // 新增ref，用于管理淡出计时器
 
   // 视频基本信息
   const [videoTitle, setVideoTitle] = useState(searchParams.get('title') || '');
@@ -3645,6 +3650,16 @@ function PlayPageClient() {
   // ---------------------------------------------------------------------------
   // 处理集数切换
   const handleEpisodeChange = (episodeNumber: number) => {
+    setLongPressedTitle(null);
+    setIsFadingOut(false); // 确保没有淡出动画在进行
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (fadeOutTimerRef.current) {
+      clearTimeout(fadeOutTimerRef.current);
+      fadeOutTimerRef.current = null;
+    }
     if (episodeNumber >= 0 && episodeNumber < totalEpisodes) {
       // 在更换集数前保存当前播放进度
       if (artPlayerRef.current && artPlayerRef.current.paused) {
@@ -3652,6 +3667,29 @@ function PlayPageClient() {
       }
       setCurrentEpisodeIndex(episodeNumber);
     }
+  };
+
+  const handleLongPress = (title: string) => {
+    // 清除任何现有计时器
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+    if (fadeOutTimerRef.current) {
+      clearTimeout(fadeOutTimerRef.current);
+    }
+
+    setIsFadingOut(false); // 确保新标题出现时不是淡出状态
+    setLongPressedTitle(title); // 显示标题
+
+    longPressTimerRef.current = setTimeout(() => {
+      setIsFadingOut(true); // 触发淡出动画
+      fadeOutTimerRef.current = setTimeout(() => {
+        setLongPressedTitle(null); // 淡出动画完成后隐藏元素
+        longPressTimerRef.current = null;
+        fadeOutTimerRef.current = null;
+        setIsFadingOut(false); // 重置状态以便下次使用
+      }, 500); // 淡出动画的持续时间
+    }, 2500); // 淡出动画开始前的延迟（总共3秒）
   };
 
   const handlePreviousEpisode = () => {
@@ -4142,7 +4180,7 @@ function PlayPageClient() {
       // const artplayerPluginDanmuku = (window as any).DynamicArtplayerPluginDanmuku; // 不再需要，已从 state 获取
 
       // 创建新的播放器实例
-      Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+      Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2];
       Artplayer.USE_RAF = true;
       // 重新启用5.3.0内存优化功能，但使用false参数避免清空DOM
       Artplayer.REMOVE_SRC_WHEN_DESTROY = true;
@@ -4392,7 +4430,7 @@ function PlayPageClient() {
         },
         settings: [
           {
-            html: '去广告',
+            html: '拦截广告',
             icon: '<text x="50%" y="50%" font-size="20" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#ffffff">AD</text>',
             tooltip: blockAdEnabled ? '已开启' : '已关闭',
             onClick() {
@@ -4401,14 +4439,17 @@ function PlayPageClient() {
                 localStorage.setItem('enable_blockad', String(newVal));
                 if (artPlayerRef.current) {
                   resumeTimeRef.current = artPlayerRef.current.currentTime;
-                  if (artPlayerRef.current.video.hls) {
+                  if (
+                    artPlayerRef.current.video &&
+                    artPlayerRef.current.video.hls
+                  ) {
                     artPlayerRef.current.video.hls.destroy();
                   }
-                  artPlayerRef.current.destroy(false);
+                  artPlayerRef.current.destroy();
                   artPlayerRef.current = null;
                 }
                 setBlockAdEnabled(newVal);
-              } catch (_) {
+              } catch (_){
                 // ignore
               }
               return newVal ? '当前开启' : '当前关闭';
@@ -5950,6 +5991,14 @@ function PlayPageClient() {
         clearTimeout(resizeResetTimeoutRef.current);
       }
 
+      // 清理长按计时器
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+      }
+      if (fadeOutTimerRef.current) {
+        clearTimeout(fadeOutTimerRef.current);
+      }
+
       // 释放 Wake Lock
       releaseWakeLock();
 
@@ -6343,16 +6392,22 @@ function PlayPageClient() {
 
             {/* 选集和换源 - 在移动端始终显示，在 lg 及以上可折叠 */}
             <div
-              className={`h-[300px] lg:h-full md:overflow-hidden transition-all duration-300 ease-in-out ${isEpisodeSelectorCollapsed
+              className={`relative h-[300px] lg:h-full md:overflow-hidden transition-all duration-300 ease-in-out ${isEpisodeSelectorCollapsed
                 ? 'md:col-span-1 lg:hidden lg:opacity-0 lg:scale-95'
                 : 'md:col-span-1 lg:opacity-100 lg:scale-100'
                 }`}
             >
+              {longPressedTitle && (
+                <div className={`absolute top-0 left-0 right-0 z-20 p-2 bg-gray-800/90 text-white text-center text-sm shadow-lg ${isFadingOut ? 'animate-fade-out' : 'animate-fade-in-down'}`}>
+                  {longPressedTitle}
+                </div>
+              )}
               <EpisodeSelector
                 totalEpisodes={totalEpisodes}
                 episodes_titles={detail?.episodes_titles || []}
                 value={currentEpisodeIndex + 1}
                 onChange={handleEpisodeChange}
+                onLongPress={handleLongPress}
                 onSourceChange={handleSourceChange}
                 currentSource={currentSource}
                 currentId={currentId}
