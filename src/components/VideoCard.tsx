@@ -39,7 +39,7 @@ export interface VideoCardProps {
   source_names?: string[];
   progress?: number;
   year?: string;
-  from: 'playrecord' | 'favorite' | 'search' | 'douban' | 'shortdrama';
+  from: 'playrecord' | 'favorite' | 'search' | 'douban' | 'shortdrama' | 'recommendation';
   currentEpisode?: number;
   douban_id?: number;
   onDelete?: () => void;
