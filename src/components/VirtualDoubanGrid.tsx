@@ -50,6 +50,7 @@ export const VirtualDoubanGrid: React.FC<VirtualDoubanGridProps> = ({
   loading,
   primarySelection,
   isBangumi = false,
+  onNavigate, // 在这里解构 onNavigate
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { columnCount, itemWidth, itemHeight, containerWidth } = useResponsiveGrid(containerRef);
