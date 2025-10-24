@@ -170,9 +170,12 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           # 输出为 canonical OCI digest 格式
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true
-          # 只使用 GitHub Actions 自带的缓存 (GHA Cache)，并按平台区分
-          cache-from: type=gha,scope=${{ matrix.platform }}-${{ github.workflow }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}-${{ github.workflow }}
+          # 优化缓存策略，为每个 Git Ref (分支/标签) 创建独立的缓存，并回退到主分支缓存
+          cache-from: |
+            type=gha,scope=${{ github.workflow }}-${{ matrix.platform }}
+            type=gha,scope=${{ github.workflow }}-${{ matrix.platform }},ref=refs/heads/${{ github.event.repository.default_branch }}
+          cache-to: |
+            type=gha,scope=${{ github.workflow }}-${{ matrix.platform }},ref=${{ github.ref }},mode=max
           # force_rebuild 时禁用缓存
           no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
           # 性能优化配置 (原样保留)
