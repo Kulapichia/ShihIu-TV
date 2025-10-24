@@ -25,7 +25,7 @@ export interface Favorite {
   year: string;
   cover: string;
   save_time: number; // 记录保存时间（时间戳）
-  search_title: string; // 搜索时使用的标题
+  search_title?: string; // 搜索时使用的标题
   origin?: 'vod' | 'live' | 'shortdrama';
   doubanId?: string; // 添加缺失的属性
 }
