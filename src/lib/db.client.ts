@@ -1418,6 +1418,62 @@ export async function deleteFavorite(
 }
 
 /**
+ * 根据标题删除收藏项。
+ * 这是一个后备方案，用于处理详情页收藏状态与实际数据不一致的情况。
+ */
+export async function deleteFavoriteByTitle(title: string): Promise<void> {
+  if (typeof window === 'undefined') {
+    console.warn('无法在服务端按标题删除收藏');
+    return;
+  }
+
+  // 数据库存储模式
+  if (STORAGE_TYPE !== 'localstorage') {
+    const allFavorites = await getAllFavorites();
+    const keysToDelete = Object.keys(allFavorites).filter(
+      (key) => allFavorites[key].title === title
+    );
+    
+    if (keysToDelete.length > 0) {
+      // 乐观更新：立即更新缓存
+      const cachedFavorites = cacheManager.getCachedFavorites() || {};
+      keysToDelete.forEach(key => delete cachedFavorites[key]);
+      cacheManager.cacheFavorites(cachedFavorites);
+
+      window.dispatchEvent(
+        new CustomEvent('favoritesUpdated', { detail: cachedFavorites })
+      );
+
+      // 异步同步到数据库
+      try {
+        await Promise.all(keysToDelete.map(key => 
+          fetchWithAuth(`/api/favorites?key=${encodeURIComponent(key)}`, {
+            method: 'DELETE',
+          })
+        ));
+      } catch (err) {
+        await handleDatabaseOperationFailure('favorites', err);
+        throw err;
+      }
+    }
+  } else {
+    // localStorage 模式
+    const allFavorites = await getAllFavorites();
+    const updatedFavorites: Record<string, Favorite> = {};
+    Object.keys(allFavorites).forEach((key) => {
+      if (allFavorites[key].title !== title) {
+        updatedFavorites[key] = allFavorites[key];
+      }
+    });
+
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(updatedFavorites));
+    window.dispatchEvent(
+      new CustomEvent('favoritesUpdated', { detail: updatedFavorites })
+    );
+  }
+}
+
+/**
  * 判断是否已收藏。
  * 数据库存储模式下使用混合缓存策略：优先返回缓存数据，后台异步同步最新数据。
  */
