@@ -17,7 +17,6 @@ import {
   deleteFavorite,
   saveFavorite,
   subscribeToDataUpdates,
-  deleteFavoriteByTitle,
 } from '@/lib/db.client';
 // [功能整合] 引入 Celebrity 类型
 import { Favorite, SearchResult, Celebrity } from '@/lib/types';
@@ -28,15 +27,15 @@ import { useSite } from '@/components/SiteProvider';
 
 function DetailPageClient() {
   const [instanceId] = useState(() => Date.now().toString());
-  // [代码整合]: 移除重复的 isMobile 状态及其 useEffect，统一使用 useIsTablet hook
-  // const [isMobile, setIsMobile] = useState(false); 
+  // [代码整合]: 移除重复的 isTablet 状态及其 useEffect，统一使用 useIsTablet hook
+  // const [isTablet, setisTablet] = useState(false); 
   // [功能整合] 从 SiteContext 获取 mainContainerRef
   const { mainContainerRef } = useSite();
 
   // [代码整合]: 以下 useEffect 逻辑已被 useIsTablet hook 替代，故删除
   // useEffect(() => {
   //   const checkMobile = () => {
-  //     setIsMobile(typeof window !== 'undefined' && window.innerWidth < 768);
+  //     setisTablet(typeof window !== 'undefined' && window.innerWidth < 768);
   //   };
   // 
   //   checkMobile(); // 组件挂载时检查
@@ -490,7 +489,7 @@ function DetailPageClient() {
       </PageLayout>
     );
   }
-  // [代码整合]: isMobile 的逻辑现在由 isTablet 统一处理 (isTablet 在移动端也为 true)
+  // [代码整合]: isTablet 的逻辑现在由 isTablet 统一处理 (isTablet 在移动端也为 true)
   return (
     <PageLayout activePath={pathname}>
       {/* [功能整合] 附加 ref 并保留原有样式 */}
@@ -519,7 +518,7 @@ function DetailPageClient() {
               <h1 className='text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100'>
                 {detail?.title ? detail.title : (isLoadingApi ? <div className='h-10 bg-gray-500 dark:bg-gray-400 rounded w-3/4 mb-3 animate-pulse'></div> : null)}
               </h1>
-              {isMobile && (
+              {isTablet && (
                 <button
                   onClick={handleFavorite}
                   className={`
@@ -577,7 +576,7 @@ function DetailPageClient() {
                 disabled={!detail?.title || !detail?.year} // 只要有title和year值即可点击
               >
                 <PlayCircle size={24} />
-                <span className='whitespace-nowrap'>{isMobile ? '播放' : '立即播放'}</span>
+                <span className='whitespace-nowrap'>{isTablet ? '播放' : '立即播放'}</span>
               </button>
               {/* 新的预告片按钮 */}
               <button
@@ -596,7 +595,7 @@ function DetailPageClient() {
                 <span className='whitespace-nowrap'>预告</span>
               </button>
               
-            {!isMobile && (
+            {!isTablet && (
                 <button
                   onClick={handleFavorite}
                   className={`w-1/2 flex items-center justify-center gap-2 px-8 py-4 bg-gray-400 sm:${isFavorited ? 'bg-gray-300' : 'bg-gray-400'} bg-opacity-80 text-white font-bold rounded-lg shadow-lg active:bg-gray-300 transition-all duration-300 transform sm:w-14 sm:h-14 sm:rounded-full sm:px-0 sm:py-0 md:hover:bg-gray-400 md:hover:scale-105`}
