@@ -82,52 +82,6 @@ export const useLongPress = <T = unknown>({
     [clearTimer, moveThreshold]
   );
 
-  const handleEnd = useCallback(() => {
-    clearTimer();
-
-    // 根据情况决定是否触发点击事件：
-    // 1. 如果是长按，不触发点击
-    // 2. 如果不是长按且触摸开始时是按钮，不触发点击
-    // 3. 否则触发点击
-    const shouldClick = !isLongPress.current && !wasButton.current && onClick && isActive.current;
-
-    if (shouldClick) {
-      onClick();
-    }
-
-    // 重置所有状态
-    isLongPress.current = false;
-    startPosition.current = null;
-    isActive.current = false;
-    wasButton.current = false;
-  }, [clearTimer, onClick]);
-
-  // 触摸事件处理器
-  const onTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      // 检查是否触摸的是按钮或其他交互元素
-      const target = e.target as HTMLElement;
-      const buttonElement = target.closest('[data-button]');
-
-      // 更精确的按钮检测：只有当触摸目标直接是按钮元素或其直接子元素时才认为是按钮
-      const isDirectButton = target.hasAttribute('data-button');
-      const isButton = !!buttonElement && isDirectButton;
-
-      // 阻止默认的长按行为，但不阻止触摸开始事件
-      const touch = e.touches[0];
-      handleStart(touch.clientX, touch.clientY, !!isButton);
-    },
-    [handleStart]
-  );
-
-  const onTouchMove = useCallback(
-    (e: React.TouchEvent) => {
-      const touch = e.touches[0];
-      handleMove(touch.clientX, touch.clientY);
-    },
-    [handleMove]
-  );
-
   const handleEnd = useCallback(
     (e: TouchEvent | MouseEvent) => {
       clearTimer();
