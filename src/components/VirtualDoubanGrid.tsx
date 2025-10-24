@@ -33,6 +33,7 @@ interface VirtualDoubanGridProps {
   
   // 是否来自番组计划
   isBangumi?: boolean;
+  onNavigate?: () => void; // 添加 onNavigate 属性
 }
 
 // 渐进式加载配置
@@ -138,6 +139,7 @@ export const VirtualDoubanGrid: React.FC<VirtualDoubanGridProps> = ({
     isBangumi: cellIsBangumi,
     columnCount: cellColumnCount,
     displayItemCount: cellDisplayItemCount,
+    onNavigate: cellOnNavigate, // 接收 onNavigate
   }: any) => {
     const index = rowIndex * cellColumnCount + columnIndex;
     
@@ -163,6 +165,7 @@ export const VirtualDoubanGrid: React.FC<VirtualDoubanGridProps> = ({
           year={item.year}
           type={cellType === 'movie' ? 'movie' : ''} // 电影类型严格控制，tv 不控
           isBangumi={cellIsBangumi}
+          onNavigate={cellOnNavigate} // 传递 onNavigate
         />
       </div>
     );
