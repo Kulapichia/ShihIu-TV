@@ -70,13 +70,14 @@ export const UserMenu: React.FC<{ className?: string }> = ({ className }) => {
   const [isContinueWatchingOpen, setIsContinueWatchingOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
-  const [storageType, setStorageType] = useState<string>(() => {
-    // 🔧 优化：直接从 RUNTIME_CONFIG 读取初始值，避免默认值导致的多次渲染
+  const [storageType, setStorageType] = useState<string>('localstorage');
+  
+  useEffect(() => {
+    // 🔧 优化：在客户端挂载后从 RUNTIME_CONFIG 读取，避免水合错误
     if (typeof window !== 'undefined') {
-      return (window as any).RUNTIME_CONFIG?.STORAGE_TYPE || 'localstorage';
+      setStorageType((window as any).RUNTIME_CONFIG?.STORAGE_TYPE || 'localstorage');
     }
-    return 'localstorage';
-  });
+  }, []);
   const [mounted, setMounted] = useState(false);
   const [watchingUpdates, setWatchingUpdates] = useState<WatchingUpdate | null>(null);
   const [playRecords, setPlayRecords] = useState<(PlayRecord & { key: string })[]>([]);
