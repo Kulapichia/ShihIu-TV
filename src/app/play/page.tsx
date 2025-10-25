@@ -6061,21 +6061,6 @@ function PlayPageClient() {
     };
   }, []);
 
-  // [整合] Handle WebSocket messages for live danmaku
-  useEffect(() => {
-    if (lastMessage && artPlayerRef.current?.plugins.artplayerPluginDanmuku) {
-      try {
-        const danmaku = JSON.parse(lastMessage.data);
-        // 假设收到的弹幕数据结构包含一个唯一标识符来匹配当前视频
-        if (danmaku.id === `${currentSource}-${currentId}-${currentEpisodeIndex}`) {
-          artPlayerRef.current.plugins.artplayerPluginDanmuku.emit(danmaku.data);
-        }
-      } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
-      }
-    }
-  }, [lastMessage, currentSource, currentId, currentEpisodeIndex]);
-
   // 返回顶部功能相关
   useEffect(() => {
     // 获取滚动位置的函数 - 专门针对 body 滚动
