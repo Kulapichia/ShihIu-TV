@@ -1,6 +1,10 @@
 import { ImagePlaceholder } from '@/components/ImagePlaceholder';
 
-const DoubanCardSkeleton = () => {
+interface DoubanCardSkeletonProps {
+  from?: 'movie' | 'tv' | 'variety' | 'anime' | 'other';
+}
+
+const DoubanCardSkeleton: React.FC<DoubanCardSkeletonProps> = ({ from = 'other' }) => {
   return (
     <div className='w-full'>
       <div className='group relative w-full rounded-lg bg-transparent shadow-none flex flex-col'>
@@ -12,8 +16,10 @@ const DoubanCardSkeleton = () => {
           <div className='flex flex-col items-center justify-center'>
             {/* 标题占位符 */}
             <div className='h-4 w-24 sm:w-32 bg-gray-300 dark:bg-gray-700 rounded animate-pulse'></div>
-            {/* 年份占位符 */}
-            <div className='h-3 mt-1 bg-gray-300 dark:bg-gray-700 rounded w-12 animate-pulse'></div>
+            {/* 年份占位符 - 仅在豆瓣和搜索页面显示 */}
+            {(from === 'movie' || from === 'tv' || from === 'variety' || from === 'anime' || from === 'other') && (
+              <div className='h-3 mt-1 bg-gray-300 dark:bg-gray-700 rounded w-12 animate-pulse'></div>
+            )}
           </div>
         </div>
       </div>
@@ -22,3 +28,4 @@ const DoubanCardSkeleton = () => {
 };
 
 export default DoubanCardSkeleton;
+
