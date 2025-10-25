@@ -86,9 +86,12 @@ jobs:
     needs: [prepare]
     strategy:
       matrix:
+        # 【修改】将矩阵扩展为对象，为每个平台定义一个安全的 artifact 后缀
         include:
           - platform: linux/amd64
+            artifact_suffix: linux-amd64
           - platform: linux/arm64
+            artifact_suffix: linux-arm64
     
     steps:
       - name: ⚡ Maximize build space
@@ -182,7 +185,7 @@ jobs:
           cache-to: |
             type=gha,scope=${{ github.workflow }}-${{ matrix.platform }},ref=${{ github.ref }},mode=max
           # force_rebuild 时禁用缓存
-          no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
+          no-cache: ${{ github.event_inputs.force_rebuild == 'true' }}
           # 性能优化配置 (原样保留)
           provenance: false
           sbom: false
@@ -204,7 +207,8 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ matrix.platform }}
+          # 【修改】使用新的、安全的 artifact_suffix 来命名 artifact
+          name: digests-${{ matrix.artifact_suffix }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
