@@ -75,6 +75,7 @@
     "react-window-infinite-loader": "^1.0.10",
     "redis": "^5.8.3",
     "swiper": "^11.2.8",
+    "sweetalert2": "^11.11.0",
     "tailwind-merge": "^2.6.0",
     "undici": "^6.19.2",
     "vidstack": "^0.6.15",
