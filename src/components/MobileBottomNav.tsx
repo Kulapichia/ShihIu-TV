@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Box, Cat, Clover, Film, Home, PlaySquare, Radio, Search, Star, Tv } from 'lucide-react';
+import { Cat, Clover, Film, Globe, Home, PlaySquare, Radio, Star, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -22,7 +22,11 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
 
   const [navItems, setNavItems] = useState([
     { icon: Home, label: '首页', href: '/' },
-    { icon: Search, label: '搜索', href: '/search' },
+    {
+      icon: Globe,
+      label: '源浏览',
+      href: '/source-browser',
+    },
     {
       icon: Film,
       label: '电影',
@@ -76,23 +80,12 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
     const decodedActive = decodeURIComponent(currentActive);
     const decodedItemHref = decodeURIComponent(href);
 
-    // 精确匹配路径
-    if (decodedActive === decodedItemHref) {
-      return true;
-    }
-
-    // 短剧页面的特殊处理
-    if (href === '/shortdrama' && decodedActive.startsWith('/shortdrama')) {
-      return true;
-    }
-
-    // 豆瓣页面的类型匹配
-    if (decodedActive.startsWith('/douban') && typeMatch &&
-      decodedActive.includes(`type=${typeMatch}`)) {
-      return true;
-    }
-
-    return false;
+    return (
+      decodedActive === decodedItemHref ||
+      (decodedActive.startsWith('/douban') &&
+        decodedActive.includes(`type=${typeMatch}`)) ||
+      (href === '/shortdrama' && decodedActive.startsWith('/shortdrama'))
+    );
   };
 
   return (
