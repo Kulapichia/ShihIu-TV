@@ -70,6 +70,12 @@ type FavoriteItem = {
 interface RestorableHomeData extends RestorableData {
   activeTab: 'home' | 'favorites';
   favoriteItems: FavoriteItem[];
+  items: any[];
+  hasNextPage: boolean;
+  primarySelection: string;
+  secondarySelection: string;
+  multiLevelValues: Record<string, string>;
+  selectedWeekday: string;
 }
 
 // Constants for better maintainability
@@ -484,12 +490,12 @@ function HomeClient() {
   const dataRef = useRef<RestorableHomeData>({
     activeTab: 'home',
     favoriteItems: [],
-    items: [], // 添加缺失的属性
-    hasNextPage: true, // 添加缺失的属性
-    primarySelection: '', // 添加缺失的属性
-    secondarySelection: '', // 添加缺失的属性
-    multiLevelValues: {}, // 添加缺失的属性
-    selectedWeekday: '', // 添加缺失的属性
+    items: [],
+    hasNextPage: true,
+    primarySelection: '',
+    secondarySelection: '',
+    multiLevelValues: {},
+    selectedWeekday: '',
   });
 
   // [滚动恢复整合] 实例化 Hook
@@ -506,14 +512,9 @@ function HomeClient() {
   // [滚动恢复整合] 监听所有相关状态，并实时更新 dataRef
   useEffect(() => {
     dataRef.current = {
+      ...dataRef.current, // 保持其他可能存在的属性
       activeTab,
       favoriteItems,
-      items: [], // 添加缺失的属性
-      hasNextPage: true, // 添加缺失的属性
-      primarySelection: '', // 添加缺失的属性
-      secondarySelection: '', // 添加缺失的属性
-      multiLevelValues: {}, // 添加缺失的属性
-      selectedWeekday: '', // 添加缺失的属性
     };
   }, [activeTab, favoriteItems]);
 
