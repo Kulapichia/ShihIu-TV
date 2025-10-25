@@ -64,7 +64,7 @@ function setupWebSocketServer(server) {
       const { pathname, query } = parse(request.url, true);
 
       // 只处理我们约定的 WebSocket 路径
-      if (pathname === '/_next/websocket') {
+      if (pathname === '/ws') {
         const { auth } = query;
         if (!auth) {
           socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
