@@ -6,7 +6,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react'; // 引入 React 用于 ErrorBoundary
 import { Heart, ChevronUp, Copy, AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-
+import { useWebSocket } from '@/hooks/useWebSocket';
 import EpisodeSelector from '@/components/EpisodeSelector';
 import NetDiskSearchResults from '@/components/NetDiskSearchResults';
 import PageLayout from '@/components/PageLayout';
@@ -139,6 +139,12 @@ const mergeSimilarDanmaku = (danmakuList: any[], windowSeconds: number = 5): any
 function PlayPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // [整合] WebSocket for Danmaku
+  const { lastMessage } = useWebSocket({
+    socketUrl: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001',
+    shouldReconnect: () => true,
+  });
 
   // 动态导入客户端库
   // -----------------------------------------------------------------------------
@@ -4180,7 +4186,7 @@ function PlayPageClient() {
       // const artplayerPluginDanmuku = (window as any).DynamicArtplayerPluginDanmuku; // 不再需要，已从 state 获取
 
       // 创建新的播放器实例
-      Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2];
+      Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
       Artplayer.USE_RAF = true;
       // 重新启用5.3.0内存优化功能，但使用false参数避免清空DOM
       Artplayer.REMOVE_SRC_WHEN_DESTROY = true;
@@ -4189,11 +4195,16 @@ function PlayPageClient() {
               ? createCustomHlsLoader(Hls) 
               : null;
 
+      // [整合] 从localStorage读取用户保存的设置
+      const savedVolume = parseFloat(localStorage.getItem('artplayer_volume') || '0.7');
+      const savedPlaybackRate = parseFloat(localStorage.getItem('artplayer_playbackRate') || '1');
+      const savedQuality = JSON.parse(localStorage.getItem('artplayer_quality') || 'null');
+
       artPlayerRef.current = new Artplayer({
         container: artRef.current,
         url: videoUrl,
         poster: videoCover,
-        volume: 0.7,
+        volume: savedVolume, // [整合] 使用保存的音量
         isLive: false,
         // iOS设备需要静音才能自动播放，参考ArtPlayer源码处理
         muted: isIOS || isSafari,
@@ -4430,7 +4441,7 @@ function PlayPageClient() {
         },
         settings: [
           {
-            html: '拦截广告',
+            html: '去广告',
             icon: '<text x="50%" y="50%" font-size="20" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#ffffff">AD</text>',
             tooltip: blockAdEnabled ? '已开启' : '已关闭',
             onClick() {
@@ -5189,6 +5200,15 @@ function PlayPageClient() {
       artPlayerRef.current.on('ready', async () => {
         setError(null);
 
+        // [整合] 恢复播放速度和画质
+        artPlayerRef.current!.playbackRate = savedPlaybackRate;
+        if (savedQuality) {
+          const quality = artPlayerRef.current!.quality.find((q: any) => q.html === savedQuality.html);
+          if (quality) {
+            artPlayerRef.current!.switchQuality = quality.url;
+          }
+        }
+
         // 在播放器就绪后添加全局事件监听器
         const handleBeforeUnload = () => {
           saveCurrentPlayProgress();
@@ -5708,6 +5728,15 @@ function PlayPageClient() {
         }
       });
 
+      // [整合] 监听并保存播放速度和画质
+      artPlayerRef.current.on('playbackRate', (rate: number) => {
+        localStorage.setItem('artplayer_playbackRate', rate.toString());
+      });
+
+      artPlayerRef.current.on('quality', (quality: any) => {
+        localStorage.setItem('artplayer_quality', JSON.stringify(quality));
+      });
+
       // 监听播放状态变化，控制 Wake Lock
       artPlayerRef.current.on('play', () => {
         requestWakeLock();
@@ -6019,6 +6048,21 @@ function PlayPageClient() {
       cleanupPlayer();
     };
   }, []);
+
+  // [整合] Handle WebSocket messages for live danmaku
+  useEffect(() => {
+    if (lastMessage && artPlayerRef.current?.plugins.artplayerPluginDanmuku) {
+      try {
+        const danmaku = JSON.parse(lastMessage.data);
+        // 假设收到的弹幕数据结构包含一个唯一标识符来匹配当前视频
+        if (danmaku.id === `${currentSource}-${currentId}-${currentEpisodeIndex}`) {
+          artPlayerRef.current.plugins.artplayerPluginDanmuku.emit(danmaku.data);
+        }
+      } catch (error) {
+        console.error('Failed to parse WebSocket message:', error);
+      }
+    }
+  }, [lastMessage, currentSource, currentId, currentEpisodeIndex]);
 
   // 返回顶部功能相关
   useEffect(() => {
