@@ -17,7 +17,7 @@ import { VirtualScrollProvider } from '../components/VirtualScrollProvider';
 import GlobalThemeLoader from '../components/GlobalThemeLoader';
 const inter = Inter({ subsets: ['latin'] });
 
-// export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic';
 
 // 动态生成 metadata，支持配置更新后的标题变化
 export async function generateMetadata(): Promise<Metadata> {
