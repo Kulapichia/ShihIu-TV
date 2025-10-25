@@ -14,5 +14,14 @@ export async function POST() {
     secure: false, // 根据协议自动设置
   });
 
+  // 同时清除旧的认证cookie (user_auth) 以保持兼容性
+  response.cookies.set('user_auth', '', {
+    path: '/',
+    expires: new Date(0),
+    sameSite: 'lax',
+    httpOnly: false,
+    secure: false,
+  });
+
   return response;
 }
