@@ -22,10 +22,10 @@ export async function GET(request: NextRequest) {
     TelegramAuth: {
       enabled: config.SiteConfig.TelegramAuth?.enabled || false,
       botName: config.SiteConfig.TelegramAuth?.botName || '',
-      botUsername: config.SiteConfig.TelegramAuth?.botUsername || '',
-      buttonSize: config.SiteConfig.TelegramAuth?.buttonSize || 'large',
-      showAvatar: config.SiteConfig.TelegramAuth?.showAvatar ?? true,
-      requestWriteAccess: config.SiteConfig.TelegramAuth?.requestWriteAccess ?? false,
+      botUsername: (config.SiteConfig.TelegramAuth as any)?.botUsername || '',
+      buttonSize: (config.SiteConfig.TelegramAuth as any)?.buttonSize || 'large',
+      showAvatar: (config.SiteConfig.TelegramAuth as any)?.showAvatar ?? true,
+      requestWriteAccess: (config.SiteConfig.TelegramAuth as any)?.requestWriteAccess ?? false,
     },
   };
   return NextResponse.json(result);
