@@ -141,9 +141,21 @@ function PlayPageClient() {
   const searchParams = useSearchParams();
 
   // [整合] WebSocket for Danmaku
-  const { lastMessage } = useWebSocket({
-    socketUrl: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001',
-    shouldReconnect: () => true,
+  const { sendMessage } = useWebSocket({
+    onMessage: (message) => {
+      // 仅处理实时弹幕消息
+      if (message.type === 'message' && artPlayerRef.current?.plugins.artplayerPluginDanmuku) {
+        try {
+          const danmaku = message.data;
+          // 假设收到的弹幕数据结构包含一个唯一标识符来匹配当前视频
+          if (danmaku.id === `${currentSourceRef.current}-${currentIdRef.current}-${currentEpisodeIndexRef.current}`) {
+            artPlayerRef.current.plugins.artplayerPluginDanmuku.emit(danmaku.data);
+          }
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
+      }
+    },
   });
 
   // 动态导入客户端库
