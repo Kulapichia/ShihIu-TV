@@ -66,15 +66,7 @@ const Sidebar = ({ onToggle, activePath = '/', isTabletMode = false, onCategoryS
   const searchParams = useSearchParams();
   const { authInfo } = useSite();
   // 若同一次 SPA 会话中已经读取过折叠状态，则直接复用，避免闪烁
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    if (
-      typeof window !== 'undefined' &&
-      typeof window.__sidebarCollapsed === 'boolean'
-    ) {
-      return window.__sidebarCollapsed;
-    }
-    return false; // 默认展开
-  });
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
 
   // 首次挂载时读取 localStorage，以便刷新后仍保持上次的折叠状态
   useLayoutEffect(() => {
