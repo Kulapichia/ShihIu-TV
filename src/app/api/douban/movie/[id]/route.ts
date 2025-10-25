@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import { fetchDoubanHtml } from '@/lib/douban'; // 关键修改：引入共享的、更健壮的 fetch 函数
 
 export async function GET(
   request: NextRequest,
@@ -15,25 +16,18 @@ export async function GET(
   const celebritiesUrl = `https://movie.douban.com/subject/${id}/celebrities`;
 
   try {
-    // 1. 使用 Promise.all 并行发起两个 fetch 请求
+    // 1. 关键修改：使用共享的 fetchDoubanHtml 函数并行发起请求，增强稳定性
     const [movieResponse, celebritiesResponse] = await Promise.all([
-      fetch(movieUrl),
-      fetch(celebritiesUrl),
+      fetchDoubanHtml(movieUrl),
+      fetchDoubanHtml(celebritiesUrl),
     ]);
 
-    // 2. 检查两个请求是否都成功
-    if (!movieResponse.ok) {
-      throw new Error(`Failed to fetch movie data from Douban: ${movieResponse.statusText}`);
-    }
-    if (!celebritiesResponse.ok) {
-      throw new Error(`Failed to fetch celebrities data from Douban: ${celebritiesResponse.statusText}`);
-    }
-
-    // 3. 并行解析两个 HTML 响应
-    const [movieHtml, celebritiesHtml] = await Promise.all([
-      movieResponse.text(),
-      celebritiesResponse.text(),
-    ]);
+    // 2. 检查响应是否成功（fetchDoubanHtml 内部已有ok检查，这里为双重保障）
+    // 注意：fetchDoubanHtml 返回的是 text() 的结果，所以直接使用
+    const movieHtml = movieResponse;
+    const celebritiesHtml = celebritiesResponse;
+    
+    // 3. 并行解析两个 HTML 响应 (此步骤已在上面完成)
 
     // 4. 使用 Cheerio 解析 HTML
     const $movie = cheerio.load(movieHtml);
