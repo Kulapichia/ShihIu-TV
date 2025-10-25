@@ -17,7 +17,7 @@
 
 <div align="center">
 
-![Next.js](https://img.shields.io/badge/Next.js-14.2.23-000?logo=nextdotjs)![React](https://img.shields.io/badge/React-18.2.0-61dafb?logo=react)![TypeScript](https://img.shields.io/badge/TypeScript-4.9.5-3178c6?logo=typescript)![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4.17-38bdf8?logo=tailwindcss)![ArtPlayer](https://img.shields.io/badge/ArtPlayer-5.3.0-ff6b6b)![HLS.js](https://img.shields.io/badge/HLS.js-1.6.13-ec407a)![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey)![Docker Ready](https://img.shields.io/badge/Docker-ready-blue?logo=docker)![Version](https://img.shields.io/badge/Version-5.6.0-orange)
+![Next.js](https://img.shields.io/badge/Next.js-14.2.23-000?logo=nextdotjs)![React](https://img.shields.io/badge/React-18.2.0-61dafb?logo=react)![TypeScript](https://img.shields.io/badge/TypeScript-4.9.5-3178c6?logo=typescript)![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4.17-38bdf8?logo=tailwindcss)![ArtPlayer](https://img.shields.io/badge/ArtPlayer-5.3.0-ff6b6b)![HLS.js](https://img.shields.io/badge/HLS.js-1.6.13-ec407a)![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey)![Docker Ready](https://img.shields.io/badge/Docker-ready-blue?logo=docker)![Version](https://img.shields.io/badge/Version-5.5.8)
 
 </div>
 
