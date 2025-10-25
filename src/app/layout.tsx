@@ -15,6 +15,7 @@ import { ThemeProvider } from '../components/ThemeProvider';
 import { ToastProvider } from '../components/Toast';
 import { VirtualScrollProvider } from '../components/VirtualScrollProvider';
 import GlobalThemeLoader from '../components/GlobalThemeLoader';
+import ThemeToggle from '../components/ThemeToggle'; // 新增导入
 const inter = Inter({ subsets: ['latin'] });
 // export const dynamic = 'force-dynamic';
 // 动态生成 metadata，支持配置更新后的标题变化
@@ -233,6 +234,7 @@ export default async function RootLayout({
                   <SourceAvailabilityChecker />
                   {children}
                   <GlobalErrorIndicator />
+                  <ThemeToggle />
                 </VirtualScrollProvider>
               </SiteProvider>
             </ToastProvider>
