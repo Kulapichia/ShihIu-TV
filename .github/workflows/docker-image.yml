@@ -200,7 +200,7 @@ jobs:
         run: |
           mkdir -p /tmp/digests
           digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha26:}" # Corrected typo from previous attempts if any
+          touch "/tmp/digests/${digest#sha256:}" # Corrected typo from previous attempts if any
 
       # 上传摘要文件作为 artifact
       - name: 📤 Upload digest artifact
