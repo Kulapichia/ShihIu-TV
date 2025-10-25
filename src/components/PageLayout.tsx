@@ -111,6 +111,14 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
             </div>
           )}
 
+          {/* 新增：为播放页和直播页等没有标准头部的页面添加右上角按钮 */}
+          {['/play', '/live', '/play-stats', '/release-calendar', '/tvbox', '/source-test'].includes(pathname) && (
+            <div className="absolute top-2 right-4 z-20 hidden md:flex items-center gap-2">
+              <ThemeToggle />
+              <UserMenu />
+            </div>
+          )}
+
           {/* 桌面端左上角返回按钮 - 详细页和播放页 */}
           {((activePath || '').startsWith('/detail') || activePath === '/play') && (
             <div className='absolute top-3 left-1 right-4 z-20 hidden md:flex items-center justify-between'>
