@@ -26,7 +26,6 @@ on:
     paths-ignore:
       - '**.md'
 
-# 【修改】恢复原始定义，不在表达式中进行转换
 env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPO_NAME }}
   REGISTRY: docker.io
@@ -41,27 +40,35 @@ permissions:
   actions: write
 
 jobs:
-  # 任务一：准备工作，仅执行一次版本检查
-  prepare:
-    name: 📝 Prepare Build Info
+  build-and-push:
+    name: 🚀 Build & Push Multi-Platform Image to Docker Hub
     runs-on: ubuntu-latest
-    outputs:
-      version_changed: ${{ steps.version_check.outputs.version_changed }}
-      current_version: ${{ steps.version_check.outputs.current_version }}
+    
     steps:
+      - name: ⚡ Maximize build space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get clean
+          df -h
+
       # fetch-depth 必须是 2 才能比较版本
       - name: 📥 Checkout source code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 2 
 
-      # Node.js 构建环境 (仅用于版本检查脚本)
+      # Node.js 构建环境
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: 📦 Install dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: 📜 Generate version and changelog
+        run: node scripts/convert-changelog.js
 
-      # 【新增】移植过来的 package.json 版本检查逻辑
       - name: 🔍 Check if version changed in package.json
         id: version_check
         run: |
@@ -78,42 +85,6 @@ jobs:
           else
             echo "version_changed=false" >> $GITHUB_OUTPUT
           fi
-
-  # 任务二：矩阵构建，为每个平台独立构建镜像
-  build:
-    name: 🚀 Build for ${{ matrix.platform }}
-    runs-on: ubuntu-latest
-    needs: [prepare]
-    strategy:
-      matrix:
-        # 【修改】将矩阵扩展为对象，为每个平台定义一个安全的 artifact 后缀
-        include:
-          - platform: linux/amd64
-            artifact_suffix: linux-amd64
-          - platform: linux/arm64
-            artifact_suffix: linux-arm64
-    
-    steps:
-      - name: ⚡ Maximize build space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo apt-get clean
-          df -h
-
-      - name: 📥 Checkout source code
-        uses: actions/checkout@v4
-
-      # Node.js 构建环境 (用于运行项目脚本)
-      - name: ⚙️ Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: 📦 Install dependencies
-        run: pnpm install --no-frozen-lockfile
-      - name: 📜 Generate version and changelog
-        run: node scripts/convert-changelog.js
 
       - name: 🎯 Setup QEMU for multi-platform builds
         uses: docker/setup-qemu-action@v3
@@ -161,82 +132,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
-      # 【新增】在 run 步骤中设置小写的镜像名称
-      - name: 📝 Set lowercase image name
-        run: echo "IMAGE_NAME_LC=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-
-      # 核心构建步骤：只构建并推送摘要，不打最终标签
-      - name: 🏗️ Build and push image by digest
-        id: build
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: ${{ matrix.platform }}
-          # 仅在非 pull_request 事件时推送
-          push: ${{ github.event_name != 'pull_request' }}
-          # 【修改】使用新的小写环境变量 IMAGE_NAME_LC
-          outputs: type=image,name=${{ env.IMAGE_NAME_LC }},push-by-digest=true,name-canonical=true
-          # 优化缓存策略，为每个 Git Ref (分支/标签) 创建独立的缓存，并回退到主分支缓存
-          cache-from: |
-            type=gha,scope=${{ github.workflow }}-${{ matrix.platform }}
-            type=gha,scope=${{ github.workflow }}-${{ matrix.platform }},ref=refs/heads/${{ github.event.repository.default_branch }}
-          cache-to: |
-            type=gha,scope=${{ github.workflow }}-${{ matrix.platform }},ref=${{ github.ref }},mode=max
-          # force_rebuild 时禁用缓存
-          no-cache: ${{ github.event_inputs.force_rebuild == 'true' }}
-          # 性能优化配置 (原样保留)
-          provenance: false
-          sbom: false
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-            NODE_ENV=production
-            SHARP_IGNORE_GLOBAL_LIBVIPS=1
-
-      # 导出摘要文件，为 merge 任务做准备
-      - name: 📦 Export digest
-        if: github.event_name != 'pull_request'
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}" # Corrected typo from previous attempts if any
-
-      # 上传摘要文件作为 artifact
-      - name: 📤 Upload digest artifact
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          # 【修改】使用新的、安全的 artifact_suffix 来命名 artifact
-          name: digests-${{ matrix.artifact_suffix }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-  
-  # 任务三：合并清单，为多平台镜像打上最终标签
-  merge:
-    name: ✨ Merge Manifest and Apply Tags
-    runs-on: ubuntu-latest
-    needs: [prepare, build]
-    if: github.event_name != 'pull_request'
-
-    steps:
-      - name: 📥 Download all digests
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/digests
-          pattern: digests-*
-          merge-multiple: true
-
-      - name: 🔧 Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: 🔐 Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          logout: true
           
       # 【新增】再次设置小写的镜像名称 (每个 job 都是独立环境)
       - name: 📝 Set lowercase image name
@@ -250,17 +145,16 @@ jobs:
           # 【修改】使用新的小写环境变量
           images: ${{ env.IMAGE_NAME_LC }}
           tags: |
-            # 规则一 (dev): 推送到默认分支时打 'dev' 标签 (保留您的逻辑)
+            # 规则一 (dev): 推送到默认分支时打 'dev' 标签
             # 这用于 CI 检查，确保代码总是可构建和推送的。
             type=raw,value=dev,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
 
-            # 规则二 (git tag): 推送 "v" 开头 Git 标签时，生成 'latest' 和版本号 (保留您的逻辑)
-            # 这是正式发布的唯一途径。
+            # 规则二 (git tag): 推送 "v" 开头 Git 标签时，生成 'latest' 和版本号
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             
             # 规则三 (package.json): 如果 package.json 版本变化，也打上版本号标签
-            type=raw,value=${{ needs.prepare.outputs.current_version }},enable=${{ needs.prepare.outputs.version_changed == 'true' }}
+            type=raw,value=${{ steps.version_check.outputs.current_version }},enable=${{ steps.version_check.outputs.version_changed == 'true' }}
 
             # 规则四 (手动): 手动触发
             type=raw,value=${{ github.event.inputs.tag || 'latest' }},enable=${{ github.event_name == 'workflow_dispatch' }}
@@ -268,18 +162,30 @@ jobs:
             # 规则五 (调试): SHA 标签
             type=sha,prefix=sha-,format=short
 
-      # 使用 buildx imagetools 创建并推送清单
-      - name: 📜 Create and push manifest list
-        working-directory: /tmp/digests
-        run: |
-          # 【修改】使用新的小写环境变量
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< '${{ steps.meta.outputs.json }}') \
-            $(printf '${{ env.IMAGE_NAME_LC }}@sha256:%s ' *)
+      # 核心构建与推送
+      - name: 🚀 Build and push multi-platform image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=multiarch-${{ github.workflow }}
+          cache-to: type=gha,mode=max,scope=multiarch-${{ github.workflow }}
+          no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
+          provenance: false
+          sbom: false
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+            NODE_ENV=production
+            SHARP_IGNORE_GLOBAL_LIBVIPS=1
 
   # 清理任务
   cleanup:
     runs-on: ubuntu-latest
-    needs: [merge]
+    needs: [build-and-push]
     if: always()
     steps:
       - name: 🧹 Cleanup workflow runs
