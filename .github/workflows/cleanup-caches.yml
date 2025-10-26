@@ -10,6 +10,10 @@ on:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    # 明确为这个任务授予删除 Actions 缓存所需的权限
+    permissions:
+      actions: write
+
     steps:
       - name: 🗑️ Delete old caches
         uses: actions/github-script@v7
