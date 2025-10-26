@@ -147,8 +147,8 @@ function setupWebSocketServer(server) {
           broadcastUserStatus(ws.userId, 'online');
         });
       } else {
-        // 如果请求路径不匹配，销毁 socket
-        socket.destroy();
+        // 如果请求路径不匹配，优雅地忽略，不销毁 socket
+        // socket.destroy();
       }
     } catch (err) {
       console.error('[WebSocket] Upgrade 请求处理错误:', err);
