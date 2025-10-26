@@ -234,7 +234,6 @@ export default async function RootLayout({
                   <SourceAvailabilityChecker />
                   {children}
                   <GlobalErrorIndicator />
-                  <ThemeToggle />
                 </VirtualScrollProvider>
               </SiteProvider>
             </ToastProvider>
