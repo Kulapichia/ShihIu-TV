@@ -17,10 +17,6 @@ import { BackToTopButton } from './BackToTopButton';
 import { FloatingHeader } from './FloatingHeader';
 import { TabletHeaderActions } from './TabletHeaderActions';
 
-// --- 引入 useAuth 和 ChatFloatButton ---
-import { useAuth } from '@/hooks/useAuth';
-import ChatFloatButton from './ChatFloatButton';
-
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -37,8 +33,8 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
   const pathname = usePathname();
   const router = useRouter();
 
-  // --- 获取登录状态和客户端状态 ---
-  const { authInfo } = useAuth();
+  // --- 客户端状态 ---
+
   const [isClient, setIsClient] = useState(false);
 
 
@@ -165,11 +161,13 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
       
       {/* --- 核心修复区域: 添加全局悬浮按钮 --- */}
       {isClient && (
-        <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-center space-y-4 md:bottom-8 md:right-8">
-          {/* 聊天悬浮按钮：仅在用户登录后显示 */}
-          {authInfo && <ChatFloatButton />}
-          
-          {/* 主题切换按钮：在非移动设备上全局显示 */}
+        // 这个容器确保按钮组固定在桌面端的右下角
+        <div className="fixed bottom-6 right-6 z-[100] md:bottom-8 md:right-8">
+          {/* 
+            ThemeToggle 组件内部已集成了聊天按钮和主题切换功能。
+            'hidden md:block' 确保这组悬浮按钮只在非移动设备上显示，
+            避免与移动端底部导航栏重叠。
+          */}
           <div className="hidden md:block">
             <ThemeToggle />
           </div>
