@@ -62,9 +62,10 @@ function setupWebSocketServer(server) {
   server.on('upgrade', (request, socket, head) => {
     try {
       const { pathname, query } = parse(request.url, true);
+      console.log(`[WebSocket] 收到 upgrade 请求: ${request.url}`); // 增加日志
 
-      // 只处理我们约定的 WebSocket 路径
-      if (pathname === '/ws') {
+      // 修正：处理 Nginx 转发过来的 /ws-api 路径
+      if (pathname === '/ws-api') {
         const { auth } = query;
         if (!auth) {
           socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
