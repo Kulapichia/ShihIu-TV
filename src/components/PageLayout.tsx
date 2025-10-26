@@ -1,7 +1,7 @@
 // src/components/PageLayout.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSite } from './SiteProvider';
 import { useIsTablet } from '@/lib/useIsTablet';
@@ -16,6 +16,11 @@ import { TabletSidebar } from './TabletSidebar';
 import { BackToTopButton } from './BackToTopButton';
 import { FloatingHeader } from './FloatingHeader';
 import { TabletHeaderActions } from './TabletHeaderActions';
+
+// --- 引入 useAuth 和 ChatFloatButton ---
+import { useAuth } from '@/hooks/useAuth';
+import ChatFloatButton from './ChatFloatButton';
+
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -32,6 +37,11 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
   const pathname = usePathname();
   const router = useRouter();
 
+  // --- 获取登录状态和客户端状态 ---
+  const { authInfo } = useAuth();
+  const [isClient, setIsClient] = useState(false);
+
+
   const showAdminBackButton = pathname === '/admin';
   const showAdminSubPageBackButton = pathname.startsWith('/admin/') && pathname !== '/admin';
   const showTabletSidebar = pathname === '/' || pathname === '/douban' || pathname === '/search';
@@ -41,6 +51,10 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
   const isFloatingHeaderVisible = useFloatingHeaderVisibility(mainContainerRef || null);
 
   useEffect(() => {
+    // --- 标记为客户端渲染 ---
+    setIsClient(true);
+
+    
     const ua = navigator.userAgent;
     const isMobile = /Mobi/i.test(ua) || window.innerWidth < 768;
     const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
@@ -96,21 +110,18 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
               <BackButton />
             </div>
           )}
-
           {/* 平板端/桌面端 顶部按钮组 */}
           {showTabletSidebar && (
             <div className="absolute top-2 left-4 right-4 z-20 hidden md:flex items-center justify-between">
               <TabletHeaderActions setIsOpen={setIsTabletSidebarOpen} isOpen={isTabletSidebarOpen} title={title} />
             </div>
           )}
-
           {/* 桌面端左上角返回按钮 - 播放页 */}
           {['/play', '/live'].includes(activePath) && (
             <div className='absolute top-3 left-1 z-20 hidden md:flex'>
               <BackButton />
             </div>
           )}
-
           {/* 新增：为播放页和直播页等没有标准头部的页面添加右上角按钮 */}
           {['/play', '/live', '/play-stats', '/release-calendar', '/tvbox', '/source-test'].includes(pathname) && (
             <div className="absolute top-2 right-4 z-20 hidden md:flex items-center gap-2">
@@ -118,7 +129,6 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
               <UserMenu />
             </div>
           )}
-
           {/* 桌面端左上角返回按钮 - 详细页和播放页 */}
           {((activePath || '').startsWith('/detail') || activePath === '/play') && (
             <div className='absolute top-3 left-1 right-4 z-20 hidden md:flex items-center justify-between'>
@@ -152,6 +162,20 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
 
       {/* 返回顶部按钮 - 仅在特定平板页面显示 */}
       {showTabletSidebar && <BackToTopButton />}
+      
+      {/* --- 核心修复区域: 添加全局悬浮按钮 --- */}
+      {isClient && (
+        <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-center space-y-4 md:bottom-8 md:right-8">
+          {/* 聊天悬浮按钮：仅在用户登录后显示 */}
+          {authInfo && <ChatFloatButton />}
+          
+          {/* 主题切换按钮：在非移动设备上全局显示 */}
+          <div className="hidden md:block">
+            <ThemeToggle />
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
