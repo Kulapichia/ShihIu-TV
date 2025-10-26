@@ -1,6 +1,9 @@
-declare module 'react-image-crop' {
-  import { ComponentType, CSSProperties, SyntheticEvent } from 'react';
+// src/types/react-image-crop.d.ts
 
+// 移除了未被使用的 'SyntheticEvent' 导入
+import { ComponentType, CSSProperties } from 'react';
+
+declare module 'react-image-crop' {
   export interface Crop {
     unit?: string | '%' | 'px';
     x: number;
