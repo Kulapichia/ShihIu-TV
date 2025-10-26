@@ -5,6 +5,7 @@ import { Search } from 'lucide-react';
 import { clearScrollCache } from '@/lib/scrollCache';
 import { UserMenu } from './UserMenu';
 import React from 'react';
+import { ThemeToggle } from './ThemeToggle';
 
 interface TabletHeaderActionsProps {
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -55,12 +56,6 @@ export function TabletHeaderActions({ setIsOpen, isOpen, title }: TabletHeaderAc
             {title}
           </h2>
         )}
-        {/* Page Title */}
-        {title && (
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap">
-            {title}
-          </h2>
-        )}
       </div>
 
       {/* Right side */}
@@ -72,6 +67,7 @@ export function TabletHeaderActions({ setIsOpen, isOpen, title }: TabletHeaderAc
         >
           <Search className="w-full h-full" />
         </button>
+        <ThemeToggle />
         <UserMenu className="md:text-zinc-800 md:dark:text-zinc-200" />
       </div>
     </>
