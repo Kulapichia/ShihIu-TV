@@ -42,29 +42,18 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   // 获取WebSocket URL
   const getWebSocketUrl = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const hostname = window.location.hostname;
-
-    // 在生产环境中，WebSocket运行在不同的端口
-    // 可以通过环境变量或配置来设置
-    let wsPort = '3001'; // 默认WebSocket端口
-
-    // 如果在开发环境，WebSocket运行在3001端口
-    if (process.env.NODE_ENV === 'development') {
-      return `${protocol}//${hostname}:3001/ws?_=${Date.now()}`;
-    }
-
-    // 生产环境，使用独立的WebSocket端口
-    // 如果通过反向代理，可能需要特殊的路径
-    if (window.location.port && window.location.port !== '80' && window.location.port !== '443') {
-      // 本地测试环境
-      return `${protocol}//${hostname}:${wsPort}/ws?_=${Date.now()}`;
-    } else {
-      // 生产环境，可能通过nginx反向代理
-      // 如果使用反向代理，通常会将WebSocket映射到特定路径
-      // 例如: /ws -> localhost:3001
-      return `${protocol}//${hostname}/ws?_=${Date.now()}`;
-    }
+    const host = window.location.host; // 使用 host 包含 hostname 和 port
+    const authInfo = getAuthInfoFromBrowserCookie();
+    
+    // 从 Cookie 获取认证信息并作为查询参数
+    const authParam = authInfo
+      ? `&auth=${encodeURIComponent(JSON.stringify(authInfo))}`
+      : '';
+      
+    // 始终连接到与网页相同的 host 和 port，并带上 auth 参数
+    return `${protocol}//${host}/ws?_=${Date.now()}${authParam}`;
   };
+
 
   // 连接WebSocket
   const connect = useCallback(() => {
