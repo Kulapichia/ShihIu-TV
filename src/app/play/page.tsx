@@ -5161,16 +5161,16 @@ function PlayPageClient() {
           // 其他浏览器：不显示 Chromecast（不支持 Cast API）
           ...(isChrome && !isIOS ? [
             artplayerPluginChromecast({
-              onStateChange: (state) => {
+              onStateChange: (state: any) => {
                 console.log('Chromecast state changed:', state);
               },
-              onCastAvailable: (available) => {
+              onCastAvailable: (available: boolean) => {
                 console.log('Chromecast available:', available);
               },
               onCastStart: () => {
                 console.log('Chromecast started');
               },
-              onError: (error) => {
+              onError: (error: any) => {
                 console.error('Chromecast error:', error);
               }
             })
