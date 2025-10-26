@@ -274,8 +274,7 @@ services:
     container_name: moontv-core
     restart: on-failure
     ports:
-      - '3000:3000'
-      - '3001:3001' # 为WebSocket服务开放端口
+      - '3000:3000' # 网页和WebSocket服务统一使用此端口
     environment:
       - USERNAME=admin
       - PASSWORD=your_secure_password
