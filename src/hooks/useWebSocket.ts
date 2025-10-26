@@ -62,7 +62,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       // 生产环境，可能通过nginx反向代理
       // 如果使用反向代理，通常会将WebSocket映射到特定路径
       // 例如: /ws -> localhost:3001
-      return `${protocol}//${hostname}/ws-api?_=${Date.now()}`;
+      return `${protocol}//${hostname}/ws?_=${Date.now()}`;
     }
   };
 
