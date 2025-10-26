@@ -130,18 +130,20 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
               )}
             </div>
             
-            {/* 右侧按钮组: 在所有桌面页面永久显示 */}
-            <div className="flex items-center gap-2 pointer-events-auto">
-              <button
-                onClick={() => router.push('/search')}
-                className="w-10 h-10 p-2 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/50 dark:text-gray-300 md:text-gray-800 md:dark:text-gray-200 dark:hover:bg-gray-700/50 transition-colors"
-                aria-label="Search"
-              >
-                <Search className="w-full h-full" />
-              </button>
-              <ThemeToggle />
-              <UserMenu />
-            </div>
+            {/* 右侧按钮组: 仅在非主页/豆瓣/搜索等页面显示，避免与 TabletHeaderActions 重复 */}
+            {!showTabletSidebar && (
+              <div className="flex items-center gap-2 pointer-events-auto">
+                <button
+                  onClick={() => router.push('/search')}
+                  className="w-10 h-10 p-2 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/50 dark:text-gray-300 md:text-gray-800 md:dark:text-gray-200 dark:hover:bg-gray-700/50 transition-colors"
+                  aria-label="Search"
+                >
+                  <Search className="w-full h-full" />
+                </button>
+                <ThemeToggle />
+                <UserMenu />
+              </div>
+            )}
           </div>
           
           {/* 主内容 */}
