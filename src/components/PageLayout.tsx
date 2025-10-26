@@ -34,7 +34,6 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
   const router = useRouter();
 
   // --- 客户端状态 ---
-
   const [isClient, setIsClient] = useState(false);
 
 
@@ -88,56 +87,55 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
           ref={mainContainerRef} // 将 ref 附加到这个容器
           className='relative min-w-0 flex-1 transition-all duration-300 md:overflow-y-auto' // 添加 overflow-y-auto
         >
-          {/* 平板端管理员页返回按钮 */}
-          {showAdminBackButton && (
-            <div
-              onClick={() => router.push('/')}
-              className="absolute top-3 left-1 z-20 w-10 h-10 p-2 rounded-full hover:bg-gray-500/20 transition-colors hidden md:block"
-              aria-label="Back to home"
-            >
-              <button>
+          {/* --- 核心修复区域: 统一的、全局的顶部按钮栏 --- */}
+          {/* 
+            这个容器在所有桌面页面都存在，负责顶部左右两侧的按钮布局。
+            pointer-events-none 避免容器的空白区域阻挡下方内容的点击，
+            而 pointer-events-auto 则让按钮自身可以被点击。
+          */}
+          <div className="absolute top-2 left-4 right-4 z-20 hidden md:flex items-center justify-between pointer-events-none">
+            {/* 左侧按钮组: 根据不同页面的条件，显示不同的按钮 */}
+            <div className="flex items-center gap-2 pointer-events-auto">
+              {/* 条件1: 在主页/豆瓣/搜索页，显示汉堡菜单和标题 */}
+              {showTabletSidebar && (
+                <TabletHeaderActions setIsOpen={setIsTabletSidebarOpen} isOpen={isTabletSidebarOpen} title={title} />
+              )}
+              {/* 条件2: 在管理员主页，显示返回首页的按钮 */}
+              {showAdminBackButton && (
+                <div
+                  onClick={() => router.push('/')}
+                  className="w-10 h-10 p-2 rounded-full hover:bg-gray-500/20 transition-colors"
+                  aria-label="Back to home"
+                >
+                  <button>
+                    <BackButton />
+                  </button>
+                </div>
+              )}
+              {/* 条件3: 在管理员子页面，显示返回按钮 */}
+              {showAdminSubPageBackButton && (
                 <BackButton />
-              </button>
+              )}
+              {/* 条件4: 在播放页/直播页，显示返回按钮 */}
+              {['/play', '/live'].includes(activePath) && (
+                <BackButton />
+              )}
+              {/* 条件5: 在详情页，显示返回按钮和自定义头部内容 */}
+              {((activePath || '').startsWith('/detail')) && (
+                <div className='flex items-center gap-2'>
+                  <BackButton />
+                  {headerContent}
+                </div>
+              )}
             </div>
-          )}
-          {/* 桌面端左上角返回按钮 - 管理子页面*/}
-          {showAdminSubPageBackButton && (
-            <div className='absolute top-3 left-1 z-20 hidden md:flex'>
-              <BackButton />
-            </div>
-          )}
-          {/* 平板端/桌面端 顶部按钮组 */}
-          {showTabletSidebar && (
-            <div className="absolute top-2 left-4 right-4 z-20 hidden md:flex items-center justify-between">
-              <TabletHeaderActions setIsOpen={setIsTabletSidebarOpen} isOpen={isTabletSidebarOpen} title={title} />
-            </div>
-          )}
-          {/* 桌面端左上角返回按钮 - 播放页 */}
-          {['/play', '/live'].includes(activePath) && (
-            <div className='absolute top-3 left-1 z-20 hidden md:flex'>
-              <BackButton />
-            </div>
-          )}
-          {/* 新增：为播放页和直播页等没有标准头部的页面添加右上角按钮 */}
-          {['/play', '/live', '/play-stats', '/release-calendar', '/tvbox', '/source-test'].includes(pathname) && (
-            <div className="absolute top-2 right-4 z-20 hidden md:flex items-center gap-2">
+            
+            {/* 右侧按钮组: 在所有桌面页面永久显示 */}
+            <div className="flex items-center gap-2 pointer-events-auto">
               <ThemeToggle />
               <UserMenu />
             </div>
-          )}
-          {/* 桌面端左上角返回按钮 - 详细页和播放页 */}
-          {((activePath || '').startsWith('/detail') || activePath === '/play') && (
-            <div className='absolute top-3 left-1 right-4 z-20 hidden md:flex items-center justify-between'>
-              <div className='flex items-center gap-2'>
-                <BackButton />
-                {headerContent}
-              </div>
-              <div className='flex items-center gap-2'>
-                <TabletHeaderActions setIsOpen={setIsTabletSidebarOpen} isOpen={isTabletSidebarOpen} />
-              </div>
-            </div>
-          )}
-
+          </div>
+          
           {/* 主内容 */}
           <main
             className='flex-1 md:min-h-0 md:mb-0 md:mt-12'
@@ -159,20 +157,7 @@ const PageLayout = ({ children, activePath = '/', title, headerContent }: PageLa
       {/* 返回顶部按钮 - 仅在特定平板页面显示 */}
       {showTabletSidebar && <BackToTopButton />}
       
-      {/* --- 核心修复区域: 添加全局悬浮按钮 --- */}
-      {isClient && (
-        // 这个容器确保按钮组固定在桌面端的右下角
-        <div className="fixed bottom-6 right-6 z-[100] md:bottom-8 md:right-8">
-          {/* 
-            ThemeToggle 组件内部已集成了聊天按钮和主题切换功能。
-            'hidden md:block' 确保这组悬浮按钮只在非移动设备上显示，
-            避免与移动端底部导航栏重叠。
-          */}
-          <div className="hidden md:block">
-            <ThemeToggle />
-          </div>
-        </div>
-      )}
+      {/* --- 已移除所有分散的、独立的按钮逻辑 (如右下角悬浮按钮和旧的顶部按钮)，全部统一到上面的全局顶部栏中 --- */}
 
     </div>
   );
