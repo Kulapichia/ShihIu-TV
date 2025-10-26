@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 /* eslint-disable @typescript-eslint/no-var-requires */
 
+// 引入 webpack-obfuscator 插件和我们的配置文件
+const WebpackObfuscator = require('webpack-obfuscator');
+const obfuscatorConfig = require('./obfuscator.config.js');
+
 const nextConfig = {
   output: 'standalone',
   eslint: {
@@ -65,7 +69,7 @@ const nextConfig = {
       }
     );
 
-    // Modify the file loader rule to ignore *.svg, since we have it handled now. 
+    // Modify the file loader rule to ignore *.svg, since we have it handled now.
     fileLoaderRule.exclude = /\.svg$/i;
 
     // --- Webpack路径别名和模块解析 ---
@@ -75,7 +79,14 @@ const nextConfig = {
       '@': path.resolve(__dirname, 'src'),
       '~': path.resolve(__dirname, 'public'),
     };
-    config.resolve.extensions = ['.ts', '.tsx', '.js', '.jsx', '.json', ...config.resolve.extensions];
+    config.resolve.extensions = [
+      '.ts',
+      '.tsx',
+      '.js',
+      '.jsx',
+      '.json',
+      ...config.resolve.extensions,
+    ];
     config.resolve.modules = [
       path.resolve(__dirname, 'src'),
       'node_modules',
@@ -91,6 +102,7 @@ const nextConfig = {
 
     // 生产环境代码保护
     if (!dev) {
+      // Terser 压缩和清理配置
       config.optimization.minimizer.forEach((plugin) => {
         if (plugin.constructor.name === 'TerserPlugin') {
           plugin.options.terserOptions = {
@@ -105,13 +117,24 @@ const nextConfig = {
           };
         }
       });
+
+      // 添加代码混淆插件
+      // 关键：只在客户端构建时应用混淆 (!isServer)，服务端代码保持原样
+      if (!isServer) {
+        config.plugins.push(
+          new WebpackObfuscator(obfuscatorConfig, [
+            // 如果有不想混淆的特定文件，可以在这里排除
+            // 例如: 'exclude_this_file.js'
+          ])
+        );
+      }
     }
 
     // 针对 Electron 环境的服务端构建优化
     if (isServer) {
       config.externals = config.externals || [];
       config.externals.push({
-        'artplayer': 'commonjs artplayer',
+        artplayer: 'commonjs artplayer',
         'hls.js': 'commonjs hls.js',
         'artplayer-plugin-danmuku': 'commonjs artplayer-plugin-danmuku',
       });
@@ -139,4 +162,3 @@ const withPWA = require('@ducanh2912/next-pwa').default({
 });
 
 module.exports = withPWA(nextConfig);
-
