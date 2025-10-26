@@ -3,6 +3,7 @@
 
 import { useState, useEffect, ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { Search } from 'lucide-react';
 import { useSite } from './SiteProvider';
 import { useIsTablet } from '@/lib/useIsTablet';
 import { useFloatingHeaderVisibility } from '@/lib/useFloatingHeaderVisibility';
