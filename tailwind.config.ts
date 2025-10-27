@@ -82,8 +82,9 @@ const config: Config = {
           '100%': { transform: 'translateX(0)', opacity: '1' },
         },
         kenBurns: {
-          '0%': { transform: 'scale(1)' },
-          '100%': { transform: 'scale(1.1)' },
+          '0%': { transform: 'scale(1) translate(0, 0)' },
+          '50%': { transform: 'scale(1.1) translate(2%, 2%)' },
+          '100%': { transform: 'scale(1.05) translate(-2%, 1%)' },
         },
         wave: {
           '0%': { transform: 'rotate(0deg)' },
@@ -108,7 +109,7 @@ const config: Config = {
         'slide-down': 'slideDown 0.3s ease-in-out',
         'slide-in-from-right': 'slideInFromRight 0.3s ease-out',
         'slide-in-from-left': 'slideInFromLeft 0.3s ease-out',
-        'ken-burns': 'kenBurns 20s ease-out infinite alternate',
+        'ken-burns': 'kenBurns 30s ease-out infinite alternate',
         wave: 'wave 2s ease-in-out infinite',
       },
       backgroundImage: {
