@@ -206,10 +206,10 @@ export async function GET(request: Request) {
     console.log(`[Verify ${requestId}] Token valid, proceeding with login for:`, telegramUsername);
 
     // 获取管理员配置
-    const config = await db.getAdminConfig();
-    const telegramConfig = config?.TelegramAuthConfig;
+    const config = await getConfig();
+    const telegramConfig = config?.SiteConfig.Telegram;
 
-    if (!telegramConfig?.enabled) {
+    if (!telegramConfig?.magicLinkLogin.enabled) {
       return new NextResponse(
         `<html><body><h1>Telegram 登录未启用</h1></body></html>`,
         {
