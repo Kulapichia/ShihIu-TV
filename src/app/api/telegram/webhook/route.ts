@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-
+import { getConfig } from '@/lib/config';
 import { getTelegramToken, deleteTelegramToken } from '@/lib/telegram-tokens';
 import { db } from '@/lib/db';
 
