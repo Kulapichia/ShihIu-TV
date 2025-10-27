@@ -394,7 +394,7 @@ export function clearConfigCache(): void {
   cachedConfig = null as any;
 }
 
-export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
+export async function configSelfCheck(adminConfig: AdminConfig): Promise<AdminConfig> {
   // 确保必要的属性存在和初始化
   if (!adminConfig.UserConfig) {
     adminConfig.UserConfig = { AllowRegister: true, Users: [] };
@@ -489,7 +489,7 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
 
   // 🔥 关键修复：每次都从数据库获取最新的用户列表
   try {
-    const dbUsers = db.getAllUsers();
+    const dbUsers = await db.getAllUsers();
     // 创建用户列表：保留数据库中存在的用户的配置信息
     const updatedUsers = dbUsers.map(username => {
       // 查找现有配置中是否有这个用户
