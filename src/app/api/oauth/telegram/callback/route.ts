@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     const config = await getConfig();
     const tgConfig = config.SiteConfig.Telegram;
 
-    if (!tgConfig || !tgConfig.enabled) {
+    if (!tgConfig || !tgConfig.magicLinkLogin?.enabled) {
       console.error('❌ 错误: Telegram 登录功能未在后台启用。');
       const errorUrl = new URL('/login?oauth_error=Telegram登录未启用', origin);
       return NextResponse.redirect(errorUrl);
@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
     } else {
       console.log('   - 用户不存在，尝试自动注册...');
       // 用户不存在，检查是否允许自动注册
-      if (!tgConfig.autoRegister) {
+      if (!tgConfig.magicLinkLogin?.autoRegister) {
         console.error('❌ 注册失败: 自动注册功能已关闭。');
         const errorUrl = new URL('/login?oauth_error=此 Telegram 账户尚未关联系统用户，且自动注册已关闭', origin);
         return NextResponse.redirect(errorUrl);
@@ -176,7 +176,7 @@ export async function GET(req: NextRequest) {
 
       const newUserEntry = {
         username: newUsername,
-        role: tgConfig.defaultRole,
+        role: tgConfig.magicLinkLogin?.defaultRole || 'user',
         banned: false,
         createdAt: Date.now(),
         telegramId: Number(telegramId),
