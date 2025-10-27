@@ -7582,7 +7582,12 @@ function AdminPageClient() {
               onToggle={() => toggleTab('telegramConfig')}
             >
               <TelegramAuthConfig
-                config={config.SiteConfig.Telegram}
+                config={config?.SiteConfig?.Telegram || {
+                  botToken: '',
+                  botUsername: '',
+                  registrationNotifications: { enabled: false, chatId: '' },
+                  magicLinkLogin: { enabled: false, autoRegister: false, defaultRole: 'user' }
+                }}
                 onSave={handleSaveTelegramConfig}
               />
             </CollapsibleTab>
