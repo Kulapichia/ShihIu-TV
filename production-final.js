@@ -56,6 +56,16 @@ app.prepare().then(() => {
   // 修正3: 将 WebSocket 服务附加到这个统一的 HTTP 服务器上
   setupWebSocketServer(server);
 
+  // 【新增】添加全局upgrade错误处理，防止未捕获的错误导致服务崩溃
+  server.on('upgrade', (request, socket, head) => {
+    socket.on('error', (error) => {
+      console.error('❌ WebSocket upgrade socket错误:', error);
+      if (!socket.destroyed) {
+        socket.destroy();
+      }
+    });
+  });
+
   // 启动统一的服务器，只监听一个端口
   server.listen(port, (err) => {
     if (err) throw err;
