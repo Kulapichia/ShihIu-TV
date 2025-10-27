@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     },
     Telegram: {
       enabled: config.SiteConfig.Telegram?.magicLinkLogin?.enabled || false,
-      botName: config.SiteConfig.Telegram?.botName || '',
+      botName: config.SiteConfig.Telegram?.botName || config.SiteConfig.Telegram?.botUsername || '',
       botUsername: config.SiteConfig.Telegram?.botUsername || '',
       buttonSize: 'large',
       showAvatar: true,
