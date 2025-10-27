@@ -301,8 +301,12 @@ function LoginPageClient() {
         {/* Bing 每日壁纸背景 */}
         {bingWallpaper && (
           <div
-            className='absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 animate-ken-burns'
-            style={{ backgroundImage: `url(${bingWallpaper})` }}
+            className='absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-1000 animate-ken-burns'
+            style={{ 
+              backgroundImage: `url(${bingWallpaper})`,
+              opacity: bingWallpaper ? 1 : 0
+            }}
+            key={bingWallpaper}
           />
         )}
 
