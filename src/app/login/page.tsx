@@ -105,7 +105,9 @@ function LoginPageClient() {
   useEffect(() => {
     const fetchBingWallpaper = async () => {
       try {
-        const response = await fetch('/api/bing-wallpaper');
+        const response = await fetch('/api/bing-wallpaper', {
+          cache: 'no-store' // 禁用缓存，每次都获取新壁纸
+        });
         const data = await response.json();
         if (data.url) {
           setBingWallpaper(data.url);
@@ -114,8 +116,12 @@ function LoginPageClient() {
         console.log('Failed to fetch Bing wallpaper:', error);
       }
     };
-
+    // 首次加载
     fetchBingWallpaper();
+    // 每60秒更换一次壁纸
+    const interval = setInterval(fetchBingWallpaper, 60000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // 在客户端挂载后设置配置
