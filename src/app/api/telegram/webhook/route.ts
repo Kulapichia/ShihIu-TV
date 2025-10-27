@@ -13,10 +13,10 @@ export async function POST(request: Request) {
     console.log('[Webhook] Received update:', JSON.stringify(update, null, 2));
 
     // 获取管理员配置
-    const config = await db.getAdminConfig();
-    const telegramConfig = config?.TelegramAuthConfig;
+    const config = await getConfig();
+    const telegramConfig = config?.SiteConfig.Telegram;
 
-    if (!telegramConfig?.enabled || !telegramConfig.botToken) {
+    if (!telegramConfig?.magicLinkLogin.enabled || !telegramConfig.botToken) {
       console.log('[Webhook] Telegram not configured');
       return NextResponse.json({ ok: true });
     }
