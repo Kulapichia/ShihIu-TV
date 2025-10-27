@@ -63,7 +63,7 @@ import {
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { exportData, parseImportData } from '@/lib/utils';
 import { DEFAULT_CMS_VIDEO_SOURCES } from '@/lib/default-video-sources';
-import TelegramConfigComponent from '@/components/TelegramConfigComponent';
+import { TelegramAuthConfig } from '@/components/TelegramAuthConfig';
 import AIRecommendConfig from '@/components/AIRecommendConfig';
 import CacheManager from '@/components/CacheManager';
 import DataMigration from '@/components/DataMigration';
@@ -7331,6 +7331,26 @@ function AdminPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<'owner' | 'admin' | null>(null);
   const [showResetConfigModal, setShowResetConfigModal] = useState(false);
+  const handleSaveTelegramConfig = async (newTelegramConfig: any) => {
+    await withLoading('saveTelegramConfig', async () => {
+      try {
+        const response = await fetch('/api/admin/telegram', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newTelegramConfig),
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || '保存失败');
+        }
+        await fetchConfig();
+      } catch (error) {
+        showError('保存配置失败: ' + (error as Error).message, showAlert);
+        throw error;
+      }
+    });
+  };
+
   // 注册管理相关状态
   const [storageType, setStorageType] = useState<string>('localstorage');
   const [expandedTabs, setExpandedTabs] = useState<{ [key: string]: boolean }>({
@@ -7546,7 +7566,7 @@ function AdminPageClient() {
           {/* Telegram Auth 配置标签 - 仅非 localStorage 模式下显示 */}
           {storageType !== 'localstorage' && (
             <CollapsibleTab
-              title='Telegram 登录配置'
+              title='Telegram 统一配置'
               icon={
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className='text-gray-600 dark:text-gray-400'>
                   <path d="M15 10l-4 4 6 6 4-16-18 7 4 2 2 6 3-4" />
@@ -7555,13 +7575,13 @@ function AdminPageClient() {
               isExpanded={expandedTabs.telegramConfig}
               onToggle={() => toggleTab('telegramConfig')}
             >
-              <TelegramConfigComponent
-                config={config}
-                refreshConfig={fetchConfig}
+              <TelegramAuthConfig
+                config={config.SiteConfig.Telegram}
+                onSave={handleSaveTelegramConfig}
               />
             </CollapsibleTab>
           )}
-          
+
           <div className='space-y-4'>
             {/* 用户配置标签 */}
             <CollapsibleTab
