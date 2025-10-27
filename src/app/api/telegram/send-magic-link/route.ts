@@ -21,11 +21,11 @@ export async function POST(request: Request) {
     }
 
     // 获取管理员配置
-    const config = await db.getAdminConfig();
-    const telegramConfig = config?.TelegramAuthConfig;
-    console.log('[Magic Link] Config loaded, enabled:', telegramConfig?.enabled);
+    const config = await getConfig();
+    const telegramConfig = config?.SiteConfig.Telegram;
+    console.log('[Magic Link] Config loaded, enabled:', telegramConfig?.magicLinkLogin.enabled);
 
-    if (!telegramConfig?.enabled) {
+    if (!telegramConfig?.magicLinkLogin.enabled) {
       console.log('[Magic Link] Telegram login not enabled');
       return NextResponse.json(
         { error: 'Telegram 登录未启用' },
