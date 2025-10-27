@@ -20,12 +20,12 @@ export async function GET(request: NextRequest) {
       enabled: config.SiteConfig.LinuxDoOAuth?.enabled || false,
     },
     TelegramAuth: {
-      enabled: config.SiteConfig.TelegramAuth?.enabled || false,
-      botName: config.SiteConfig.TelegramAuth?.botName || '',
-      botUsername: (config.SiteConfig.TelegramAuth as any)?.botUsername || '',
-      buttonSize: (config.SiteConfig.TelegramAuth as any)?.buttonSize || 'large',
-      showAvatar: (config.SiteConfig.TelegramAuth as any)?.showAvatar ?? true,
-      requestWriteAccess: (config.SiteConfig.TelegramAuth as any)?.requestWriteAccess ?? false,
+      enabled: config.SiteConfig.Telegram?.magicLinkLogin.enabled || false,
+      botName: config.SiteConfig.Telegram?.botUsername || '',
+      botUsername: config.SiteConfig.Telegram?.botUsername || '',
+      buttonSize: 'large',
+      showAvatar: true,
+      requestWriteAccess: false,
     },
   };
   return NextResponse.json(result);
