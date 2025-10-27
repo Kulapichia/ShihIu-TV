@@ -47,6 +47,12 @@
     restart: unless-stopped
     networks:
       - moontv-network
-    # 关键修改：让隧道指向新的代理服务，而不是直接指向应用
-    # 如果用command参数配置，应类似如下:
-    command: tunnel --no-autoupdate --url http://shihiütv-proxy:80 run --token eyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXNMSJ9
+    # 关键修改：让隧道指向新的代理服务，并增加协议超时配置
+    command: >
+      tunnel 
+      --no-autoupdate 
+      --url http://shihiütv-proxy:80 
+      --protocol h2mux
+      --retries 3
+      --loglevel info
+      run --token eyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXNMSJ9
