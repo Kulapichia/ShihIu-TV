@@ -109,7 +109,7 @@ const config: Config = {
         'slide-down': 'slideDown 0.3s ease-in-out',
         'slide-in-from-right': 'slideInFromRight 0.3s ease-out',
         'slide-in-from-left': 'slideInFromLeft 0.3s ease-out',
-        'ken-burns': 'kenBurns 30s ease-out infinite alternate',
+        'ken-burns': 'kenBurns 30s ease-in-out infinite alternate',
         wave: 'wave 2s ease-in-out infinite',
       },
       backgroundImage: {
