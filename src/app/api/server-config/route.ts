@@ -19,9 +19,9 @@ export async function GET(request: NextRequest) {
     LinuxDoOAuth: {
       enabled: config.SiteConfig.LinuxDoOAuth?.enabled || false,
     },
-    TelegramAuth: {
-      enabled: config.SiteConfig.Telegram?.magicLinkLogin.enabled || false,
-      botName: config.SiteConfig.Telegram?.botUsername || '',
+    Telegram: {
+      enabled: config.SiteConfig.Telegram?.magicLinkLogin?.enabled || false,
+      botName: config.SiteConfig.Telegram?.botName || '',
       botUsername: config.SiteConfig.Telegram?.botUsername || '',
       buttonSize: 'large',
       showAvatar: true,
