@@ -94,10 +94,10 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       // 设置超时处理
       const connectionTimeout = setTimeout(() => {
         if (wsRef.current && wsRef.current.readyState !== WebSocket.OPEN) {
-          console.warn('WebSocket 连接超时，正在关闭...');
+          console.warn(`⏱️ [${instanceIdRef.current}] WebSocket 连接超时（30秒），正在关闭...`);
           wsRef.current.close();
         }
-      }, 10000); // 10秒超时
+      }, 30000); // 【修改】30秒超时（匹配Nginx的proxy_read_timeout）
 
       wsRef.current.onopen = () => {
         clearTimeout(connectionTimeout);
@@ -216,9 +216,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
         // 自动重连（除非是正常关闭）
         if (event.code !== 1000 && reconnectAttemptsRef.current < maxReconnectAttempts) {
-          // 增加最小延迟时间，避免太频繁的重连
-          const baseDelay = 2000; // 最小2秒
-          const delay = Math.max(baseDelay, Math.min(Math.pow(2, reconnectAttemptsRef.current) * 1000, 30000)); // 指数退避，最少2秒，最多30秒
+          // 【修改】增加最小延迟时间，避免太频繁的重连
+          const baseDelay = 5000; // 最小5秒（原2秒）
+          const delay = Math.max(baseDelay, Math.min(Math.pow(2, reconnectAttemptsRef.current) * 1000, 60000)); // 指数退避，最少5秒，最多60秒（原30秒）
           console.log(`准备重新连接，等待 ${delay / 1000} 秒... (尝试 ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`);
 
           // 清除之前的重连定时器
