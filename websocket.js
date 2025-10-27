@@ -92,6 +92,10 @@ function setupWebSocketServer(server) {
 
         // 认证通过，完成协议升级
         wss.handleUpgrade(request, socket, head, (ws) => {
+
+          // 【新增】清除升级标记
+          delete socket._websocket_upgrading;
+
           // --- 连接成功后的处理逻辑 ---
           
           // 1. 存储连接并标记用户ID
