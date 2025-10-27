@@ -4,17 +4,19 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    // 随机选择壁纸来源：70% Bing, 30% Lorem Picsum
+    // 每次随机选择不同来源和索引
     const useBing = Math.random() < 0.7;
 
     if (useBing) {
-      // Bing 随机壁纸（从过去 0-7 天中随机选择）
+      // Bing 随机壁纸(从过去 0-7 天中随机选择)
       const randomIdx = Math.floor(Math.random() * 8);
       const response = await fetch(
-        `https://www.bing.com/HPImageArchive.aspx?format=js&idx=${randomIdx}&n=1&mkt=zh-CN`,
+        `https://www.bing.com/HPImageArchive.aspx?format=js&idx=${randomIdx}&n=1&mkt=zh-CN&_t=${Date.now()}`,
         {
-          // 不缓存，每次都随机
-          cache: 'no-store'
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
         }
       );
 
