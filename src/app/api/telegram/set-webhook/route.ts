@@ -9,10 +9,10 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     // 获取管理员配置
-    const config = await db.getAdminConfig();
-    const telegramConfig = config?.TelegramAuthConfig;
+    const config = await getConfig();
+    const telegramConfig = config?.SiteConfig.Telegram;
 
-    if (!telegramConfig?.enabled || !telegramConfig.botToken) {
+    if (!telegramConfig?.magicLinkLogin.enabled || !telegramConfig.botToken) {
       return NextResponse.json(
         { error: 'Telegram 未配置' },
         { status: 400 }
@@ -75,10 +75,10 @@ export async function POST(request: Request) {
 // 获取 Webhook 信息
 export async function GET() {
   try {
-    const config = await db.getAdminConfig();
-    const telegramConfig = config?.TelegramAuthConfig;
+    const config = await getConfig();
+    const telegramConfig = config?.SiteConfig.Telegram;
 
-    if (!telegramConfig?.enabled || !telegramConfig.botToken) {
+    if (!telegramConfig?.magicLinkLogin.enabled || !telegramConfig.botToken) {
       return NextResponse.json(
         { error: 'Telegram 未配置' },
         { status: 400 }
