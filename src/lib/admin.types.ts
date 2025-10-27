@@ -26,11 +26,19 @@ export interface OAuthConfig {
 }
 
 export interface TelegramConfig {
-  enabled: boolean; // Telegram 登录开关
-  autoRegister: boolean; // 自动注册开关
-  botName: string; // Bot 用户名
-  botToken: string; // Bot Token
-  defaultRole: 'user' | 'admin'; // 自动注册默认角色
+  botToken: string;
+  botUsername: string; // 用于魔法链接登录和设置 webhook
+  // 用于新用户注册的通知
+  registrationNotifications: {
+    enabled: boolean;
+    chatId: string; // 接收通知的频道/群组/用户 ID
+  };
+  // 用于魔法链接登录
+  magicLinkLogin: {
+    enabled: boolean;
+    autoRegister: boolean;
+    defaultRole: 'user' | 'admin';
+  };
 }
 
 export interface SiteConfig {
@@ -100,11 +108,12 @@ export interface SiteConfig {
   RegistrationApproval: boolean; // 是否需要管理员审批
   MaxUsers?: number; // 最大用户数限制（可选）
   LinuxDoOAuth: OAuthConfig;
-  TelegramAuth: TelegramConfig; // 新增 Telegram 配置
+  Telegram: TelegramConfig; // 使用统一的 Telegram 配置
   RequireDeviceCode: boolean;
 }
 
 export interface AdminConfig {
+  TelegramAuthConfig?: any; // 兼容旧配置，以便平滑迁移
   ConfigSubscribtion: {
     URL: string;
     AutoUpdate: boolean;
