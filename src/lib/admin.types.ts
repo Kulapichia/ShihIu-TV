@@ -28,6 +28,7 @@ export interface OAuthConfig {
 export interface TelegramConfig {
   botToken: string;
   botUsername: string; // 用于魔法链接登录和设置 webhook
+  botName?: string; // 新增：机器人名称
   // 用于新用户注册的通知
   registrationNotifications: {
     enabled: boolean;
@@ -39,6 +40,10 @@ export interface TelegramConfig {
     autoRegister: boolean;
     defaultRole: 'user' | 'admin';
   };
+  // 新增：为了兼容旧代码，添加顶层属性
+  enabled?: boolean; // 等同于 magicLinkLogin.enabled
+  autoRegister?: boolean; // 等同于 magicLinkLogin.autoRegister
+  defaultRole?: 'user' | 'admin'; // 等同于 magicLinkLogin.defaultRole
 }
 
 export interface SiteConfig {
