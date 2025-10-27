@@ -279,7 +279,7 @@ export const ChatModal = React.memo(function ChatModal({
       const allParticipants = data.reduce((acc: string[], conv: Conversation) => [...acc, ...conv.participants], []);
       preloadUserAvatars(allParticipants);
     }
-  }, [preloadUserAvatars]);
+  }, [preloadUserAvatars, fetchWithHandling]);
 
   useEffect(() => {
     if (isOpen) {
@@ -371,7 +371,7 @@ export const ChatModal = React.memo(function ChatModal({
   }, [currentUser, friends]);
 
   // 【健壮性】统一的API请求包装函数
-  const fetchWithHandling = async (url: string, options?: RequestInit) => {
+  const fetchWithHandling = useCallback(async (url: string, options?: RequestInit) => {
     try {
       const response = await fetch(url, options);
       if (response.ok) return await response.json();
@@ -390,7 +390,7 @@ export const ChatModal = React.memo(function ChatModal({
       showError('网络错误', '无法连接到服务器，请检查您的网络连接');
       return null;
     }
-  };
+  }, [showError]);
 
   const loadFriends = useCallback(async () => {
     const data = await fetchWithHandling('/api/chat/friends');
@@ -398,7 +398,7 @@ export const ChatModal = React.memo(function ChatModal({
       setFriends(data);
       preloadUserAvatars(data.map((friend: Friend) => friend.username));
     }
-  }, [preloadUserAvatars]);
+  }, [preloadUserAvatars, fetchWithHandling]);
 
   const loadFriendRequests = useCallback(async () => {
     const data = await fetchWithHandling('/api/chat/friend-requests');
@@ -406,7 +406,7 @@ export const ChatModal = React.memo(function ChatModal({
       setFriendRequests(data);
       preloadUserAvatars(data.map((req: FriendRequest) => req.from_user));
     }
-  }, [preloadUserAvatars]);
+  }, [preloadUserAvatars, fetchWithHandling]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
     try {
@@ -437,7 +437,7 @@ export const ChatModal = React.memo(function ChatModal({
       showError('加载消息失败', '网络错误，请稍后重试');
       setMessages([]);
     }
-  }, [preloadUserAvatars, showError]);
+  }, [preloadUserAvatars, showError, fetchWithHandling]);
 
   const handleSendMessage = useCallback(async () => {
     if (!newMessage.trim() || !selectedConversation || !currentUser) return;
