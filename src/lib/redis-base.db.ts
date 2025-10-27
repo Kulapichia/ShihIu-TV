@@ -399,8 +399,8 @@ export abstract class BaseRedisStorage implements IStorage {
     const users: string[] = [];
     let cursor = 0; // SCAN in node-redis uses a number for cursor
     do {
-      const reply = await this.withRetry(() => this.client.scan(cursor, { MATCH: 'u:*:pwd', COUNT: 100 }));
-      cursor = reply.cursor;
+      const reply = await this.withRetry(() => this.client.scan(String(cursor), { MATCH: 'u:*:pwd', COUNT: 100 }));
+      cursor = Number(reply.cursor);
       for (const key of reply.keys) {
         const match = key.match(/^u:(.+?):pwd$/);
         if (match) {
