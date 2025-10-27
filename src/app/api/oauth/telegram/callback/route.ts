@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
     console.log('✅ 1. 收到 Telegram 回调数据 (from URL):', JSON.stringify(telegramUser, null, 2));
 
     const config = await getConfig();
-    const tgConfig = config.SiteConfig.TelegramAuth;
+    const tgConfig = config.SiteConfig.Telegram;
 
     if (!tgConfig || !tgConfig.enabled) {
       console.error('❌ 错误: Telegram 登录功能未在后台启用。');
