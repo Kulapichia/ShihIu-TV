@@ -60,6 +60,11 @@ function setupWebSocketServer(server) {
 
   // 监听 HTTP server 的 'upgrade' 事件，这是 WebSocket 连接的握手阶段
   server.on('upgrade', (request, socket, head) => {
+    // 【新增】防止重复处理同一个socket
+    if (socket._websocket_upgrading) {
+      console.log('[WebSocket] 检测到重复upgrade事件，跳过处理');
+      return;
+    }
     try {
       const { pathname, query } = parse(request.url, true);
       console.log(`[WebSocket] 收到 upgrade 请求: ${request.url}`); // 增加日志
@@ -81,7 +86,8 @@ function setupWebSocketServer(server) {
           socket.destroy();
           return;
         }
-        
+        // 【新增】标记socket正在处理，防止重复upgrade
+        socket._websocket_upgrading = true;
         const userId = authInfo.username; // 使用 username 作为 userId
 
         // 认证通过，完成协议升级
