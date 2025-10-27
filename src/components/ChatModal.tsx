@@ -191,6 +191,28 @@ export const ChatModal = React.memo(function ChatModal({
     return { username, avatar: null };
   }, [userAvatars]);
 
+  // 【健壮性】统一的API请求包装函数
+  const fetchWithHandling = useCallback(async (url: string, options?: RequestInit) => {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) return await response.json();
+
+      const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
+      console.error(`API Error - Status: ${response.status}`, errorData);
+
+      if (response.status === 401) showError('未授权', '请重新登录');
+      else if (response.status === 403) showError('无权限', '您没有执行此操作的权限');
+      else if (response.status === 404) showError('未找到', '请求的资源不存在');
+      else showError('请求失败', errorData.error || '服务器发生错误');
+
+      return null;
+    } catch (error) {
+      console.error('Network Error:', error);
+      showError('网络错误', '无法连接到服务器，请检查您的网络连接');
+      return null;
+    }
+  }, [showError]);
+
   // 【性能优化】预加载用户头像，并进行批量状态更新
   const preloadUserAvatars = useCallback(async (usernames: string[]) => {
     const usernamesToFetch = Array.from(new Set(usernames.filter(name => name && !(name in userAvatars))));
@@ -369,28 +391,6 @@ export const ChatModal = React.memo(function ChatModal({
     const friend = friends.find(f => f.username === username);
     return friend?.nickname || username;
   }, [currentUser, friends]);
-
-  // 【健壮性】统一的API请求包装函数
-  const fetchWithHandling = useCallback(async (url: string, options?: RequestInit) => {
-    try {
-      const response = await fetch(url, options);
-      if (response.ok) return await response.json();
-
-      const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
-      console.error(`API Error - Status: ${response.status}`, errorData);
-
-      if (response.status === 401) showError('未授权', '请重新登录');
-      else if (response.status === 403) showError('无权限', '您没有执行此操作的权限');
-      else if (response.status === 404) showError('未找到', '请求的资源不存在');
-      else showError('请求失败', errorData.error || '服务器发生错误');
-
-      return null;
-    } catch (error) {
-      console.error('Network Error:', error);
-      showError('网络错误', '无法连接到服务器，请检查您的网络连接');
-      return null;
-    }
-  }, [showError]);
 
   const loadFriends = useCallback(async () => {
     const data = await fetchWithHandling('/api/chat/friends');
