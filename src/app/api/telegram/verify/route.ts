@@ -232,7 +232,7 @@ export async function GET(request: Request) {
 
     if (!userExists) {
       // 自动注册新用户
-      if (telegramConfig.magicLinkLogin.autoRegister) {
+      if (telegramConfig.magicLinkLogin?.autoRegister) {
         console.log(`[Verify ${requestId}] Auto-register enabled, creating new user`);
         initialPassword = generatePassword();
         console.log(`[Verify ${requestId}] Generated password:`, initialPassword);
