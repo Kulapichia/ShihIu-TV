@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { getConfig } from '@/lib/config';
 
 import { db } from '@/lib/db';
 import { setTelegramToken } from '@/lib/telegram-tokens';
