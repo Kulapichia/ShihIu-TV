@@ -4438,13 +4438,19 @@ const SiteConfigComponent = ({
       tokenUrl: 'https://connect.linux.do/oauth2/token',
       userInfoUrl: 'https://connect.linux.do/api/user',
     },
-    // 新增 TelegramAuth 的默认值
-    TelegramAuth: {
-      enabled: false,
-      autoRegister: false,
-      botName: '',
+    // 使用统一的 Telegram 配置
+    Telegram: {
       botToken: '',
-      defaultRole: 'user',
+      botUsername: '',
+      registrationNotifications: {
+        enabled: false,
+        chatId: '',
+      },
+      magicLinkLogin: {
+        enabled: false,
+        autoRegister: false,
+        defaultRole: 'user',
+      },
     },
   });
   // 新增：API测试相关状态
