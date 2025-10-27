@@ -65,6 +65,14 @@ function setupWebSocketServer(server) {
       console.log('[WebSocket] 检测到重复upgrade事件，跳过处理');
       return;
     }
+    // 【关键修复】添加错误处理，防止socket泄漏
+    socket.on('error', (error) => {
+      console.error('[WebSocket] Socket错误:', error);
+      if (!socket.destroyed) {
+        socket.destroy();
+      }
+    });
+
     try {
       const { pathname, query } = parse(request.url, true);
       console.log(`[WebSocket] 收到 upgrade 请求: ${request.url}`); // 增加日志
