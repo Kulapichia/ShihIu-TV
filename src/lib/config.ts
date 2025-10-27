@@ -279,12 +279,18 @@ async function getInitConfig(configFile: string, subConfig: {
         userInfoUrl: 'https://connect.linux.do/api/user',
       },
       // 新增 TelegramAuth 的默认值
-      TelegramAuth: {
-        enabled: false,
-        autoRegister: false,
-        botName: '',
+      Telegram: {
         botToken: '',
-        defaultRole: 'user',
+        botUsername: '',
+        registrationNotifications: {
+          enabled: false,
+          chatId: '',
+        },
+        magicLinkLogin: {
+          enabled: false,
+          autoRegister: false,
+          defaultRole: 'user',
+        },
       },
     },
     UserConfig: {
@@ -440,13 +446,19 @@ export async function configSelfCheck(adminConfig: AdminConfig): Promise<AdminCo
   }
 
   // 确保 Telegram Auth 配置存在
-  if (!adminConfig.SiteConfig.TelegramAuth) {
-    adminConfig.SiteConfig.TelegramAuth = {
-      enabled: false,
-      autoRegister: false,
-      botName: '',
+  if (!adminConfig.SiteConfig.Telegram) {
+    adminConfig.SiteConfig.Telegram = {
       botToken: '',
-      defaultRole: 'user',
+      botUsername: '',
+      registrationNotifications: {
+        enabled: false,
+        chatId: '',
+      },
+      magicLinkLogin: {
+        enabled: false,
+        autoRegister: false,
+        defaultRole: 'user',
+      },
     };
   }
   
