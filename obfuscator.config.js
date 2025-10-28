@@ -11,9 +11,9 @@ module.exports = {
   deadCodeInjection: true,
   deadCodeInjectionThreshold: 0.4,
   // 调试保护：禁止使用开发者工具的调试功能 (F12)
-  debugProtection: true,
+  debugProtection: false,
   // 调试保护间隔：如果开启调试工具，会不断进入 debugger 状态，卡住调试器
-  debugProtectionInterval: 4000,
+  debugProtectionInterval: 0,
   // 禁止在开发者工具中输出 console 信息
   disableConsoleOutput: true,
   // 标识符（变量名、函数名）混淆方式
