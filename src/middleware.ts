@@ -160,18 +160,7 @@ function shouldSkipAuth(pathname: string): boolean {
 // 配置middleware匹配规则
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - ws (WebSocket protocol)
-     *
-     * This ensures the middleware does not interfere with data fetching API calls
-     * or static asset loading.
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico|ws).*)',
+    '/((?!_next/static|_next/image|favicon.ico|login|register|warning|api/login|api/register|api/logout|api/cron|api/server-config|api/tvbox|api/live/merged|api/parse|api/bing-wallpaper|api/proxy/spider.jar|api/telegram/).*)',
   ],
 };
 
