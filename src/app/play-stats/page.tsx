@@ -18,6 +18,7 @@ import {
 
 import PageLayout from '@/components/PageLayout';
 import VideoCard from '@/components/VideoCard';
+export const dynamic = 'force-dynamic';
 
 // 用户等级系统
 const USER_LEVELS = [
