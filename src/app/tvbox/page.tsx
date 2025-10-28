@@ -4,6 +4,7 @@ import { AlertTriangle, Monitor, Shield, Smartphone, Tv, Activity, Heart, Wrench
 import { useCallback, useEffect, useState } from 'react';
 
 import PageLayout from '@/components/PageLayout';
+export const dynamic = 'force-dynamic';
 
 interface SecurityConfig {
   enableAuth: boolean;
