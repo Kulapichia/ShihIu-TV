@@ -1,10 +1,6 @@
 /** @type {import('next').NextConfig} */
 /* eslint-disable @typescript-eslint/no-var-requires */
 
-// 引入 webpack-obfuscator 插件和我们的配置文件
-const WebpackObfuscator = require('webpack-obfuscator');
-const obfuscatorConfig = require('./obfuscator.config.js');
-
 const nextConfig = {
   output: 'standalone',
   eslint: {
@@ -119,18 +115,6 @@ const nextConfig = {
           };
         }
       });
-
-      // 添加代码混淆插件
-      // 关键：只在客户端构建时应用混淆 (!isServer)，服务端代码保持原样
-      if (!isServer) {
-        config.plugins.push(
-          new WebpackObfuscator(obfuscatorConfig, [
-            // 如果有不想混淆的特定文件，可以在这里排除
-            // 例如: 'exclude_this_file.js'
-          ])
-        );
-      }
-    }
 
     // 针对 Electron 环境的服务端构建优化
     if (isServer) {
