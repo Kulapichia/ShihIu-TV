@@ -69,9 +69,11 @@ app.prepare().then(() => {
   // 启动统一的服务器，只监听一个端口
   server.listen(port, (err) => {
     if (err) throw err;
-    console.log(`====================================`);
-    console.log(`✅ Next.js & WebSocket 服务统一运行在: http://${hostname}:${port}`);
-    console.log(`====================================`);
+    console.log('====================================');
+    console.log(`✅ Next.js & WebSocket 服务已启动`);
+    console.log(`   - HTTP 服务运行在: http://${hostname}:${port}`);
+    console.log(`   - WebSocket 服务路径: /ws`);
+    console.log('====================================');
     // 设置服务器启动后的任务
     setupServerTasks();
   });
