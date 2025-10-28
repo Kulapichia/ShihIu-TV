@@ -10,6 +10,7 @@ import { getAuthInfoFromBrowserCookie } from '@/lib/auth'; // 引入认证工具
 import { ClientCache } from '@/lib/client-cache';
 import PageLayout from '@/components/PageLayout';
 import type { DoubanItem, SearchResult as GlobalSearchResult } from '@/lib/types';
+export const dynamic = 'force-dynamic';
 
 type Source = { key: string; name: string; api: string };
 type Category = { type_id: string | number; type_name: string };
