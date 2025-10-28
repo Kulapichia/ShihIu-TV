@@ -125,7 +125,7 @@ function handleAuthFailure(
 function shouldSkipAuth(pathname: string): boolean {
   const skipPaths = [
     // 基础静态资源和Next.js内部路径
-    '/_next', // 虽然matcher排除了static/image，但其他_next路径可能仍需跳过
+    '/_next',
     '/favicon.ico',
     '/robots.txt',
     '/manifest.json',
@@ -138,20 +138,22 @@ function shouldSkipAuth(pathname: string): boolean {
     '/register',
     '/warning',
 
-    // 认证及OAuth相关API
+    // 认证相关API
     '/api/login',
     '/api/register',
     '/api/logout',
     '/api/server-config',
-    '/api/oauth/', // 涵盖所有OAuth子路径
+    '/api/oauth/authorize',
+    '/api/oauth/callback',
+    '/api/oauth/telegram/callback', 
+    '/api/oauth/exchange-token',
 
-    // 公开API路径
+    // --- 公开API路径 ---
     '/api/tvbox',
     '/api/live/merged',
     '/api/parse',
     '/api/bing-wallpaper',
     '/api/proxy/spider.jar',
-    '/api/telegram/', // Telegram API 端点
   ];
 
   return skipPaths.some((path) => pathname.startsWith(path));
@@ -159,14 +161,5 @@ function shouldSkipAuth(pathname: string): boolean {
 
 // 配置middleware匹配规则
 export const config = {
-  /*
-   * matcher 的作用是过滤掉那些永远不应该经过中间件的请求，
-   * 比如静态文件和图片优化。这能提升性能并避免底层错误。
-   * 我们使用一个更简单、更标准、更不容易出错的正则表达式。
-   * 其他所有应用层面的路径判断，全部交给 shouldSkipAuth 函数处理。
-   */
-  matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/cron).*)'],
 };
-
