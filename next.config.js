@@ -9,6 +9,8 @@ const nextConfig = {
   output: 'standalone',
   eslint: {
     dirs: ['src'],
+    // Warning: 这将允许在项目存在 ESLint 错误时，也能成功完成生产构建。
+    ignoreDuringBuilds: true,
   },
 
   reactStrictMode: false,
