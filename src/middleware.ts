@@ -126,11 +126,32 @@ function shouldSkipAuth(pathname: string): boolean {
   const skipPaths = [
     // 基础静态资源和Next.js内部路径
     '/_next', // 虽然matcher排除了static/image，但其他_next路径可能仍需跳过
+    '/favicon.ico',
+    '/robots.txt',
+    '/manifest.json',
     '/icons/',
     '/logo.png',
     '/screenshot.png',
-    // Telegram API 端点
-    '/api/telegram/',
+
+    // 认证相关页面
+    '/login',
+    '/register',
+    '/warning',
+
+    // 认证及OAuth相关API
+    '/api/login',
+    '/api/register',
+    '/api/logout',
+    '/api/server-config',
+    '/api/oauth/', // 涵盖所有OAuth子路径
+
+    // 公开API路径
+    '/api/tvbox',
+    '/api/live/merged',
+    '/api/parse',
+    '/api/bing-wallpaper',
+    '/api/proxy/spider.jar',
+    '/api/telegram/', // Telegram API 端点
   ];
 
   return skipPaths.some((path) => pathname.startsWith(path));
@@ -139,6 +160,13 @@ function shouldSkipAuth(pathname: string): boolean {
 // 配置middleware匹配规则
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|login|register|warning|ws|api/login|api/register|api/logout|api/cron|api/server-config|api/tvbox|api/live/merged|api/parse|api/bing-wallpaper|api/proxy/spider.jar|api/oauth/|api/telegram/).*)',
+    // 匹配所有请求路径，但排除...
+    '/((?!' +
+      '_next/static|' + // Next.js 静态文件
+      '_next/image|' +  // Next.js 图片优化文件
+      'favicon.ico|' +   // 网站图标
+      'ws|' +           // WebSocket 协议
+      'api/cron' +      // Cron Job 任务API
+      ').*)',
   ],
 };
