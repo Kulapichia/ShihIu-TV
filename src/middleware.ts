@@ -160,13 +160,18 @@ function shouldSkipAuth(pathname: string): boolean {
 // 配置middleware匹配规则
 export const config = {
   matcher: [
-    // 匹配所有请求路径，但排除...
-    '/((?!' +
-      '_next/static|' + // Next.js 静态文件
-      '_next/image|' +  // Next.js 图片优化文件
-      'favicon.ico|' +   // 网站图标
-      'ws|' +           // WebSocket 协议
-      'api/cron' +      // Cron Job 任务API
-      ').*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - ws (WebSocket protocol)
+     *
+     * This ensures the middleware does not interfere with data fetching API calls
+     * or static asset loading.
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|ws).*)',
   ],
 };
+
