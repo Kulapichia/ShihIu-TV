@@ -17,6 +17,7 @@ import PageLayout from '@/components/PageLayout';
 import ShortDramaCard from '@/components/ShortDramaCard';
 // 导入我们已经“换肤”后的 ShortDramaSelector 组件
 import ShortDramaSelector from '@/components/ShortDramaSelector';
+export const dynamic = 'force-dynamic';
 
 export default function ShortDramaPage() {
   // 注意：这里的 categories 状态在修改后的组件中不是必需的，
