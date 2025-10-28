@@ -5,6 +5,7 @@ import { Calendar, Filter, Search, Clock, Film, Tv, MapPin, Tag, ChevronUp } fro
 
 import { ReleaseCalendarItem, ReleaseCalendarResult } from '@/lib/types';
 import PageLayout from '@/components/PageLayout';
+export const dynamic = 'force-dynamic';
 
 export default function ReleaseCalendarPage() {
   const [data, setData] = useState<ReleaseCalendarResult | null>(null);
