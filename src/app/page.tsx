@@ -570,92 +570,108 @@ function HomeClient() {
     cleanExpiredCache().catch(console.error);
 
     const fetchRecommendData = async () => {
-      // 并行获取热门电影、热门剧集、热门综艺和热门短剧
-      const [
-        moviesData,
-        tvShowsData,
-        varietyShowsData,
-        shortDramasData,
-        bangumiData,
-      ] = await Promise.allSettled([
-        getDoubanCategories({ kind: 'movie', category: '热门', type: '全部' }),
-        getDoubanCategories({ kind: 'tv', category: 'tv', type: 'tv' }),
-        getDoubanCategories({ kind: 'tv', category: 'show', type: 'show' }),
-        getRecommendedShortDramas(undefined, 8),
-        GetBangumiCalendarData(),
-      ]);
+      try {
+        // 并行获取热门电影、热门剧集、热门综艺和热门短剧
+        const [
+          moviesData,
+          tvShowsData,
+          varietyShowsData,
+          shortDramasData,
+          bangumiData,
+        ] = await Promise.allSettled([
+          getDoubanCategories({ kind: 'movie', category: '热门', type: '全部' }),
+          getDoubanCategories({ kind: 'tv', category: 'tv', type: 'tv' }),
+          getDoubanCategories({ kind: 'tv', category: 'show', type: 'show' }),
+          getRecommendedShortDramas(undefined, 8),
+          GetBangumiCalendarData(),
+        ]);
 
-      // 处理电影数据
-      if (moviesData.status === 'fulfilled' && moviesData.value?.code === 200) {
-        setHotMovies(moviesData.value.list);
-      } else {
-        setErrorStates((prev) => ({ ...prev, movies: true }));
-        console.warn(
-          '获取热门电影失败:',
-          moviesData.status === 'rejected' ? moviesData.reason : '数据格式错误'
-        );
-      }
-      setLoadingStates((prev) => ({ ...prev, movies: false }));
+        // 处理电影数据
+        if (moviesData.status === 'fulfilled' && moviesData.value?.code === 200) {
+          setHotMovies(moviesData.value.list);
+        } else {
+          setErrorStates((prev) => ({ ...prev, movies: true }));
+          console.warn(
+            '获取热门电影失败:',
+            moviesData.status === 'rejected' ? moviesData.reason : '数据格式错误'
+          );
+        }
 
-      // 处理剧集数据
-      if (
-        tvShowsData.status === 'fulfilled' &&
-        tvShowsData.value?.code === 200
-      ) {
-        setHotTvShows(tvShowsData.value.list);
-      } else {
-        setErrorStates((prev) => ({ ...prev, tvShows: true }));
-        console.warn(
-          '获取热门剧集失败:',
-          tvShowsData.status === 'rejected' ? tvShowsData.reason : '数据格式错误'
-        );
-      }
-      setLoadingStates((prev) => ({ ...prev, tvShows: false }));
+        // 处理剧集数据
+        if (
+          tvShowsData.status === 'fulfilled' &&
+          tvShowsData.value?.code === 200
+        ) {
+          setHotTvShows(tvShowsData.value.list);
+        } else {
+          setErrorStates((prev) => ({ ...prev, tvShows: true }));
+          console.warn(
+            '获取热门剧集失败:',
+            tvShowsData.status === 'rejected' ? tvShowsData.reason : '数据格式错误'
+          );
+        }
 
-      // 处理综艺数据
-      if (
-        varietyShowsData.status === 'fulfilled' &&
-        varietyShowsData.value?.code === 200
-      ) {
-        setHotVarietyShows(varietyShowsData.value.list);
-      } else {
-        setErrorStates((prev) => ({ ...prev, varietyShows: true }));
-        console.warn(
-          '获取热门综艺失败:',
-          varietyShowsData.status === 'rejected'
-            ? varietyShowsData.reason
-            : '数据格式错误'
-        );
-      }
-      setLoadingStates((prev) => ({ ...prev, varietyShows: false }));
+        // 处理综艺数据
+        if (
+          varietyShowsData.status === 'fulfilled' &&
+          varietyShowsData.value?.code === 200
+        ) {
+          setHotVarietyShows(varietyShowsData.value.list);
+        } else {
+          setErrorStates((prev) => ({ ...prev, varietyShows: true }));
+          console.warn(
+            '获取热门综艺失败:',
+            varietyShowsData.status === 'rejected'
+              ? varietyShowsData.reason
+              : '数据格式错误'
+          );
+        }
 
-      // 处理短剧数据
-      if (shortDramasData.status === 'fulfilled') {
-        setHotShortDramas(shortDramasData.value);
-      } else {
-        setErrorStates((prev) => ({ ...prev, shortDramas: true }));
-        console.warn('获取热门短剧失败:', shortDramasData.reason);
-        setHotShortDramas([]);
-      }
-      setLoadingStates((prev) => ({ ...prev, shortDramas: false }));
+        // 处理短剧数据
+        if (shortDramasData.status === 'fulfilled') {
+          setHotShortDramas(shortDramasData.value);
+        } else {
+          setErrorStates((prev) => ({ ...prev, shortDramas: true }));
+          console.warn('获取热门短剧失败:', shortDramasData.reason);
+          setHotShortDramas([]);
+        }
 
-      // 处理bangumi数据
-      if (
-        bangumiData.status === 'fulfilled' &&
-        Array.isArray(bangumiData.value)
-      ) {
-        setBangumiCalendarData(bangumiData.value);
-      } else {
-        setErrorStates((prev) => ({ ...prev, bangumi: true }));
-        console.warn(
-          'Bangumi接口失败或返回数据格式错误:',
-          bangumiData.status === 'rejected'
-            ? bangumiData.reason
-            : '数据格式错误'
-        );
-        setBangumiCalendarData([]);
+        // 处理bangumi数据
+        if (
+          bangumiData.status === 'fulfilled' &&
+          Array.isArray(bangumiData.value)
+        ) {
+          setBangumiCalendarData(bangumiData.value);
+        } else {
+          setErrorStates((prev) => ({ ...prev, bangumi: true }));
+          console.warn(
+            'Bangumi接口失败或返回数据格式错误:',
+            bangumiData.status === 'rejected'
+              ? bangumiData.reason
+              : '数据格式错误'
+          );
+          setBangumiCalendarData([]);
+        }
+      } catch (error) {
+        console.error('获取首页推荐数据时发生未知错误:', error);
+        // 发生整体错误时，将所有模块标记为错误状态
+        setErrorStates({
+          movies: true,
+          tvShows: true,
+          varietyShows: true,
+          shortDramas: true,
+          bangumi: true,
+        });
+      } finally {
+        // 无论成功或失败，最后都将所有加载状态设为 false
+        setLoadingStates({
+          movies: false,
+          tvShows: false,
+          varietyShows: false,
+          shortDramas: false,
+          bangumi: false,
+        });
       }
-      setLoadingStates((prev) => ({ ...prev, bangumi: false }));
     };
 
     fetchRecommendData();
