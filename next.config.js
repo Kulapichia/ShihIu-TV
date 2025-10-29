@@ -115,6 +115,7 @@ const nextConfig = {
           };
         }
       });
+    }
 
     // 针对 Electron 环境的服务端构建优化
     if (isServer) {
