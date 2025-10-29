@@ -1,7 +1,12 @@
 import { NextRequest } from 'next/server';
 
-// 从cookie获取认证信息 (服务端使用)
-export function getAuthInfoFromCookie(request: NextRequest): {
+import { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
+
+// 定义一个兼容两种 cookie 存储类型的接口
+type CookieStore = Pick<NextRequest['cookies'], 'get'> | ReadonlyRequestCookies;
+
+// 从cookie获取认证信息 (服务端使用，兼容中间件和服务器组件)
+export function getAuthInfoFromCookie(cookieStore: CookieStore): {
   password?: string;
   username?: string;
   signature?: string;
@@ -9,7 +14,7 @@ export function getAuthInfoFromCookie(request: NextRequest): {
   loginTime?: number;
   role?: 'owner' | 'admin' | 'user';
 } | null {
-  const authCookie = request.cookies.get('auth');
+  const authCookie = cookieStore.get('auth');
 
   if (!authCookie) {
     return null;
