@@ -20,7 +20,7 @@ function generateManifest() {
     const generateManifestScript = path.join(__dirname, 'scripts', 'generate-manifest.js');
     require(generateManifestScript);
     // 添加成功日志，便于调试
-    console.log('✅ Generated manifest.json with site name: ShihYuTV');
+    console.log('✅ Generated manifest.json with site name: SiffCITY');
   } catch (error) {
     console.error('❌ Error calling generate-manifest.js:', error);
     throw error;
