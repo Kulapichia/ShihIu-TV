@@ -87,7 +87,6 @@ export async function GET(request: NextRequest) {
         Role: userRole,
         Config: publicConfig,
       };
-
       return NextResponse.json(result, {
         headers: {
           'Cache-Control': 'public, max-age=60', // 公开配置可以缓存1分钟
