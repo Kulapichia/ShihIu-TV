@@ -19,6 +19,12 @@ const nextConfig = {
   // 禁用 ETag 生成，适用于 CDN 或反向代理环境
   generateEtags: false,
 
+  // 为 SWC 编译器添加配置
+  compiler: {
+    // 在生产环境中移除所有 console.* 调用
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+
   experimental: {
     // instrumentationHook 配置
     instrumentationHook: process.env.NODE_ENV === 'production',
@@ -97,25 +103,6 @@ const nextConfig = {
       tls: false,
       crypto: false,
     };
-
-    // 生产环境代码保护
-    if (!dev) {
-      // Terser 压缩和清理配置
-      config.optimization.minimizer.forEach((plugin) => {
-        if (plugin.constructor.name === 'TerserPlugin') {
-          plugin.options.terserOptions = {
-            ...plugin.options.terserOptions,
-            compress: {
-              drop_console: true,
-              drop_debugger: true,
-            },
-            format: {
-              comments: false,
-            },
-          };
-        }
-      });
-    }
 
     // 针对 Electron 环境的服务端构建优化
     if (isServer) {
