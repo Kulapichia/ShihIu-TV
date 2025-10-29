@@ -2,9 +2,9 @@
 
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
-
+import { cookies } from 'next/headers';
 import './globals.css';
-
+import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
@@ -62,6 +62,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   try {
+    const cookieStore = cookies();
+    const authInfo = getAuthInfoFromCookie(cookieStore);
     const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
 
     // REFACTOR: 将默认配置定义为一个对象，使代码更清晰
@@ -225,6 +227,7 @@ export default async function RootLayout({
               <SiteProvider
                 siteName={configData.siteName}
                 announcement={configData.announcement}
+                initialAuthInfo={authInfo}
               >
                 <VirtualScrollProvider
                   initialValue={configData.enableVirtualScroll}
