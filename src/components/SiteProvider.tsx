@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, ReactNode, useContext, useRef, MutableRefObject } from 'react';
-import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
+import { createContext, ReactNode, useContext, useRef, MutableRefObject, useState } from 'react';
+// import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 
 // 扩展 AuthInfo 类型以匹配 auth.ts 中的返回值
 interface AuthInfo {
@@ -34,13 +34,15 @@ export function SiteProvider({
   children,
   siteName,
   announcement,
+  initialAuthInfo,
 }: {
   children: ReactNode;
   siteName: string;
   announcement?: string;
+  initialAuthInfo: AuthInfo | null;
 }) {
   // 在客户端组件中安全地获取 authInfo
-  const authInfo = typeof window !== 'undefined' ? getAuthInfoFromBrowserCookie() : null;
+  const [authInfo] = useState(initialAuthInfo);
   // [滚动恢复整合] 创建 ref 实例，它将在整个应用生命周期内保持不变
   const mainContainerRef = useRef<HTMLDivElement | null>(null);
 
