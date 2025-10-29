@@ -2,11 +2,11 @@ import { NextRequest } from 'next/server';
 
 import { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
 
-// 定义一个兼容两种 cookie 存储类型的接口
-type CookieStore = Pick<NextRequest['cookies'], 'get'> | ReadonlyRequestCookies;
+// 定义一个联合类型，使其可以接收 NextRequest 对象或 ReadonlyRequestCookies 对象
+type CookieSource = NextRequest | ReadonlyRequestCookies;
 
 // 从cookie获取认证信息 (服务端使用，兼容中间件和服务器组件)
-export function getAuthInfoFromCookie(cookieStore: CookieStore): {
+export function getAuthInfoFromCookie(source: CookieSource): {
   password?: string;
   username?: string;
   signature?: string;
@@ -14,7 +14,16 @@ export function getAuthInfoFromCookie(cookieStore: CookieStore): {
   loginTime?: number;
   role?: 'owner' | 'admin' | 'user';
 } | null {
-  const authCookie = cookieStore.get('auth');
+  let authCookie;
+
+  // 通过检查 'cookies' 属性是否存在来判断传入的是 NextRequest 还是 ReadonlyRequestCookies
+  if ('cookies' in source) {
+    // 这是 NextRequest 对象
+    authCookie = source.cookies.get('auth');
+  } else {
+    // 这是 ReadonlyRequestCookies 对象
+    authCookie = source.get('auth');
+  }
 
   if (!authCookie) {
     return null;
