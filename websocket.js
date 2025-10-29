@@ -164,12 +164,6 @@ function setupWebSocketServer(server) {
           // 8. 向其他所有用户广播该用户上线状态
           broadcastUserStatus(ws.userId, 'online');
         });
-      } else {
-        // 对于非 /ws 路径的 upgrade 请求，明确拒绝并关闭连接
-        // 这可以防止未知来源的 upgrade 请求导致服务器挂起或行为异常
-        console.warn(`[WebSocket] 拒绝了未知路径的 upgrade 请求: ${pathname}`);
-        socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
-        socket.destroy();
       }
     } catch (err) {
       console.error('[WebSocket] Upgrade 请求处理错误:', err);
