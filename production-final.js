@@ -10,7 +10,7 @@ const { parse } = require('url');
 const next = require('next');
 const path = require('path');
 const http = require('http');
-// 修正1: 引入功能更完整的 `websocket.js` 中的 `setupWebSocketServer`
+// 关键修复：确保引入的是 setupWebSocketServer
 const { setupWebSocketServer } = require('./websocket');
 
 // 生成 manifest.json 的逻辑保持不变
@@ -53,18 +53,10 @@ app.prepare().then(() => {
     }
   });
 
-  // 修正3: 将 WebSocket 服务附加到这个统一的 HTTP 服务器上
+  // 移除此文件中多余的 'upgrade' 事件监听器。
+  // setupWebSocketServer 函数内部已经包含了完整的、带认证和错误处理的 'upgrade' 逻辑。
+  // 重复监听会导致冲突和崩溃。
   setupWebSocketServer(server);
-
-  // 【新增】添加全局upgrade错误处理，防止未捕获的错误导致服务崩溃
-  server.on('upgrade', (request, socket, head) => {
-    socket.on('error', (error) => {
-      console.error('❌ WebSocket upgrade socket错误:', error);
-      if (!socket.destroyed) {
-        socket.destroy();
-      }
-    });
-  });
 
   // 启动统一的服务器，只监听一个端口
   server.listen(port, (err) => {
