@@ -1,5 +1,5 @@
 /**
- * 生产模式下的服务器入口
+ * 生产模式下的服务器入口 (已修复)
  * 使用 NODE_ENV=production node production.js 来启动
  */
 process.env.NODE_ENV = 'production';
@@ -9,7 +9,7 @@ const { parse } = require('url');
 const next = require('next');
 const path = require('path');
 const http = require('http');
-const { createWebSocketServer } = require('./websocket');
+const { setupWebSocketServer } = require('./websocket');
 
 // 调用 generate-manifest.js 生成 manifest.json
 function generateManifest() {
@@ -22,6 +22,7 @@ function generateManifest() {
       'generate-manifest.js'
     );
     require(generateManifestScript);
+    console.log('✅ Generated manifest.json with site name: ShihYuTV');
   } catch (error) {
     console.error('❌ Error calling generate-manifest.js:', error);
     throw error;
@@ -46,72 +47,36 @@ const handle = app.getRequestHandler();
 app.prepare().then(() => {
   const server = createServer(async (req, res) => {
     try {
-      // 检查是否是WebSocket升级请求，如果是则跳过Next.js处理
-      const upgrade = req.headers.upgrade;
-      if (upgrade && upgrade.toLowerCase() === 'websocket') {
-        // 不处理WebSocket升级请求，让upgrade事件处理器处理
-        return;
-      }
-
-      // 使用Next.js处理所有非WebSocket请求
+      // 统一由 Next.js 处理所有非 upgrade 请求
       const parsedUrl = parse(req.url, true);
       await handle(req, res, parsedUrl);
     } catch (err) {
-      console.error('处理请求时出错:', req.url, err);
+      console.error('Error occurred handling', req.url, err);
       res.statusCode = 500;
-      res.end('内部服务器错误');
+      res.end('internal server error');
     }
   });
 
-  // 初始化 WebSocket 服务器
-  const wss = createWebSocketServer();
-
-  // 将 WebSocket 服务器实例存储到全局对象中，供 API 路由使用
-  global.wss = wss;
-
-  // 使用WeakSet来跟踪已处理的socket，避免重复处理
-  const handledSockets = new WeakSet();
-
-  // 处理 WebSocket 升级请求
-  server.on('upgrade', (request, socket, head) => {
-    // 如果socket已经被处理过，直接返回
-    if (handledSockets.has(socket)) {
-      return;
-    }
-
-    const pathname = parse(request.url).pathname;
-
-    if (pathname === '/ws') {
-      console.log('处理 WebSocket 升级请求:', pathname);
-
-      // 标记socket已被处理
-      handledSockets.add(socket);
-
-      // 处理WebSocket连接
-      try {
-        wss.handleUpgrade(request, socket, head, (ws) => {
-          wss.emit('connection', ws, request);
-        });
-      } catch (error) {
-        console.error('WebSocket升级错误:', error);
-        socket.destroy();
-      }
-    } else {
-      console.log('未知的升级请求路径:', pathname);
-      // 不销毁socket，让它自然关闭
-    }
-  });
+  // 初始化并附加 WebSocket 服务器
+  setupWebSocketServer(server);
 
   // 启动服务器
   server.listen(port, (err) => {
     if (err) throw err;
-    console.log(`> 服务已启动 (生产模式): http://${hostname}:${port}`);
-    console.log(`> WebSocket 服务已启动: ws://${hostname}:${port}/ws`);
+    console.log('====================================');
+    console.log(`✅ Next.js & WebSocket 服务已启动`);
+    console.log(`   - HTTP 服务运行在: http://${hostname}:${port}`);
+    console.log(`   - WebSocket 服务路径: /ws`);
+    console.log('====================================');
 
     // 设置服务器启动后的任务
     setupServerTasks();
   });
+}).catch(err => {
+  console.error('❌ Next.js app preparation failed:', err);
+  process.exit(1);
 });
+
 
 // 设置服务器启动后的任务
 function setupServerTasks() {
@@ -131,12 +96,11 @@ function setupServerTasks() {
           // 服务器启动后，立即执行一次 cron 任务
           executeCronJob();
         }, 3000);
-
-        // 然后设置每小时执行一次 cron 任务
-        setInterval(() => {
-          executeCronJob();
-        }, 60 * 60 * 1000); // 每小时执行一次
       }
+    });
+    
+    req.on('error', () => {
+      // 忽略轮询错误，继续尝试
     });
 
     req.setTimeout(2000, () => {
@@ -171,7 +135,7 @@ function executeCronJob() {
     console.error('Error executing cron job:', err);
   });
 
-  req.setTimeout(30000, () => {
+  req.setTimeout(300000, () => { // 增加超时时间到5分钟
     console.error('Cron job timeout');
     req.destroy();
   });
