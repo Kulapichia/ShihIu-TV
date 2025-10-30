@@ -62,9 +62,9 @@ function setupWebSocketServer(server) {
   server.on('upgrade', (request, socket, head) => {
     try {
       const { pathname, query } = parse(request.url, true);
-      console.log(`[WebSocket] 收到 upgrade 请求: ${request.url}`); // 增加日志
+      console.log(`[WebSocket] 收到 upgrade 请求: ${request.url}`);
 
-      // 修正：处理 Nginx 转发过来的 /ws 路径
+      // 只处理 /ws 路径的升级请求
       if (pathname === '/ws') {
         const { auth } = query;
         if (!auth) {
@@ -147,6 +147,10 @@ function setupWebSocketServer(server) {
           // 8. 向其他所有用户广播该用户上线状态
           broadcastUserStatus(ws.userId, 'online');
         });
+      } else {
+        // 对于非 /ws 的路径，直接销毁 socket，避免 Next.js 处理它
+        console.log(`[WebSocket] 拒绝非 /ws 路径的 upgrade 请求: ${pathname}`);
+        socket.destroy();
       }
     } catch (err) {
       console.error('[WebSocket] Upgrade 请求处理错误:', err);
@@ -231,6 +235,8 @@ function sendMessageToUsers(userIds, message) {
 }
 
 module.exports = {
+  // 保持 createWebSocketServer 导出以兼容旧文件
+  createWebSocketServer: setupWebSocketServer,
   setupWebSocketServer,
   getOnlineUsers,
   sendMessageToUser,
