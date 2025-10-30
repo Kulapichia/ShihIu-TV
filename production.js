@@ -1,5 +1,5 @@
 /**
- * 生产模式下的服务器入口 (已修复)
+ * 生产模式下的服务器入口
  * 使用 NODE_ENV=production node production.js 来启动
  */
 process.env.NODE_ENV = 'production';
